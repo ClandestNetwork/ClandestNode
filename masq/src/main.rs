@@ -87,7 +87,7 @@ mod tests {
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use masq_lib::messages::ToMessageBody;
     use masq_cli_lib::test_utils::mocks::{MockCommand, CommandFactoryMock, CommandProcessorMock, CommandProcessorFactoryMock, CommandContextMock};
-    use masq_cli_lib::commands::CommandError::Transaction;
+    use masq_cli_lib::commands::CommandError::Transmission;
 
     #[test]
     fn go_works_when_everything_is_copacetic() {
@@ -152,7 +152,7 @@ mod tests {
 
         let result = command.execute(&mut context);
 
-        assert_eq! (result, Err(Transaction("not really an error".to_string())));
+        assert_eq! (result, Err(Transmission("not really an error".to_string())));
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq! (*transact_params, vec![NodeFromUiMessage {
             client_id: 0,
@@ -223,7 +223,7 @@ mod tests {
         let process_params_arc = Arc::new (Mutex::new (vec![]));
         let processor = CommandProcessorMock::new()
             .process_params (&process_params_arc)
-            .process_result(Err(Transaction("Booga!".to_string())));
+            .process_result(Err(Transmission("Booga!".to_string())));
         let processor_factory = CommandProcessorFactoryMock::new()
             .make_result (Box::new (processor));
         let mut subject = Main {
@@ -239,6 +239,6 @@ mod tests {
 
         assert_eq! (result, 1);
         assert_eq! (stream_holder.stdout.get_string(), "".to_string());
-        assert_eq! (stream_holder.stderr.get_string(), "Transaction(\"Booga!\")\n".to_string());
+        assert_eq! (stream_holder.stderr.get_string(), "Transmission(\"Booga!\")\n".to_string());
     }
 }

@@ -9,11 +9,11 @@ use lazy_static::lazy_static;
 use masq_lib::messages::ToMessageBody;
 use crate::commands::{CommandError, Command};
 use crate::command_context::{CommandContext};
-use crate::commands::CommandError::Transaction;
 use crate::command_processor::{CommandProcessor, CommandProcessorFactory};
 use crate::websockets_client::nfum;
 use std::io::{Read, Write};
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriterInner, ByteArrayWriter};
+use crate::commands::CommandError::Transmission;
 
 lazy_static! {
     pub static ref ONE_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
@@ -218,7 +218,7 @@ impl<T: ToMessageBody + Clone> Command for MockCommand<T> {
         write!(context.stderr(), "MockCommand error").unwrap();
         match context.transact(nfum(self.message.clone())) {
             Ok(_) => self.execute_results.borrow_mut().remove (0),
-            Err(e) => Err(Transaction(e)),
+            Err(e) => Err(Transmission(e)),
         }
     }
 }

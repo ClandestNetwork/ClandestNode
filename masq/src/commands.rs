@@ -3,12 +3,16 @@
 use std::fmt::Debug;
 use crate::command_context::{CommandContext};
 use std::collections::HashMap;
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiSetup, UiSetupValue};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiSetup, UiSetupValue, UiMessageError};
 use masq_lib::ui_gateway::NodeFromUiMessage;
+use crate::commands::CommandError::UnexpectedResponse;
 
 #[derive (Debug, PartialEq)]
 pub enum CommandError {
-    Transaction(String),
+    Transmission(String),
+    Reception(String),
+    UnexpectedResponse(UiMessageError),
+    Payload(String),
 }
 
 pub trait Command: Debug {
@@ -33,11 +37,17 @@ impl Command for SetupCommand {
             }.tmb(0)
         }) {
             Ok(ntum) => ntum,
-            Err(e) => return Err(CommandError::Transaction(e)),
+            Err(e) => {
+                write!(context.stderr(), "Couldn't send command to Node or Daemon: {}\n", e).expect ("write! failed");
+                return Err(CommandError::Transmission(e))
+            },
         };
         let mut response: UiSetup = match UiSetup::fmb (ntum.body) {
             Ok ((r, _)) => r,
-            Err (ume) => return Err(CommandError::Transaction(format!("{:?}", ume))),
+            Err (e) => {
+                write!(context.stderr(), "Node or Daemon is acting erratically: {}\n", e).expect ("write! failed");
+                return Err(UnexpectedResponse(e))
+            }
         };
         response.values
             .sort_by(|a, b| a.name.partial_cmp(&b.name).expect("String comparison failed"));
@@ -79,6 +89,10 @@ mod tests {
     use std::sync::{Mutex, Arc};
     use masq_lib::ui_gateway::{NodeToUiMessage, NodeFromUiMessage};
     use masq_lib::ui_gateway::MessageTarget::ClientId;
+    use crate::commands::CommandError::{Transmission, UnexpectedResponse};
+    use masq_lib::messages::UiShutdownOrder;
+    use masq_lib::messages::UiMessageError::UnexpectedMessage;
+    use masq_lib::ui_gateway::MessagePath::OneWay;
 
     #[test]
     fn setup_command_validator_rejects_arg_without_equals() {
@@ -142,5 +156,40 @@ mod tests {
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
             "NAME                      VALUE\nc                         3\ndddd                      4444\n");
         assert_eq! (stderr_arc.lock().unwrap().get_string(), String::new());
+    }
+
+    #[test]
+    fn setup_command_doesnt_leave_masq () {
+        let mut context = CommandContextMock::new()
+            .transact_result (Err ("Couldn't transmit".to_string()));
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let subject = SetupCommand::new (vec![]);
+
+        let result = subject.execute (&mut context);
+
+        assert_eq! (result, Err(Transmission("Couldn't transmit".to_string())));
+        assert_eq! (stdout_arc.lock().unwrap().get_string(), String::new());
+        assert_eq! (&stderr_arc.lock().unwrap().get_string(),
+          "Couldn't send command to Node or Daemon: Couldn't transmit\n");
+    }
+
+    #[test]
+    fn setup_command_gets_unexpected_message_in_response () {
+        let mut context = CommandContextMock::new()
+            .transact_result (Ok (NodeToUiMessage {
+                target: ClientId(0),
+                body: UiShutdownOrder {}.tmb (0)
+            }));
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let subject = SetupCommand::new (vec![]);
+
+        let result = subject.execute (&mut context);
+
+        assert_eq! (result, Err(UnexpectedResponse(UnexpectedMessage("shutdownOrder".to_string(), OneWay))));
+        assert_eq! (stdout_arc.lock().unwrap().get_string(), String::new());
+        assert_eq! (&stderr_arc.lock().unwrap().get_string(),
+          "Node or Daemon is acting erratically: Unexpected one-way message with opcode 'shutdownOrder'\n");
     }
 }
