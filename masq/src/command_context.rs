@@ -2,12 +2,19 @@
 
 use std::io::{Write, Read};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
-use crate::websockets_client::{NodeConnection};
+use crate::websockets_client::{NodeConnection, ClientError};
 use std::io;
 
+#[derive (Clone, Debug, PartialEq)]
+pub enum ContextError {
+    ConnectionDropped(String),
+    PayloadError(u64, String),
+    Other(String),
+}
+
 pub trait CommandContext {
-    fn send (&mut self, message: NodeFromUiMessage) -> Result<(), String>;
-    fn transact (&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, String>;
+    fn send (&mut self, message: NodeFromUiMessage) -> Result<(), ContextError>;
+    fn transact (&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError>;
     fn stdin(&mut self) -> &mut Box<dyn Read>;
     fn stdout(&mut self) -> &mut Box<dyn Write>;
     fn stderr(&mut self) -> &mut Box<dyn Write>;
@@ -23,17 +30,22 @@ pub struct CommandContextReal {
 
 impl CommandContext for CommandContextReal {
 
-    fn send (&mut self, message: NodeFromUiMessage) -> Result<(), String> {
+    fn send (&mut self, message: NodeFromUiMessage) -> Result<(), ContextError> {
         let mut conversation = self.connection.start_conversation();
-        conversation.send(message)
+        match conversation.send(message) {
+            Ok(_) => Ok(()),
+            Err(ClientError::ConnectionDropped(e)) => Err(ContextError::ConnectionDropped(e)),
+            Err(e) => Err(ContextError::Other(format!("{:?}", e))),
+        }
     }
 
-    fn transact (&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, String> {
+    fn transact (&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
         match conversation.transact (message) {
-            Err (e) => Err (e),
+            Err(ClientError::ConnectionDropped(e)) => Err(ContextError::ConnectionDropped(e)),
+            Err(e) => Err(ContextError::Other(format!("{:?}", e))),
             Ok(ntum) => match ntum.body.payload {
-                Err((code, msg)) => Err (format!("Daemon or Node reports error {:X}: {}", code, msg)),
+                Err((code, msg)) => Err (ContextError::PayloadError(code, msg)),
                 Ok (_) => Ok (ntum)
             }
         }
@@ -81,6 +93,7 @@ mod tests {
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use crate::websockets_client::nfum;
     use masq_lib::messages::FromMessageBody;
+    use crate::command_context::ContextError::{ConnectionDropped, PayloadError};
 
     #[test]
     fn works_when_everythings_fine() {
@@ -155,7 +168,7 @@ mod tests {
             values: vec![]
         }));
 
-        assert_eq! (response, Err(format!("Daemon or Node reports error 65: booga")));
+        assert_eq! (response, Err(PayloadError(101, "booga".to_string())));
         stop_handle.stop();
     }
 
@@ -172,7 +185,10 @@ mod tests {
         }));
 
         stop_handle.stop();
-        assert_eq! (response, Err(format!("NoDataAvailable")));
+        match response {
+            Err(ConnectionDropped(_)) => (),
+            x => panic! ("Expected ConnectionDropped; got {:?} instead", x),
+        }
     }
 
     #[test]

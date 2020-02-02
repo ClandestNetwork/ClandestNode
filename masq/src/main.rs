@@ -88,6 +88,7 @@ mod tests {
     use masq_lib::messages::ToMessageBody;
     use masq_cli_lib::test_utils::mocks::{MockCommand, CommandFactoryMock, CommandProcessorMock, CommandProcessorFactoryMock, CommandContextMock};
     use masq_cli_lib::commands::CommandError::Transmission;
+    use masq_cli_lib::command_context::ContextError::Other;
 
     #[test]
     fn go_works_when_everything_is_copacetic() {
@@ -146,13 +147,13 @@ mod tests {
         let transact_params_arc = Arc::new (Mutex::new (vec![]));
         let mut context = CommandContextMock::new()
             .transact_params (&transact_params_arc)
-            .transact_result (Err("not really an error".to_string()));
+            .transact_result (Err(Other("not really an error".to_string())));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
 
         let result = command.execute(&mut context);
 
-        assert_eq! (result, Err(Transmission("not really an error".to_string())));
+        assert_eq! (result, Err(Transmission("Other(\"not really an error\")".to_string())));
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq! (*transact_params, vec![NodeFromUiMessage {
             client_id: 0,

@@ -11,9 +11,8 @@ pub trait CommandFactory {
     fn make(&self, pieces: Vec<String>) -> Result<Box<dyn Command>, CommandFactoryError>;
 }
 
-pub struct CommandFactoryReal {
-
-}
+#[derive(Default)]
+pub struct CommandFactoryReal {}
 
 impl CommandFactory for CommandFactoryReal {
     fn make(&self, pieces: Vec<String>) -> Result<Box<dyn Command>, CommandFactoryError> {
@@ -28,8 +27,6 @@ impl CommandFactory for CommandFactoryReal {
 impl CommandFactoryReal {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self {
-
-        }
+        Self::default()
     }
 }

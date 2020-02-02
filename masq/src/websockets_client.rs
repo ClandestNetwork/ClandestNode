@@ -6,12 +6,22 @@ use websocket::{ClientBuilder, OwnedMessage};
 use std::sync::{Mutex, Arc};
 use masq_lib::utils::localhost;
 use masq_lib::messages::{NODE_UI_PROTOCOL, ToMessageBody};
-use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
-use masq_lib::ui_traffic_converter::UiTrafficConverter;
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage, MessagePath};
+use masq_lib::ui_traffic_converter::{UiTrafficConverter, UnmarshalError};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
+use crate::websockets_client::ClientError::{Deserialization, MessageType, PacketType, NoServer, ConnectionDropped};
 
 pub const BROADCAST_CONTEXT_ID: u64 = 0;
+
+#[derive (Clone, Debug, PartialEq)]
+pub enum ClientError {
+    NoServer(u16, String),
+    ConnectionDropped(String),
+    PacketType(String),
+    Deserialization(UnmarshalError),
+    MessageType(String, MessagePath),
+}
 
 pub struct NodeConnectionInner {
     next_context_id: u64,
@@ -31,10 +41,10 @@ impl Drop for NodeConnection {
 }
 
 impl NodeConnection {
-    pub fn new(port: u16) -> Result<NodeConnection, String> {
+    pub fn new(port: u16) -> Result<NodeConnection, ClientError> {
         let builder = ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect ("Bad URL");
         let client = match builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure() {
-            Err(e) => return Err(format!("No Node or Daemon is listening on port {}: {:?}", port, e)),
+            Err(e) => return Err(NoServer(port, format!("{:?}", e))),
             Ok(c) => c,
         };
         let inner_arc = Arc::new(Mutex::new(NodeConnectionInner {
@@ -52,11 +62,10 @@ impl NodeConnection {
             inner.next_context_id += 1;
             context_id
         };
-        let conversation = NodeConversation {
+        NodeConversation {
             context_id,
             inner_arc,
-        };
-        conversation
+        }
     }
 
     #[allow (dead_code)]
@@ -81,22 +90,23 @@ impl NodeConversation {
         self.context_id
     }
 
-    pub fn send(&mut self, outgoing_msg: NodeFromUiMessage) -> Result<(), String> {
+    pub fn send(&mut self, outgoing_msg: NodeFromUiMessage) -> Result<(), ClientError> {
+        // TODO: drive in a check for outgoing_msg.body.path == OneWay
         let outgoing_msg_json = UiTrafficConverter::new_marshal_from_ui(outgoing_msg);
         self.send_string(outgoing_msg_json)
     }
 
     #[allow (dead_code)]
-    pub fn establish_receiver<F>(/*mut*/ self, _receiver: F) -> Result<(), String> where F: Fn() -> NodeToUiMessage {
+    pub fn establish_receiver<F>(/*mut*/ self, _receiver: F) -> Result<(), ClientError> where F: Fn() -> NodeToUiMessage {
         unimplemented!();
     }
 
     pub fn transact(
         &mut self,
         mut outgoing_msg: NodeFromUiMessage,
-    ) -> Result<NodeToUiMessage, String> {
+    ) -> Result<NodeToUiMessage, ClientError> {
         if outgoing_msg.body.path == OneWay {
-            return Err(format!("'{}' message is one-way only; can't transact() with it", outgoing_msg.body.opcode))
+            return Err(MessageType(outgoing_msg.body.opcode, outgoing_msg.body.path))
         }
         else {
             outgoing_msg.body.path = TwoWay(self.context_id());
@@ -112,27 +122,27 @@ impl NodeConversation {
         let _ = client.send_message (&OwnedMessage::Close(None));
     }
 
-    fn send_string(&mut self, string: String) -> Result<(), String> {
+    fn send_string(&mut self, string: String) -> Result<(), ClientError> {
         let client = &mut self.inner_arc.lock().expect ("Connection poisoned").client;
         if let Err(e) = client.send_message(&OwnedMessage::Text(string)) {
-            Err(format!("{:?}", e))
+            Err(ConnectionDropped(format!("{:?}", e)))
         }
         else {
             Ok (())
         }
     }
 
-    fn receive(&mut self) -> Result<NodeToUiMessage, String> {
+    fn receive(&mut self) -> Result<NodeToUiMessage, ClientError> {
         let client = &mut self.inner_arc.lock().expect ("Connection poisoned").client;
         let incoming_msg = client.recv_message();
         let incoming_msg_json = match incoming_msg {
             Ok(OwnedMessage::Text(json)) => json,
-            Ok(x) => return Err(format!("Expected text; received {:?}", x)),
-            Err (e) => return Err(format!("{:?}", e)),
+            Ok(x) => return Err(PacketType(format!("{:?}", x))),
+            Err (e) => return Err(ConnectionDropped(format!("{:?}", e))),
         };
         match UiTrafficConverter::new_unmarshal_to_ui(&incoming_msg_json, ClientId(0)) {
             Ok(m) => Ok(m),
-            Err(e) => Err(format! ("Deserialization problem: {:?}", e)),
+            Err(e) => Err(Deserialization(e)),
         }
     }
 }
@@ -154,6 +164,9 @@ mod tests {
     use masq_lib::ui_gateway::{MessageBody};
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::messages::FromMessageBody;
+    use crate::websockets_client::ClientError::{ConnectionDropped, NoServer};
+    use masq_lib::ui_traffic_converter::TrafficConversionError::JsonSyntaxError;
+    use masq_lib::ui_traffic_converter::UnmarshalError::Critical;
 
     #[allow (dead_code)]
     pub fn nftm1<T: ToMessageBody> (tmb: T) -> NodeToUiMessage {
@@ -199,9 +212,12 @@ mod tests {
     fn connection_works_when_no_server_exists() {
         let port = find_free_port();
 
-        let err_msg = NodeConnection::new (port).err().unwrap();
+        let error = NodeConnection::new (port).err().unwrap();
 
-        assert_eq! (err_msg.starts_with(&format!("No Node or Daemon is listening on port {}: ", port)), true, "{}", err_msg);
+        match error {
+            NoServer(p, _) if p == port => (),
+            x => panic! ("Expected NoServer; got {:?} instead", x),
+        }
     }
 
     #[test]
@@ -211,9 +227,12 @@ mod tests {
         server.protocol = "Booga".to_string();
         server.start();
 
-        let err_msg = NodeConnection::new (port).err().unwrap();
+        let error = NodeConnection::new (port).err().unwrap();
 
-        assert_eq! (err_msg.starts_with(&format!("No Node or Daemon is listening on port {}: ", port)), true, "{}", err_msg);
+        match error {
+            NoServer(p, _) if p == port => (),
+            x => panic! ("Expected NoServer; got {:?} instead", x),
+        }
     }
 
     #[test]
@@ -242,7 +261,7 @@ mod tests {
 
         let result = subject.transact (nfum(UiShutdownOrder{}));
 
-        assert_eq! (result, Err("'shutdownOrder' message is one-way only; can't transact() with it".to_string()));
+        assert_eq! (result, Err(MessageType("shutdownOrder".to_string(), OneWay)));
         stop_handle.stop();
     }
 
@@ -257,7 +276,10 @@ mod tests {
 
         let result = subject.transact (nfum(UiSetup {values: vec![]}));
 
-        assert_eq! (result, Err("NoDataAvailable".to_string()));
+        match result {
+            Err(ConnectionDropped(_)) => (),
+            x => panic! ("Expected ConnectionDropped; got {:?} instead", x),
+        }
     }
 
     #[test]
@@ -274,7 +296,10 @@ mod tests {
         let result = subject.send (nfum(UiShutdownOrder {})).err().unwrap();
 
         stop_handle.stop();
-        assert! (result.contains ("BrokenPipe"));
+        match result {
+            ConnectionDropped(_) => (),
+            x => panic! ("Expected ConnectionDropped; got {:?} instead", x),
+        }
     }
 
     #[test]
@@ -289,8 +314,8 @@ mod tests {
 
         let result = subject.receive ();
 
-        if let Err(err_msg) = result {
-            assert_eq!(err_msg, "Expected text; received Close(None)".to_string());
+        if let Err(error) = result {
+            assert_eq!(error, PacketType("Close(None)".to_string()));
         }
         else {
             assert!(false, "Expected Close(None); got {:?}", result);
@@ -309,7 +334,7 @@ mod tests {
         let result = subject.transact (nfum(UiSetup {values: vec![]}));
 
         stop_handle.stop();
-        assert_eq! (result, Err("Deserialization problem: Critical(JsonSyntaxError(\"Error(\\\"expected value\\\", line: 1, column: 1)\"))".to_string()));
+        assert_eq! (result, Err(Deserialization(Critical(JsonSyntaxError("Error(\"expected value\", line: 1, column: 1)".to_string())))));
     }
 
     #[test]

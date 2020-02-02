@@ -46,14 +46,13 @@ impl MockWebSocketsServer {
 
     pub fn start (self) -> MockWebSocketsServerStopHandle {
         let server_arc = Arc::new(Mutex::new(Server::bind(SocketAddr::new(localhost(), self.port)).unwrap()));
-        let inner_server_arc = server_arc.clone();
         let requests_arc = Arc::new(Mutex::new(vec![]));
         let inner_requests_arc = requests_arc.clone();
         let inner_responses_arc = self.responses_arc.clone();
         let (stop_tx, stop_rx) = std::sync::mpsc::channel();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let join_handle = thread::spawn (move || {
-            let mut server = inner_server_arc.lock().unwrap();
+            let mut server = server_arc.lock().unwrap();
             let mut requests = inner_requests_arc.lock().unwrap();
             ready_tx.send(()).unwrap();
             let upgrade = server.accept().unwrap();
@@ -84,7 +83,7 @@ impl MockWebSocketsServer {
                 if let Some (incoming) = incoming_opt {
                     requests.push (incoming);
                     let outgoing: String = inner_responses_arc.lock().unwrap().remove(0);
-                    if outgoing == "disconnect".to_string() {
+                    if outgoing == "disconnect" {
                         break;
                     }
                     client.send_message (&OwnedMessage::Text(outgoing)).unwrap()

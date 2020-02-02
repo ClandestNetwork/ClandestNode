@@ -10,6 +10,7 @@ pub trait CommandProcessorFactory {
     fn make(&self, args: &[String]) -> Box<dyn CommandProcessor>;
 }
 
+#[derive (Default)]
 pub struct CommandProcessorFactoryReal {
 }
 
@@ -26,8 +27,7 @@ impl CommandProcessorFactory for CommandProcessorFactoryReal {
 
 impl CommandProcessorFactoryReal {
     pub fn new () -> Self {
-        Self {
-        }
+        Self::default()
     }
 }
 
@@ -52,7 +52,7 @@ impl CommandProcessor for CommandProcessorReal {
 }
 
 impl CommandProcessorReal {
-    pub fn new(_args: &Vec<String>) -> Self {
+    pub fn new(_args: &[String]) -> Self {
         unimplemented!()
     }
 }
