@@ -5,7 +5,7 @@ use masq_lib::command::{StdStreams, Command};
 use std::io;
 use masq_cli_lib::command_processor::{CommandProcessor, CommandProcessorFactoryReal, CommandProcessorFactory};
 use masq_cli_lib::command_factory::{CommandFactoryReal, CommandFactory};
-use masq_cli_lib::command_factory::CommandFactoryError::SyntaxError;
+use masq_cli_lib::command_factory::CommandFactoryError::UnrecognizedSubcommand;
 
 fn main() {
     let mut streams: StdStreams<'_> = StdStreams {
@@ -69,7 +69,7 @@ impl Main {
     fn handle_command(&self, processor: &mut dyn CommandProcessor, command_parts: Vec<String>) -> Result<(), String> {
         let command = match self.command_factory.make (command_parts) {
             Ok(c) => c,
-            Err(SyntaxError(msg)) => return Err(msg),
+            Err(UnrecognizedSubcommand(msg)) => return Err(msg),
         };
         if let Err(e) = processor.process (command) {
             return Err(format!("{:?}", e))
@@ -191,7 +191,7 @@ mod tests {
         let c_make_params_arc = Arc::new (Mutex::new (vec![]));
         let command_factory = CommandFactoryMock::new()
             .make_params(&c_make_params_arc)
-            .make_result(Err(SyntaxError("booga".to_string())));
+            .make_result(Err(UnrecognizedSubcommand("booga".to_string())));
         let processor = CommandProcessorMock::new();
         let processor_factory = CommandProcessorFactoryMock::new()
             .make_result (Box::new (processor));

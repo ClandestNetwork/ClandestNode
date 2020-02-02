@@ -207,6 +207,7 @@ mod tests {
     use masq_lib::ui_gateway::MessagePath::{TwoWay};
     use crate::command_context::ContextError;
     use std::time::SystemTime;
+    use crate::command_factory::{CommandFactoryReal, CommandFactory};
 
     #[test]
     fn one_way_transmission_passes_dropped_connection_error() {
@@ -340,7 +341,8 @@ mod tests {
             }));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
-        let subject = SetupCommand::new (vec!["setup".to_string(), "a=1".to_string(), "bbbb=2222".to_string()]);
+        let factory = CommandFactoryReal::new();
+        let subject = factory.make (vec!["setup".to_string(), "a=1".to_string(), "bbbb=2222".to_string()]).unwrap();
 
         let result = subject.execute (&mut context);
 
@@ -374,7 +376,8 @@ mod tests {
             }));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
-        let subject = StartCommand::new ();
+        let factory = CommandFactoryReal::new();
+        let subject = factory.make (vec!["start".to_string()]).unwrap();
 
         let result = subject.execute (&mut context);
 
@@ -398,6 +401,18 @@ mod tests {
     }
 
     #[test]
+    fn testing_command_factory_here() {
+        let factory = CommandFactoryReal::new();
+        let mut context = CommandContextMock::new()
+            .send_result (Err(ContextError::ConnectionDropped("booga".to_string())));
+        let subject = factory.make (vec!["shutdown".to_string()]).unwrap();
+
+        let result = subject.execute (&mut context);
+
+        assert_eq! (result, Ok(()));
+    }
+
+    #[test]
     fn shutdown_command_happy_path () {
         let send_params_arc = Arc::new (Mutex::new (vec![]));
         let mut context = CommandContextMock::new()
@@ -407,7 +422,7 @@ mod tests {
             .send_result (Err(ContextError::ConnectionDropped("booga".to_string())));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
-        let mut subject = ShutdownCommand::new ();
+        let mut subject = ShutdownCommand::new();
         subject.attempt_interval = 10;
         subject.attempt_limit = 3;
 
