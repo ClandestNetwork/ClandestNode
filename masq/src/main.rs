@@ -35,7 +35,7 @@ impl command::Command for Main {
                 return 1
             }
         };
-        if let Err(msg) = self.handle_command(&mut processor, command_parts) {
+        if let Err(msg) = self.handle_command(&mut *processor, command_parts) {
             writeln! (streams.stderr, "{}", msg).expect ("writeln! failed");
             return 1
         }
@@ -55,7 +55,7 @@ impl Main {
     }
 
     fn extract_subcommand(args: &[String]) -> Result<Vec<String>, String> {
-        let args_vec: Vec<String> = args.into_iter().map(|s| s.clone()).collect();
+        let args_vec: Vec<String> = args.to_vec();
         for idx in 1..args_vec.len() {
             let one = &args_vec[idx - 1];
             let two = &args_vec[idx];
@@ -63,10 +63,10 @@ impl Main {
                 return Ok(args_vec.into_iter ().skip (idx).collect())
             }
         }
-        return Err(format!("No masq subcommand found in '{}'", args_vec.join(" ")));
+        Err(format!("No masq subcommand found in '{}'", args_vec.join(" ")))
     }
 
-    fn handle_command(&self, processor: &mut Box<dyn CommandProcessor>, command_parts: Vec<String>) -> Result<(), String> {
+    fn handle_command(&self, processor: &mut dyn CommandProcessor, command_parts: Vec<String>) -> Result<(), String> {
         let command = match self.command_factory.make (command_parts) {
             Ok(c) => c,
             Err(SyntaxError(msg)) => return Err(msg),

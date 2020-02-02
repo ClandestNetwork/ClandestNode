@@ -80,15 +80,15 @@ impl CommandContext for CommandContextMock {
         self.transact_results.borrow_mut ().remove (0)
     }
 
-    fn stdin(&mut self) -> &mut Box<dyn Read> {
+    fn stdin(&mut self) -> &mut dyn Read {
         unimplemented!()
     }
 
-    fn stdout(&mut self) -> &mut Box<dyn Write> {
+    fn stdout(&mut self) -> &mut dyn Write {
         &mut self.stdout
     }
 
-    fn stderr(&mut self) -> &mut Box<dyn Write> {
+    fn stderr(&mut self) -> &mut dyn Write {
         &mut self.stderr
     }
 

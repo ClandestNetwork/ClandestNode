@@ -15,9 +15,9 @@ pub enum ContextError {
 pub trait CommandContext {
     fn send (&mut self, message: NodeFromUiMessage) -> Result<(), ContextError>;
     fn transact (&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError>;
-    fn stdin(&mut self) -> &mut Box<dyn Read>;
-    fn stdout(&mut self) -> &mut Box<dyn Write>;
-    fn stderr(&mut self) -> &mut Box<dyn Write>;
+    fn stdin(&mut self) -> &mut dyn Read;
+    fn stdout(&mut self) -> &mut dyn Write;
+    fn stderr(&mut self) -> &mut dyn Write;
     fn close(&mut self);
 }
 
@@ -51,15 +51,15 @@ impl CommandContext for CommandContextReal {
         }
     }
 
-    fn stdin(&mut self) -> &mut Box<dyn Read> {
+    fn stdin(&mut self) -> &mut dyn Read {
         &mut self.stdin
     }
 
-    fn stdout(&mut self) -> &mut Box<dyn Write> {
+    fn stdout(&mut self) -> &mut dyn Write {
         &mut self.stdout
     }
 
-    fn stderr(&mut self) -> &mut Box<dyn Write> {
+    fn stderr(&mut self) -> &mut dyn Write {
         &mut self.stderr
     }
 
