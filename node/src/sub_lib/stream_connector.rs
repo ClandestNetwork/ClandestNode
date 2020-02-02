@@ -158,6 +158,7 @@ mod tests {
     use crate::test_utils::logging::TestLogHandler;
     use futures::future::lazy;
     use futures::future::ok;
+    use masq_lib::utils::{find_free_port, localhost};
     use std::net::{IpAddr, Shutdown};
     use std::str::FromStr;
     use std::sync::mpsc;
@@ -167,7 +168,6 @@ mod tests {
     use std::time::Duration;
     use tokio;
     use tokio::io::ErrorKind;
-    use masq_lib::utils::{localhost, find_free_port};
 
     #[test]
     fn stream_connector_can_fail_to_connect() {

@@ -183,13 +183,13 @@ mod tests {
     use crate::daemon::launch_verifier::LaunchVerification::{
         CleanFailure, InterventionRequired, Launched,
     };
+    use masq_lib::utils::{find_free_port, localhost};
     use std::cell::RefCell;
     use std::net::SocketAddr;
     use std::process::{Child, Command};
     use std::sync::{Arc, Mutex};
     use std::time::Instant;
     use websocket::server::sync::Server;
-    use masq_lib::utils::{find_free_port, localhost};
 
     struct VerifierToolsMock {
         can_connect_to_ui_gateway_params: Arc<Mutex<Vec<u16>>>,

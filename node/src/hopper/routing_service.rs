@@ -528,9 +528,9 @@ mod tests {
         route_to_proxy_server, DEFAULT_CHAIN_ID,
     };
     use actix::System;
+    use masq_lib::environment_guard::EnvironmentGuard;
     use std::net::SocketAddr;
     use std::str::FromStr;
-    use masq_lib::environment_guard::EnvironmentGuard;
 
     #[test]
     fn dns_resolution_failures_are_reported_to_the_proxy_server() {

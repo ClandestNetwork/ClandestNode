@@ -4,9 +4,9 @@ use crate::sub_lib::accountant::FinancialStatisticsMessage;
 use crate::sub_lib::peer_actors::BindMessage;
 use actix::Message;
 use actix::Recipient;
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
-use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 
 #[derive(Message, PartialEq, Debug)]
 pub struct FromUiMessage {

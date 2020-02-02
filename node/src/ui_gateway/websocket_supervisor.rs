@@ -1,5 +1,6 @@
 // Copyright (c) 2017-2018, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 use crate::sub_lib::logger::Logger;
+use crate::sub_lib::ui_gateway::FromUiMessage;
 use actix::Recipient;
 use bytes::BytesMut;
 use futures::future::FutureResult;
@@ -10,6 +11,13 @@ use futures::Future;
 use futures::Sink;
 use futures::Stream;
 use itertools::Itertools;
+use masq_lib::messages::{ToMessageBody, UiUnmarshalError, UNMARSHAL_ERROR};
+use masq_lib::ui_gateway::MessagePath::TwoWay;
+use masq_lib::ui_gateway::MessageTarget::ClientId;
+use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
+use masq_lib::ui_traffic_converter::UiTrafficConverter;
+use masq_lib::ui_traffic_converter::UnmarshalError::{Critical, NonCritical};
+use masq_lib::utils::localhost;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -24,14 +32,6 @@ use websocket::server::r#async::Server;
 use websocket::server::upgrade::WsUpgrade;
 use websocket::OwnedMessage;
 use websocket::WebSocketError;
-use masq_lib::ui_gateway::{NodeToUiMessage, MessageTarget, MessageBody, NodeFromUiMessage};
-use crate::sub_lib::ui_gateway::FromUiMessage;
-use masq_lib::ui_gateway::MessageTarget::ClientId;
-use masq_lib::ui_gateway::MessagePath::TwoWay;
-use masq_lib::ui_traffic_converter::UiTrafficConverter;
-use masq_lib::ui_traffic_converter::UnmarshalError::{NonCritical, Critical};
-use masq_lib::messages::{UiUnmarshalError, UNMARSHAL_ERROR, ToMessageBody};
-use masq_lib::utils::localhost;
 
 trait ClientWrapper: Send + Any {
     fn as_any(&self) -> &dyn Any;
@@ -171,7 +171,10 @@ impl WebSocketSupervisorReal {
         inner: Arc<Mutex<WebSocketSupervisorInner>>,
         logger: &Logger,
     ) {
-        if upgrade.protocols().contains(&String::from(NODE_UI_PROTOCOL)) {
+        if upgrade
+            .protocols()
+            .contains(&String::from(NODE_UI_PROTOCOL))
+        {
             Self::accept_upgrade_request(upgrade, socket_addr, inner, logger);
         } else if upgrade.protocols().contains(&String::from("MASQNode-UI")) {
             Self::accept_old_upgrade_request(upgrade, socket_addr, inner, logger);
@@ -482,20 +485,25 @@ impl WebSocketSupervisorReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sub_lib::ui_gateway::{
-        FromUiMessage, UiMessage,
-    };
+    use crate::sub_lib::ui_gateway::{FromUiMessage, UiMessage};
+    use crate::test_utils::assert_contains;
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
     use crate::test_utils::recorder::make_recorder;
     use crate::test_utils::recorder::Recorder;
     use crate::test_utils::wait_for;
-    use crate::test_utils::{assert_contains};
-    use crate::ui_gateway::ui_traffic_converter::{UiTrafficConverterOld, UiTrafficConverterOldReal};
+    use crate::ui_gateway::ui_traffic_converter::{
+        UiTrafficConverterOld, UiTrafficConverterOldReal,
+    };
     use actix::Actor;
     use actix::Addr;
     use actix::System;
     use futures::future::lazy;
+    use masq_lib::messages::{FromMessageBody, UiUnmarshalError, UNMARSHAL_ERROR};
+    use masq_lib::ui_gateway::MessagePath::OneWay;
+    use masq_lib::ui_gateway::NodeFromUiMessage;
+    use masq_lib::ui_traffic_converter::UiTrafficConverter;
+    use masq_lib::utils::{find_free_port, localhost};
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::net::Shutdown;
@@ -506,11 +514,6 @@ mod tests {
     use websocket::stream::sync::TcpStream;
     use websocket::ClientBuilder;
     use websocket::Message;
-    use masq_lib::ui_gateway::NodeFromUiMessage;
-    use masq_lib::ui_gateway::MessagePath::OneWay;
-    use masq_lib::ui_traffic_converter::UiTrafficConverter;
-    use masq_lib::messages::{UNMARSHAL_ERROR, UiUnmarshalError, FromMessageBody};
-    use masq_lib::utils::{find_free_port, localhost};
 
     impl WebSocketSupervisorReal {
         fn inject_mock_client(&self, mock_client: ClientWrapperMock, old_client: bool) -> u64 {
@@ -959,8 +962,8 @@ mod tests {
             OwnedMessage::Text(s) => s,
             x => panic!("Expected OwnedMessage::Text, got {:?}", x),
         };
-        let actual_struct = UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0))
-            .unwrap();
+        let actual_struct =
+            UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0)).unwrap();
         assert_eq!(actual_struct.target, ClientId(0));
         assert_eq!(
             UiUnmarshalError::fmb(actual_struct.body).unwrap().0,
@@ -1028,8 +1031,8 @@ mod tests {
             OwnedMessage::Text(s) => s,
             x => panic!("Expected OwnedMessage::Text, got {:?}", x),
         };
-        let actual_struct = UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0))
-            .unwrap();
+        let actual_struct =
+            UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0)).unwrap();
         assert_eq!(actual_struct.target, ClientId(0));
         assert_eq!(
             UiUnmarshalError::fmb(actual_struct.body).unwrap().0,
@@ -1097,8 +1100,8 @@ mod tests {
             OwnedMessage::Text(s) => s,
             x => panic!("Expected OwnedMessage::Text, got {:?}", x),
         };
-        let actual_struct = UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0))
-            .unwrap();
+        let actual_struct =
+            UiTrafficConverter::new_unmarshal_to_ui(&actual_json, ClientId(0)).unwrap();
         assert_eq!(
             actual_struct,
             NodeToUiMessage {

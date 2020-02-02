@@ -2,19 +2,19 @@
 
 pub mod utils;
 
-use node_lib::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
-use node_lib::database::db_initializer::DATABASE_FILE;
 use masq_lib::messages::ToMessageBody;
 use masq_lib::messages::{
     UiFinancialsRequest, UiRedirect, UiSetup, UiShutdownOrder, UiStartOrder, UiStartResponse,
     NODE_NOT_RUNNING_ERROR,
 };
+use masq_lib::ui_connection::UiConnection;
+use masq_lib::utils::find_free_port;
+use node_lib::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
+use node_lib::database::db_initializer::DATABASE_FILE;
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
 use utils::CommandConfig;
 use utils::MASQNode;
-use masq_lib::ui_connection::UiConnection;
-use masq_lib::utils::find_free_port;
 
 #[test]
 fn clap_help_does_not_initialize_database_integration() {

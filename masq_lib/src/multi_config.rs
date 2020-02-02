@@ -1,8 +1,8 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use clap::{App, ArgMatches};
 #[allow(unused_imports)]
 use clap::{value_t, values_t};
+use clap::{App, ArgMatches};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs::File;
@@ -345,11 +345,11 @@ impl ConfigFileVcl {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::test_utils::environment_guard::EnvironmentGuard;
+    use crate::test_utils::utils::ensure_node_home_directory_exists;
     use clap::Arg;
     use std::fs::File;
     use std::io::Write;
-    use crate::test_utils::environment_guard::EnvironmentGuard;
-    use crate::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     fn double_provided_optional_single_valued_parameter_with_no_default_produces_second_value() {

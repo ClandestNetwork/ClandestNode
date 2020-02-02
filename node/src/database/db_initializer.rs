@@ -426,8 +426,9 @@ pub mod test_utils {
 mod tests {
     use super::*;
     use crate::blockchain::blockchain_interface::chain_id_from_name;
-    use crate::test_utils::{
-        DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME,
+    use crate::test_utils::{DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
+    use masq_lib::test_utils::utils::{
+        ensure_node_home_directory_does_not_exist, ensure_node_home_directory_exists,
     };
     use rusqlite::types::Type::Null;
     use rusqlite::OpenFlags;
@@ -435,7 +436,6 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
     use tokio::net::TcpListener;
-    use masq_lib::test_utils::utils::{ensure_node_home_directory_exists, ensure_node_home_directory_does_not_exist};
 
     #[test]
     fn db_initialize_creates_payable_table() {

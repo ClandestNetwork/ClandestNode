@@ -27,7 +27,6 @@ use crate::sub_lib::cryptde::CryptDE;
 use crate::sub_lib::cryptde_null::CryptDENull;
 use crate::sub_lib::cryptde_real::CryptDEReal;
 use crate::sub_lib::logger::Logger;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::neighborhood::NodeDescriptor;
 use crate::sub_lib::neighborhood::{NeighborhoodConfig, NeighborhoodMode};
 use crate::sub_lib::node_addr::NodeAddr;
@@ -37,6 +36,8 @@ use crate::sub_lib::wallet::Wallet;
 use futures::try_ready;
 use itertools::Itertools;
 use log::LevelFilter;
+use masq_lib::command::StdStreams;
+use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 use std::collections::HashMap;
 use std::env::var;
 use std::fmt::{Debug, Error, Formatter};
@@ -49,7 +50,6 @@ use tokio::prelude::stream::futures_unordered::FuturesUnordered;
 use tokio::prelude::Async;
 use tokio::prelude::Future;
 use tokio::prelude::Stream;
-use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
 static mut MAIN_CRYPTDE_BOX_OPT: Option<Box<dyn CryptDE>> = None;
 static mut ALIAS_CRYPTDE_BOX_OPT: Option<Box<dyn CryptDE>> = None;
@@ -391,8 +391,8 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
     fn initialize_as_unprivileged(&mut self, args: &[String], streams: &mut StdStreams) {
         // NOTE: The following line of code is not covered by unit tests
         fdlimit::raise_fd_limit();
-        let unprivileged_config =
-            NodeConfiguratorStandardUnprivileged::new(&self.config).configure(&args.to_vec(), streams);
+        let unprivileged_config = NodeConfiguratorStandardUnprivileged::new(&self.config)
+            .configure(&args.to_vec(), streams);
         self.config.merge_unprivileged(unprivileged_config);
         self.establish_clandestine_port();
         let (cryptde_ref, _) = Bootstrapper::initialize_cryptdes(
@@ -557,13 +557,12 @@ mod tests {
     use crate::test_utils::recorder::Recording;
     use crate::test_utils::tokio_wrapper_mocks::ReadHalfWrapperMock;
     use crate::test_utils::tokio_wrapper_mocks::WriteHalfWrapperMock;
-    use crate::test_utils::{
-        assert_contains, rate_pack, ArgsBuilder,
-    };
+    use crate::test_utils::{assert_contains, rate_pack, ArgsBuilder};
     use crate::test_utils::{main_cryptde, FakeStreamHolder, DEFAULT_CHAIN_ID};
     use actix::Recipient;
     use actix::System;
     use lazy_static::lazy_static;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
     use std::cell::RefCell;
     use std::io;
@@ -578,7 +577,6 @@ mod tests {
     use std::thread;
     use tokio;
     use tokio::prelude::Async;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     lazy_static! {
         static ref INITIALIZATION: Mutex<bool> = Mutex::new(false);

@@ -7,8 +7,6 @@ use crate::entry_dns::dns_socket_server::DnsSocketServer;
 use crate::node_configurator::node_configurator_standard::NodeConfiguratorStandardPrivileged;
 use crate::node_configurator::NodeConfigurator;
 use crate::sub_lib;
-use masq_lib::command::Command;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::socket_server::SocketServer;
 use backtrace::Backtrace;
 use chrono::{DateTime, Local};
@@ -17,6 +15,8 @@ use flexi_logger::Logger;
 use flexi_logger::{Cleanup, Criterion, LevelFilter, Naming};
 use flexi_logger::{DeferredNow, Duplicate, Record};
 use futures::try_ready;
+use masq_lib::command::Command;
+use masq_lib::command::StdStreams;
 use std::any::Any;
 use std::panic::{Location, PanicInfo};
 use std::path::PathBuf;
@@ -341,15 +341,9 @@ pub mod tests {
             &self.configuration
         }
 
-        fn initialize_as_privileged(&mut self, _args: &[String], _streams: &mut StdStreams<'_>) {
-        }
+        fn initialize_as_privileged(&mut self, _args: &[String], _streams: &mut StdStreams<'_>) {}
 
-        fn initialize_as_unprivileged(
-            &mut self,
-            _args: &[String],
-            _streams: &mut StdStreams<'_>,
-        ) {
-        }
+        fn initialize_as_unprivileged(&mut self, _args: &[String], _streams: &mut StdStreams<'_>) {}
     }
 
     struct SocketServerMock<C> {

@@ -434,6 +434,7 @@ mod tests {
     use ethereum_types::BigEndianHash;
     use ethsign_crypto::Keccak256;
     use jsonrpc_core as rpc;
+    use masq_lib::utils::find_free_port;
     use serde_json::json;
     use serde_json::Value;
     use simple_server::Server;
@@ -445,7 +446,6 @@ mod tests {
     use std::sync::mpsc;
     use std::thread;
     use web3::{transports::Http, Error, RequestId, Transport};
-    use masq_lib::utils::find_free_port;
 
     #[derive(Debug, Default, Clone)]
     pub struct TestTransport {

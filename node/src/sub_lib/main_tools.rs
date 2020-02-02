@@ -1,7 +1,7 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 use crate::run_modes;
-use std::io;
 use masq_lib::command::StdStreams;
+use std::io;
 
 pub fn main_with_args(args: &Vec<String>) -> i32 {
     let mut streams: StdStreams<'_> = StdStreams {

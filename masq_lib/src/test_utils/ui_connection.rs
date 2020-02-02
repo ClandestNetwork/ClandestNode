@@ -1,13 +1,13 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use std::net::TcpStream;
-use crate::messages::{ToMessageBody, FromMessageBody, UiMessageError};
+use crate::messages::{FromMessageBody, ToMessageBody, UiMessageError};
+use crate::ui_gateway::MessageTarget::ClientId;
 use crate::ui_gateway::NodeFromUiMessage;
 use crate::ui_traffic_converter::UiTrafficConverter;
-use crate::ui_gateway::MessageTarget::ClientId;
+use crate::utils::localhost;
+use std::net::TcpStream;
 use websocket::sync::Client;
 use websocket::{ClientBuilder, OwnedMessage};
-use crate::utils::localhost;
 
 // covered with tests.
 pub struct UiConnection {

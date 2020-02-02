@@ -1,8 +1,8 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use std::io::ErrorKind;
-use std::net::{SocketAddr, TcpListener, Ipv4Addr, IpAddr};
 use lazy_static::lazy_static;
+use std::io::ErrorKind;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::Arc;
 use std::sync::Mutex;
 

@@ -9,11 +9,11 @@ use crate::node_configurator::{
 };
 use crate::persistent_configuration::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use crate::sub_lib::crash_point::CrashPoint;
-use masq_lib::command::StdStreams;
-use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 use clap::{App, Arg};
 use indoc::indoc;
 use lazy_static::lazy_static;
+use masq_lib::command::StdStreams;
+use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
 pub struct NodeConfiguratorStandardPrivileged {}
 
@@ -308,10 +308,10 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
+    use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
-    use masq_lib::multi_config::{MultiConfig, ConfigFileVcl, EnvironmentVcl, CommandLineVcl};
 
     pub fn make_service_mode_multi_config<'a>(app: &'a App, args: &Vec<String>) -> MultiConfig<'a> {
         let (config_file_path, user_specified) = determine_config_file_path(app, args);
@@ -785,11 +785,14 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::{
-        main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME,
-    };
+    use crate::test_utils::{main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME};
     use crate::test_utils::{make_default_persistent_configuration, DEFAULT_CHAIN_ID};
     use crate::test_utils::{ByteArrayWriter, FakeStreamHolder};
+    use masq_lib::environment_guard::EnvironmentGuard;
+    use masq_lib::multi_config::{
+        CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
+    };
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rustc_hex::{FromHex, ToHex};
     use std::fs::File;
     use std::io::Cursor;
@@ -799,10 +802,6 @@ mod tests {
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
-    use masq_lib::multi_config::{NameValueVclArg, VclArg, MultiConfig, CommandLineVcl, VirtualCommandLine, ConfigFileVcl};
-    use masq_lib::environment_guard::EnvironmentGuard;
-
 
     fn make_default_cli_params() -> ArgsBuilder {
         ArgsBuilder::new()

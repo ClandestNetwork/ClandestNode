@@ -11,10 +11,10 @@ use crate::node_configurator::{
 };
 use crate::persistent_configuration::PersistentConfiguration;
 use crate::sub_lib::cryptde::PlainData;
-use masq_lib::command::StdStreams;
 use bip39::{Language, Mnemonic};
 use clap::{value_t, values_t, App, Arg};
 use indoc::indoc;
+use masq_lib::command::StdStreams;
 use masq_lib::multi_config::MultiConfig;
 
 pub struct NodeConfiguratorRecoverWallet {
@@ -247,9 +247,9 @@ mod tests {
     };
     use crate::test_utils::*;
     use bip39::Seed;
-    use std::io::Cursor;
-    use masq_lib::multi_config::{MultiConfig, CommandLineVcl, VirtualCommandLine};
+    use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use std::io::Cursor;
 
     #[test]
     fn validate_mnemonic_words_if_provided_in_chinese_simplified() {

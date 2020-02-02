@@ -1,11 +1,13 @@
 // Copyright (c) 2017-2018, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use crate::ui_gateway::MessagePath::{OneWay, TwoWay};
+use crate::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
+use crate::ui_traffic_converter::TrafficConversionError::{
+    FieldTypeError, JsonSyntaxError, MissingFieldError, NotJsonObjectError,
+};
+use crate::ui_traffic_converter::UnmarshalError::{Critical, NonCritical};
 use serde_json::Value;
 use std::fmt::Display;
-use crate::ui_traffic_converter::UnmarshalError::{NonCritical, Critical};
-use crate::ui_traffic_converter::TrafficConversionError::{MissingFieldError, FieldTypeError, NotJsonObjectError, JsonSyntaxError};
-use crate::ui_gateway::{MessageTarget, MessageBody, NodeToUiMessage, NodeFromUiMessage};
-use crate::ui_gateway::MessagePath::{TwoWay, OneWay};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TrafficConversionError {
@@ -57,12 +59,11 @@ pub struct UiTrafficConverter {}
 
 impl Default for UiTrafficConverter {
     fn default() -> Self {
-        Self{}
+        Self {}
     }
 }
 
 impl UiTrafficConverter {
-
     pub fn new() -> Self {
         Self::default()
     }
@@ -224,8 +225,10 @@ impl UiTrafficConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui_traffic_converter::TrafficConversionError::{
+        FieldTypeError, JsonSyntaxError, MissingFieldError, NotJsonObjectError,
+    };
     use serde_json::Number;
-    use crate::ui_traffic_converter::TrafficConversionError::{MissingFieldError, FieldTypeError, NotJsonObjectError, JsonSyntaxError};
 
     #[test]
     fn new_marshaling_and_unmarshaling_works_from_ui_one_way_for_success() {
@@ -277,8 +280,8 @@ mod tests {
 
         let json = UiTrafficConverter::new_marshal_to_ui(ui_msg);
 
-        let ui_msg = UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234))
-            .unwrap();
+        let ui_msg =
+            UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234)).unwrap();
         assert_eq!(ui_msg.target, MessageTarget::ClientId(1234));
         assert_eq!(ui_msg.body.opcode, "opcode".to_string());
         assert_eq!(ui_msg.body.path, OneWay);
@@ -332,8 +335,8 @@ mod tests {
 
         let json = UiTrafficConverter::new_marshal_to_ui(ui_msg);
 
-        let ui_msg = UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234))
-            .unwrap();
+        let ui_msg =
+            UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234)).unwrap();
         assert_eq!(ui_msg.target, MessageTarget::ClientId(1234));
         assert_eq!(ui_msg.body.opcode, "opcode".to_string());
         assert_eq!(ui_msg.body.path, OneWay);
@@ -393,8 +396,8 @@ mod tests {
 
         let json = UiTrafficConverter::new_marshal_to_ui(ui_msg);
 
-        let ui_msg = UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234))
-            .unwrap();
+        let ui_msg =
+            UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234)).unwrap();
         assert_eq!(ui_msg.target, MessageTarget::ClientId(1234));
         assert_eq!(ui_msg.body.opcode, "opcode".to_string());
         assert_eq!(ui_msg.body.path, TwoWay(2222));
@@ -448,8 +451,8 @@ mod tests {
 
         let json = UiTrafficConverter::new_marshal_to_ui(ui_msg);
 
-        let ui_msg = UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234))
-            .unwrap();
+        let ui_msg =
+            UiTrafficConverter::new_unmarshal_to_ui(&json, MessageTarget::ClientId(1234)).unwrap();
         assert_eq!(ui_msg.target, MessageTarget::ClientId(1234));
         assert_eq!(ui_msg.body.opcode, "opcode".to_string());
         assert_eq!(ui_msg.body.path, TwoWay(2222));

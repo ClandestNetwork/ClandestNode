@@ -35,15 +35,15 @@ use actix::Recipient;
 use futures::future::Future;
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use masq_lib::messages::UiMessageError::BadOpcode;
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiFinancialsRequest, UiMessageError};
+use masq_lib::messages::{UiFinancialsResponse, UiPayableAccount, UiReceivableAccount};
+use masq_lib::ui_gateway::MessageTarget::ClientId;
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use payable_dao::PayableDao;
 use receivable_dao::ReceivableDao;
 use std::thread;
 use std::time::{Duration, SystemTime};
-use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
-use masq_lib::ui_gateway::MessageTarget::ClientId;
-use masq_lib::messages::UiMessageError::BadOpcode;
-use masq_lib::messages::{UiFinancialsRequest, UiMessageError, FromMessageBody, ToMessageBody};
-use masq_lib::messages::{UiReceivableAccount, UiPayableAccount, UiFinancialsResponse};
 
 pub const DEFAULT_PAYABLE_SCAN_INTERVAL: u64 = 3600; // one hour
 pub const DEFAULT_PAYMENT_RECEIVED_SCAN_INTERVAL: u64 = 3600; // one hour
@@ -661,8 +661,7 @@ pub mod tests {
         FinancialStatisticsMessage, ReportRoutingServiceConsumedMessage,
     };
     use crate::sub_lib::blockchain_bridge::ReportAccountsPayable;
-    use crate::sub_lib::ui_gateway::{UiCarrierMessage, UiMessage,
-    };
+    use crate::sub_lib::ui_gateway::{UiCarrierMessage, UiMessage};
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
@@ -674,6 +673,8 @@ pub mod tests {
     use actix::System;
     use ethereum_types::BigEndianHash;
     use ethsign_crypto::Keccak256;
+    use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
+    use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
     use std::cell::RefCell;
     use std::convert::TryFrom;
     use std::ops::Sub;
@@ -684,8 +685,6 @@ pub mod tests {
     use std::time::SystemTime;
     use web3::types::H256;
     use web3::types::U256;
-    use masq_lib::ui_gateway::{NodeToUiMessage, MessageTarget, MessageBody, NodeFromUiMessage};
-    use masq_lib::ui_gateway::MessagePath::{TwoWay, OneWay};
 
     #[derive(Debug, Default)]
     pub struct PayableDaoMock {

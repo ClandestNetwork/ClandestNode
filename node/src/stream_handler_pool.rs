@@ -34,6 +34,7 @@ use actix::Addr;
 use actix::Context;
 use actix::Handler;
 use actix::Recipient;
+use masq_lib::utils::localhost;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
@@ -41,7 +42,6 @@ use std::thread;
 use std::time::Duration;
 use tokio;
 use tokio::prelude::Future;
-use masq_lib::utils::localhost;
 
 // IMPORTANT: Nothing at or below the level of StreamHandlerPool should know about StreamKeys.
 // StreamKeys should exist solely between ProxyServer and ProxyClient. Many of the streams

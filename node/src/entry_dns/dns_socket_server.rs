@@ -1,7 +1,7 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 use crate::sub_lib::logger::Logger;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::socket_server::SocketServer;
+use masq_lib::command::StdStreams;
 use std::net::IpAddr::V4;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;

@@ -6,10 +6,10 @@ use crate::daemon::launch_verifier::LaunchVerification::{
 use crate::daemon::launch_verifier::{LaunchVerifier, LaunchVerifierReal};
 use crate::daemon::{LaunchSuccess, Launcher};
 use itertools::Itertools;
+use masq_lib::utils::find_free_port;
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::mpsc::Sender;
-use masq_lib::utils::find_free_port;
 
 pub trait Execer {
     fn exec(&self, params: Vec<String>) -> Result<u32, String>;
@@ -82,10 +82,10 @@ mod tests {
     use super::*;
     use crate::daemon::launch_verifier::LaunchVerification::Launched;
     use crate::daemon::launch_verifier_mock::LaunchVerifierMock;
+    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
     use std::cell::RefCell;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
-    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
     struct ExecerMock {
         exec_params: Arc<Mutex<Vec<Vec<String>>>>,

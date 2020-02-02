@@ -6,10 +6,10 @@ use std::io;
 use std::io::Error;
 use std::io::Read;
 use std::io::Write;
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
 pub struct ByteArrayWriter {
-    inner_arc: Arc<Mutex<ByteArrayWriterInner>>
+    inner_arc: Arc<Mutex<ByteArrayWriterInner>>,
 }
 
 pub struct ByteArrayWriterInner {
@@ -29,10 +29,10 @@ impl ByteArrayWriterInner {
 impl Default for ByteArrayWriter {
     fn default() -> Self {
         ByteArrayWriter {
-            inner_arc: Arc::new (Mutex::new (ByteArrayWriterInner {
+            inner_arc: Arc::new(Mutex::new(ByteArrayWriterInner {
                 byte_array: vec![],
                 next_error: None,
-            }))
+            })),
         }
     }
 }
@@ -63,8 +63,7 @@ impl Write for ByteArrayWriter {
         let mut inner = self.inner_arc.lock().unwrap();
         if let Some(next_error) = inner.next_error.take() {
             Err(next_error)
-        }
-        else {
+        } else {
             for byte in buf {
                 inner.byte_array.push(*byte)
             }
@@ -94,7 +93,7 @@ impl ByteArrayReader {
 impl Read for ByteArrayReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let to_copy = min(buf.len(), self.byte_array.len() - self.position);
-        #[allow (clippy::needless_range_loop)]
+        #[allow(clippy::needless_range_loop)]
         for idx in 0..to_copy {
             buf[idx] = self.byte_array[self.position + idx]
         }

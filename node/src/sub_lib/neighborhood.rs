@@ -17,11 +17,11 @@ use actix::Message;
 use actix::Recipient;
 use core::fmt;
 use lazy_static::lazy_static;
+use masq_lib::ui_gateway::NodeFromUiMessage;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::net::IpAddr;
 use std::str::FromStr;
-use masq_lib::ui_gateway::NodeFromUiMessage;
 
 pub const DEFAULT_RATE_PACK: RatePack = RatePack {
     routing_byte_rate: 100,
@@ -413,8 +413,8 @@ mod tests {
     use crate::test_utils::recorder::Recorder;
     use crate::test_utils::{main_cryptde, DEFAULT_CHAIN_ID};
     use actix::Actor;
-    use std::str::FromStr;
     use masq_lib::utils::localhost;
+    use std::str::FromStr;
 
     pub fn rate_pack(base_rate: u64) -> RatePack {
         RatePack {

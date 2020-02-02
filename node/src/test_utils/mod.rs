@@ -25,7 +25,6 @@ use crate::sub_lib::cryptde::PublicKey;
 use crate::sub_lib::cryptde_null::CryptDENull;
 use crate::sub_lib::dispatcher::Component;
 use crate::sub_lib::hopper::MessageType;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::neighborhood::ExpectedService;
 use crate::sub_lib::neighborhood::ExpectedServices;
 use crate::sub_lib::neighborhood::RatePack;
@@ -40,6 +39,7 @@ use crate::sub_lib::wallet::Wallet;
 use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
 use ethsign_crypto::Keccak256;
 use lazy_static::lazy_static;
+use masq_lib::command::StdStreams;
 use regex::Regex;
 use rustc_hex::ToHex;
 use std::cmp::min;
@@ -48,12 +48,13 @@ use std::collections::HashSet;
 use std::convert::From;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::io::{Error, ErrorKind};
 use std::iter::repeat;
+use std::net::SocketAddr;
 use std::net::{Shutdown, TcpStream};
-use std::net::{SocketAddr};
 use std::str::from_utf8;
 use std::str::FromStr;
 use std::sync::mpsc;
@@ -64,7 +65,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use std::io;
 
 pub const DEFAULT_CHAIN_ID: u8 = 3u8; //For testing only
 pub const TEST_DEFAULT_CHAIN_NAME: &str = "ropsten"; //For testing only

@@ -1,13 +1,13 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use serde::de::DeserializeOwned;
-use serde_derive::{Deserialize, Serialize};
-use crate::messages::UiMessageError::{PayloadError, DeserializationError, UnexpectedMessage};
-use crate::ui_gateway::{MessageBody, MessagePath};
+use crate::messages::UiMessageError::{DeserializationError, PayloadError, UnexpectedMessage};
 use crate::ui_gateway::MessagePath::{OneWay, TwoWay};
-use std::fmt;
-use serde::export::Formatter;
+use crate::ui_gateway::{MessageBody, MessagePath};
+use serde::de::DeserializeOwned;
 use serde::export::fmt::Error;
+use serde::export::Formatter;
+use serde_derive::{Deserialize, Serialize};
+use std::fmt;
 
 pub const NODE_UI_PROTOCOL: &str = "MASQNode-UIv2";
 
@@ -25,10 +25,24 @@ pub enum UiMessageError {
 impl fmt::Display for UiMessageError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            UnexpectedMessage(opcode, OneWay) => write!(f, "Unexpected one-way message with opcode '{}'", opcode),
-            UnexpectedMessage(opcode, TwoWay(context_id)) => write!(f, "Unexpected two-way message from context {} with opcode '{}'", context_id, opcode),
-            PayloadError(code, message) => write!(f, "Daemon or Node complained about your command. Error code {}: {}", code, message),
-            DeserializationError(message) => write!(f, "Could not deserialize message from Daemon or Node: {}", message),
+            UnexpectedMessage(opcode, OneWay) => {
+                write!(f, "Unexpected one-way message with opcode '{}'", opcode)
+            }
+            UnexpectedMessage(opcode, TwoWay(context_id)) => write!(
+                f,
+                "Unexpected two-way message from context {} with opcode '{}'",
+                context_id, opcode
+            ),
+            PayloadError(code, message) => write!(
+                f,
+                "Daemon or Node complained about your command. Error code {}: {}",
+                code, message
+            ),
+            DeserializationError(message) => write!(
+                f,
+                "Could not deserialize message from Daemon or Node: {}",
+                message
+            ),
         }
     }
 }
@@ -120,7 +134,9 @@ macro_rules! two_way_message {
                 };
                 let context_id = match body.path {
                     TwoWay(context_id) => context_id,
-                    OneWay => return Err(UiMessageError::UnexpectedMessage(body.opcode, body.path)),
+                    OneWay => {
+                        return Err(UiMessageError::UnexpectedMessage(body.opcode, body.path))
+                    }
                 };
                 Ok((payload, context_id))
             }
@@ -240,19 +256,28 @@ one_way_message!(UiUnmarshalError, "unmarshalError");
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui_gateway::MessagePath::{TwoWay, OneWay};
-    use crate::messages::UiMessageError::{PayloadError, DeserializationError, UnexpectedMessage};
+    use crate::messages::UiMessageError::{DeserializationError, PayloadError, UnexpectedMessage};
+    use crate::ui_gateway::MessagePath::{OneWay, TwoWay};
 
     #[test]
     fn ui_message_errors_are_displayable() {
-        assert_eq! (UnexpectedMessage("opcode".to_string(), OneWay).to_string(),
-            "Unexpected one-way message with opcode 'opcode'".to_string());
-        assert_eq! (UnexpectedMessage("opcode".to_string(), TwoWay(1234)).to_string(),
-            "Unexpected two-way message from context 1234 with opcode 'opcode'".to_string());
-        assert_eq! (PayloadError(1234, "Booga booga".to_string()).to_string(),
-            "Daemon or Node complained about your command. Error code 1234: Booga booga".to_string());
-        assert_eq! (DeserializationError("Booga booga".to_string()).to_string(),
-            "Could not deserialize message from Daemon or Node: Booga booga".to_string());
+        assert_eq!(
+            UnexpectedMessage("opcode".to_string(), OneWay).to_string(),
+            "Unexpected one-way message with opcode 'opcode'".to_string()
+        );
+        assert_eq!(
+            UnexpectedMessage("opcode".to_string(), TwoWay(1234)).to_string(),
+            "Unexpected two-way message from context 1234 with opcode 'opcode'".to_string()
+        );
+        assert_eq!(
+            PayloadError(1234, "Booga booga".to_string()).to_string(),
+            "Daemon or Node complained about your command. Error code 1234: Booga booga"
+                .to_string()
+        );
+        assert_eq!(
+            DeserializationError("Booga booga".to_string()).to_string(),
+            "Could not deserialize message from Daemon or Node: Booga booga".to_string()
+        );
     }
 
     #[test]
@@ -264,8 +289,8 @@ mod tests {
             total_receivable: 0,
         };
 
-        assert_eq! (subject.opcode(), "financials");
-        assert_eq! (subject.is_two_way(), true);
+        assert_eq!(subject.opcode(), "financials");
+        assert_eq!(subject.is_two_way(), true);
     }
 
     #[test]
@@ -319,7 +344,10 @@ mod tests {
         let result: Result<(UiFinancialsResponse, u64), UiMessageError> =
             UiFinancialsResponse::fmb(message_body);
 
-        assert_eq!(result, Err(UnexpectedMessage("booga".to_string(), TwoWay(1234))))
+        assert_eq!(
+            result,
+            Err(UnexpectedMessage("booga".to_string(), TwoWay(1234)))
+        )
     }
 
     #[test]
@@ -342,7 +370,10 @@ mod tests {
         let result: Result<(UiFinancialsResponse, u64), UiMessageError> =
             UiFinancialsResponse::fmb(message_body);
 
-        assert_eq!(result, Err(UnexpectedMessage("financials".to_string(), OneWay)))
+        assert_eq!(
+            result,
+            Err(UnexpectedMessage("financials".to_string(), OneWay))
+        )
     }
 
     #[test]
@@ -435,8 +466,8 @@ mod tests {
     fn ui_shutdown_order_methods_were_correctly_generated() {
         let subject = UiShutdownOrder {};
 
-        assert_eq! (subject.opcode(), "shutdownOrder");
-        assert_eq! (subject.is_two_way(), false);
+        assert_eq!(subject.opcode(), "shutdownOrder");
+        assert_eq!(subject.is_two_way(), false);
     }
 
     #[test]
@@ -483,7 +514,10 @@ mod tests {
         let result: Result<(UiShutdownOrder, u64), UiMessageError> =
             UiShutdownOrder::fmb(message_body);
 
-        assert_eq!(result, Err(UnexpectedMessage("shutdownOrder".to_string(), TwoWay(0))))
+        assert_eq!(
+            result,
+            Err(UnexpectedMessage("shutdownOrder".to_string(), TwoWay(0)))
+        )
     }
 
     #[test]

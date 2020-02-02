@@ -315,10 +315,10 @@ mod tests {
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
     use crate::test_utils::{make_wallet, DEFAULT_CHAIN_ID};
     use ethereum_types::BigEndianHash;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rusqlite::{Connection, OpenFlags, NO_PARAMS};
     use std::str::FromStr;
     use web3::types::U256;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     fn more_money_payable_works_for_new_address() {

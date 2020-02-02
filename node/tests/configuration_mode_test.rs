@@ -3,6 +3,7 @@
 pub mod utils;
 
 use bip39::{Language, Mnemonic, Seed};
+use masq_lib::environment_guard::EnvironmentGuard;
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
 use node_lib::database::db_initializer::{
     DbInitializer, DbInitializerReal, CURRENT_SCHEMA_VERSION,
@@ -16,7 +17,6 @@ use regex::Regex;
 use std::str::FromStr;
 use utils::CommandConfig;
 use utils::MASQNode;
-use masq_lib::environment_guard::EnvironmentGuard;
 
 const PHRASE: &str =
     "snake gorilla marine couch wheel decline stamp glass aunt antenna transfer exit";

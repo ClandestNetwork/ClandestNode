@@ -13,8 +13,8 @@ use crate::sub_lib::blockchain_bridge::{SetDbPasswordMsg, SetGasPriceMsg};
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::neighborhood::NeighborhoodDotGraphRequest;
 use crate::sub_lib::peer_actors::BindMessage;
+use crate::sub_lib::ui_gateway::UiGatewaySubs;
 use crate::sub_lib::ui_gateway::{FromUiMessage, UiCarrierMessage};
-use crate::sub_lib::ui_gateway::{UiGatewaySubs};
 use crate::sub_lib::ui_gateway::{UiGatewayConfig, UiMessage};
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use crate::ui_gateway::shutdown_supervisor::ShutdownSupervisor;
@@ -293,7 +293,7 @@ mod tests {
     use super::*;
     use crate::sub_lib::accountant::{FinancialStatisticsMessage, GetFinancialStatisticsMessage};
     use crate::sub_lib::blockchain_bridge::SetDbPasswordMsg;
-    use crate::sub_lib::ui_gateway::{UiMessage};
+    use crate::sub_lib::ui_gateway::UiMessage;
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
     use crate::test_utils::recorder::peer_actors_builder;
@@ -301,13 +301,13 @@ mod tests {
     use crate::test_utils::wait_for;
     use crate::ui_gateway::websocket_supervisor_mock::WebSocketSupervisorMock;
     use actix::System;
+    use masq_lib::ui_gateway::MessagePath::OneWay;
+    use masq_lib::ui_gateway::{MessageBody, MessageTarget};
+    use masq_lib::utils::find_free_port;
     use std::cell::RefCell;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::thread;
-    use masq_lib::ui_gateway::{MessageTarget, MessageBody};
-    use masq_lib::ui_gateway::MessagePath::OneWay;
-    use masq_lib::utils::find_free_port;
 
     impl Default for UiGatewayOutSubs {
         fn default() -> Self {
@@ -930,8 +930,8 @@ mod tests {
     #[test]
     fn bad_from_ui_message_is_logged_and_ignored() {
         init_test_logging();
-        let handler =
-            UiTrafficConverterOldMock::new().unmarshal_result(Err(String::from("I have a tummyache")));
+        let handler = UiTrafficConverterOldMock::new()
+            .unmarshal_result(Err(String::from("I have a tummyache")));
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
 
         thread::spawn(move || {

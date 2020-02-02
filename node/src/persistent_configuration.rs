@@ -442,16 +442,14 @@ mod tests {
     use crate::blockchain::test_utils::make_meaningless_seed;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
     use crate::test_utils::config_dao_mock::ConfigDaoMock;
-    use crate::test_utils::{
-        main_cryptde, DEFAULT_CHAIN_ID,
-    };
+    use crate::test_utils::{main_cryptde, DEFAULT_CHAIN_ID};
     use bip39::{Language, Mnemonic, MnemonicType, Seed};
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::utils::find_free_port;
     use rustc_hex::FromHex;
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
-    use masq_lib::utils::find_free_port;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     #[should_panic(expected = "Can't continue; current schema version is inaccessible: NotPresent")]

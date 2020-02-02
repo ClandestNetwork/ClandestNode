@@ -1,15 +1,15 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
-use masq_lib::ui_gateway::DEFAULT_UI_PORT;
-use lazy_static::lazy_static;
-use clap::{crate_description, crate_version, App, AppSettings, Arg, SubCommand};
-use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use crate::commands::SetupCommand;
+use clap::{crate_description, crate_version, App, AppSettings, Arg, SubCommand};
+use lazy_static::lazy_static;
+use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
+use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
 lazy_static! {
     static ref UI_PORT_HELP: String = format!(
         "If the Daemon is listening for connections at some port other than {}, specify that port \
-        here. Must be between {} and {}.", DEFAULT_UI_PORT,
-        LOWEST_USABLE_INSECURE_PORT, HIGHEST_USABLE_PORT
+         here. Must be between {} and {}.",
+        DEFAULT_UI_PORT, LOWEST_USABLE_INSECURE_PORT, HIGHEST_USABLE_PORT
     );
     static ref DEFAULT_UI_PORT_STRING: String = format!("{}", DEFAULT_UI_PORT);
 }

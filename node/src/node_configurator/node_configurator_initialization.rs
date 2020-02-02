@@ -6,9 +6,9 @@ use crate::node_configurator::{
     NodeConfigurator, CONFIG_FILE_HELP, DB_PASSWORD_HELP,
 };
 use crate::persistent_configuration::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
-use masq_lib::command::StdStreams;
 use clap::{App, Arg};
 use lazy_static::lazy_static;
+use masq_lib::command::StdStreams;
 use std::path::PathBuf;
 
 lazy_static! {
@@ -69,8 +69,8 @@ mod initialization {
     use super::*;
     use crate::node_configurator::real_user_data_directory_and_chain_id;
     use clap::value_t;
-    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
     use masq_lib::multi_config::MultiConfig;
+    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
     pub fn parse_args(
         multi_config: &MultiConfig,
@@ -95,14 +95,14 @@ mod tests {
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
     use crate::test_utils::{ArgsBuilder, FakeStreamHolder};
+    use masq_lib::environment_guard::EnvironmentGuard;
+    use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
-    use masq_lib::multi_config::{MultiConfig, CommandLineVcl, VirtualCommandLine};
-    use masq_lib::environment_guard::EnvironmentGuard;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     fn can_read_parameters_from_config_file() {

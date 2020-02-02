@@ -146,6 +146,7 @@ mod tests {
     use actix::Actor;
     use actix::Addr;
     use actix::System;
+    use masq_lib::utils::{find_free_port, localhost};
     use std::cell::RefCell;
     use std::io::Error;
     use std::io::ErrorKind;
@@ -160,7 +161,6 @@ mod tests {
     use tokio;
     use tokio::net::TcpStream;
     use tokio::reactor::Handle;
-    use masq_lib::utils::{localhost, find_free_port};
 
     struct TokioListenerWrapperMock {
         log: Arc<TestLog>,

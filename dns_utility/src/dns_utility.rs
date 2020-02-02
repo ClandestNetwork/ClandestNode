@@ -2,8 +2,8 @@
 use crate::dns_modifier::DnsModifier;
 use crate::dns_modifier_factory::DnsModifierFactory;
 use crate::dns_modifier_factory::DnsModifierFactoryReal;
-use masq_lib::command::StdStreams;
 use masq_lib::command::Command;
+use masq_lib::command::StdStreams;
 use std::io::Write;
 
 enum Action {

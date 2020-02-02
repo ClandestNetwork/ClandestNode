@@ -58,16 +58,16 @@ use gossip_acceptor::GossipAcceptorReal;
 use gossip_producer::GossipProducer;
 use gossip_producer::GossipProducerReal;
 use itertools::Itertools;
+use masq_lib::messages::FromMessageBody;
+use masq_lib::messages::UiMessageError::BadOpcode;
+use masq_lib::messages::{UiMessageError, UiShutdownOrder};
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use neighborhood_database::NeighborhoodDatabase;
 use node_record::NodeRecord;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use masq_lib::ui_gateway::{NodeToUiMessage, NodeFromUiMessage};
-use masq_lib::messages::UiMessageError::BadOpcode;
-use masq_lib::messages::{UiShutdownOrder, UiMessageError};
-use masq_lib::messages::{FromMessageBody};
 
 pub struct Neighborhood {
     cryptde: &'static dyn CryptDE,
@@ -1258,6 +1258,7 @@ mod tests {
         neighborhood_from_nodes,
     };
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
+    use crate::test_utils::rate_pack;
     use crate::test_utils::recorder::make_recorder;
     use crate::test_utils::recorder::peer_actors_builder;
     use crate::test_utils::recorder::Recorder;
@@ -1265,13 +1266,15 @@ mod tests {
     use crate::test_utils::vec_to_set;
     use crate::test_utils::{assert_contains, make_wallet};
     use crate::test_utils::{assert_matches, make_meaningless_route};
-    use crate::test_utils::{rate_pack};
     use crate::test_utils::{main_cryptde, make_paying_wallet, DEFAULT_CHAIN_ID};
     use actix::dev::{MessageResponse, ResponseChannel};
     use actix::Message;
     use actix::Recipient;
     use actix::System;
     use itertools::Itertools;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::ui_gateway::MessageBody;
+    use masq_lib::ui_gateway::MessagePath::OneWay;
     use serde_cbor;
     use std::cell::RefCell;
     use std::convert::TryInto;
@@ -1280,9 +1283,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use tokio::prelude::Future;
-    use masq_lib::ui_gateway::MessageBody;
-    use masq_lib::ui_gateway::MessagePath::OneWay;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     #[should_panic(expected = "Neighbor AQIDBA:1.2.3.4:1234 is not on the mainnet blockchain")]

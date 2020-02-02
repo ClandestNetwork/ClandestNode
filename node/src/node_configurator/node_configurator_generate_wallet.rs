@@ -12,14 +12,14 @@ use crate::node_configurator::{
 };
 use crate::persistent_configuration::PersistentConfiguration;
 use crate::sub_lib::cryptde::PlainData;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::wallet::Wallet;
 use bip39::{Language, Mnemonic, MnemonicType};
 use clap::{value_t, App, Arg};
 use indoc::indoc;
+use masq_lib::command::StdStreams;
+use masq_lib::multi_config::MultiConfig;
 use std::str::FromStr;
 use unindent::unindent;
-use masq_lib::multi_config::MultiConfig;
 
 pub struct NodeConfiguratorGenerateWallet {
     app: App<'static, 'static>,
@@ -332,12 +332,12 @@ mod tests {
     use crate::sub_lib::wallet::DEFAULT_EARNING_DERIVATION_PATH;
     use crate::test_utils::*;
     use bip39::Seed;
+    use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
     use std::cell::RefCell;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
-    use masq_lib::multi_config::{MultiConfig, CommandLineVcl, VirtualCommandLine};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     struct MnemonicFactoryMock {
         make_parameters: Arc<Mutex<Vec<(MnemonicType, Language)>>>,

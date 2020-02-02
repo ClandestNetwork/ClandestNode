@@ -2,8 +2,8 @@
 #![cfg(test)]
 
 use crate::ui_gateway::websocket_supervisor::WebSocketSupervisor;
-use std::sync::{Arc, Mutex};
 use masq_lib::ui_gateway::NodeToUiMessage;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct WebSocketSupervisorMock {

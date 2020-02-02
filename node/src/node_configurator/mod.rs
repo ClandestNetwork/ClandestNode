@@ -15,22 +15,22 @@ use crate::persistent_configuration::{
     PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
 };
 use crate::sub_lib::cryptde::PlainData;
-use masq_lib::command::StdStreams;
 use crate::sub_lib::wallet::Wallet;
 use crate::sub_lib::wallet::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use bip39::Language;
 use clap::{crate_description, crate_version, value_t, App, AppSettings, Arg};
 use dirs::{data_local_dir, home_dir};
+use masq_lib::command::StdStreams;
+use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig, VclArg};
 use rpassword;
 use rpassword::read_password_with_reader;
 use rustc_hex::FromHex;
 use std::fmt::Debug;
 use std::io;
+use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
-use std::io::Read;
-use masq_lib::multi_config::{MultiConfig, EnvironmentVcl, CommandLineVcl, merge, VclArg};
 
 pub trait NodeConfigurator<T> {
     fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> T;
@@ -553,9 +553,9 @@ pub fn flushed_write(target: &mut dyn io::Write, string: &str) {
 
 pub mod common_validators {
     use crate::persistent_configuration::LOWEST_USABLE_INSECURE_PORT;
+    use masq_lib::constants::LOWEST_USABLE_INSECURE_PORT;
     use regex::Regex;
     use tiny_hderive::bip44::DerivationPath;
-    use masq_lib::constants::LOWEST_USABLE_INSECURE_PORT;
 
     pub fn validate_earning_wallet(value: String) -> Result<(), String> {
         validate_ethereum_address(value.clone()).or_else(|_| validate_derivation_path(value))
@@ -771,16 +771,15 @@ mod tests {
     use crate::sub_lib::wallet::{Wallet, DEFAULT_EARNING_DERIVATION_PATH};
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use crate::test_utils::{
-        ArgsBuilder, ByteArrayWriter, DEFAULT_CHAIN_ID,
-        TEST_DEFAULT_CHAIN_NAME,
+        ArgsBuilder, ByteArrayWriter, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME,
     };
     use bip39::{Mnemonic, MnemonicType, Seed};
+    use masq_lib::environment_guard::EnvironmentGuard;
+    use masq_lib::multi_config::MultiConfig;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
     use tiny_hderive::bip44::DerivationPath;
-    use masq_lib::multi_config::MultiConfig;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
-    use masq_lib::environment_guard::EnvironmentGuard;
 
     #[test]
     fn validate_ethereum_address_requires_an_address_that_is_42_characters_long() {

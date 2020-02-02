@@ -3,21 +3,23 @@
 pub mod utils;
 
 use futures::future::*;
-use node_lib::sub_lib::ui_gateway::{
-    UiMessage,
+use masq_lib::messages::{UiFinancialsRequest, UiFinancialsResponse};
+use masq_lib::ui_gateway::MessagePath::TwoWay;
+use masq_lib::ui_gateway::{
+    MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage, DEFAULT_UI_PORT,
 };
+use masq_lib::ui_traffic_converter::UiTrafficConverter;
+use masq_lib::utils::localhost;
+use node_lib::sub_lib::ui_gateway::UiMessage;
 use node_lib::test_utils::assert_matches;
-use node_lib::ui_gateway::ui_traffic_converter::{UiTrafficConverterOld, UiTrafficConverterOldReal};
+use node_lib::ui_gateway::ui_traffic_converter::{
+    UiTrafficConverterOld, UiTrafficConverterOldReal,
+};
 use std::time::Duration;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use websocket::ClientBuilder;
 use websocket::OwnedMessage;
-use masq_lib::ui_gateway::{DEFAULT_UI_PORT, NodeFromUiMessage, MessageBody, NodeToUiMessage, MessageTarget};
-use masq_lib::ui_gateway::MessagePath::TwoWay;
-use masq_lib::messages::{UiFinancialsResponse, UiFinancialsRequest};
-use masq_lib::ui_traffic_converter::UiTrafficConverter;
-use masq_lib::utils::localhost;
 
 #[test]
 fn ui_gateway_message_integration() {
@@ -147,8 +149,11 @@ fn request_financial_information_integration() {
             .and_then(|s| s.into_future().map_err(|e| e.0))
             .map(|(m, _)| match m {
                 Some(OwnedMessage::Text(response_json)) => {
-                    let response_msg: NodeToUiMessage = UiTrafficConverter::new_unmarshal_to_ui(&response_json, MessageTarget::ClientId(1234))
-                        .unwrap();
+                    let response_msg: NodeToUiMessage = UiTrafficConverter::new_unmarshal_to_ui(
+                        &response_json,
+                        MessageTarget::ClientId(1234),
+                    )
+                    .unwrap();
                     assert_eq!(response_msg.target, MessageTarget::ClientId(1234));
                     assert_eq!(response_msg.body.opcode, "financials".to_string());
                     assert_eq!(response_msg.body.path, TwoWay(2222));

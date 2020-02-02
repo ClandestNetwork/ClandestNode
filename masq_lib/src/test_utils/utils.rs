@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 pub const BASE_TEST_DIR: &str = "generated/test";
 

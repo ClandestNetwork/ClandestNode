@@ -327,8 +327,8 @@ mod tests {
         DbInitializer, DbInitializerReal, CURRENT_SCHEMA_VERSION,
     };
     use crate::test_utils::{assert_contains, DEFAULT_CHAIN_ID};
-    use rusqlite::NO_PARAMS;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use rusqlite::NO_PARAMS;
 
     #[test]
     fn get_all_returns_multiple_results() {

@@ -344,9 +344,9 @@ mod tests {
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use crate::test_utils::{assert_contains, make_wallet};
     use crate::test_utils::{logging, DEFAULT_CHAIN_ID};
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rusqlite::NO_PARAMS;
     use rusqlite::{Connection, Error, OpenFlags};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     #[test]
     fn more_money_receivable_works_for_new_address() {

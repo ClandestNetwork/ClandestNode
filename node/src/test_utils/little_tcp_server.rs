@@ -1,5 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use masq_lib::utils::localhost;
 use std::io::Read;
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener};
@@ -7,7 +8,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use masq_lib::utils::localhost;
 
 pub struct LittleTcpServer {
     port: u16,
