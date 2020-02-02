@@ -11,7 +11,7 @@ use futures::Future;
 use futures::Sink;
 use futures::Stream;
 use itertools::Itertools;
-use masq_lib::messages::{ToMessageBody, UiUnmarshalError, UNMARSHAL_ERROR};
+use masq_lib::messages::{ToMessageBody, UiUnmarshalError, NODE_UI_PROTOCOL, UNMARSHAL_ERROR};
 use masq_lib::ui_gateway::MessagePath::TwoWay;
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
@@ -499,7 +499,9 @@ mod tests {
     use actix::Addr;
     use actix::System;
     use futures::future::lazy;
-    use masq_lib::messages::{FromMessageBody, UiUnmarshalError, UNMARSHAL_ERROR};
+    use masq_lib::messages::{
+        FromMessageBody, UiUnmarshalError, NODE_UI_PROTOCOL, UNMARSHAL_ERROR,
+    };
     use masq_lib::ui_gateway::MessagePath::OneWay;
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use masq_lib::ui_traffic_converter::UiTrafficConverter;

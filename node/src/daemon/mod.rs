@@ -9,7 +9,7 @@ use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
-use masq_lib::messages::UiMessageError::BadOpcode;
+use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetup, UiSetupValue,
     UiStartOrder, UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
@@ -102,12 +102,12 @@ impl Handler<NodeFromUiMessage> for Daemon {
         let result: Result<(UiSetup, u64), UiMessageError> = UiSetup::fmb(msg.body.clone());
         match result {
             Ok((payload, context_id)) => self.handle_setup(client_id, context_id, payload),
-            Err(e) if e == BadOpcode => {
+            Err(UnexpectedMessage(_, _)) => {
                 let result: Result<(UiStartOrder, u64), UiMessageError> =
                     UiStartOrder::fmb(msg.body.clone());
                 match result {
                     Ok((_, context_id)) => self.handle_start_order(client_id, context_id),
-                    Err(e) if e == BadOpcode => {
+                    Err(UnexpectedMessage(_, _)) => {
                         self.handle_unexpected_message(msg.client_id, msg.body);
                     }
                     Err(e) => error!(

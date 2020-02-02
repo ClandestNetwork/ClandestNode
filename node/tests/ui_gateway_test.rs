@@ -3,7 +3,7 @@
 pub mod utils;
 
 use futures::future::*;
-use masq_lib::messages::{UiFinancialsRequest, UiFinancialsResponse};
+use masq_lib::messages::{UiFinancialsRequest, UiFinancialsResponse, NODE_UI_PROTOCOL};
 use masq_lib::ui_gateway::MessagePath::TwoWay;
 use masq_lib::ui_gateway::{
     MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage, DEFAULT_UI_PORT,

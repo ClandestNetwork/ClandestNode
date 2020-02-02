@@ -552,7 +552,6 @@ mod tests {
     use crate::json_masquerader::JsonMasquerader;
     use crate::masquerader::Masquerader;
     use crate::node_test_utils::FailingMasquerader;
-    use crate::persistent_configuration::HTTP_PORT;
     use crate::sub_lib::cryptde::CryptDE;
     use crate::sub_lib::dispatcher::InboundClientData;
     use crate::sub_lib::neighborhood::NodeQueryResponseMetadata;
@@ -572,6 +571,7 @@ mod tests {
     use actix::Actor;
     use actix::Addr;
     use actix::System;
+    use masq_lib::constants::HTTP_PORT;
     use std::io::Error;
     use std::io::ErrorKind;
     use std::net::IpAddr;

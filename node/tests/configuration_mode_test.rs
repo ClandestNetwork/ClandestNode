@@ -3,7 +3,7 @@
 pub mod utils;
 
 use bip39::{Language, Mnemonic, Seed};
-use masq_lib::environment_guard::EnvironmentGuard;
+use masq_lib::test_utils::environment_guard::EnvironmentGuard;
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
 use node_lib::database::db_initializer::{
     DbInitializer, DbInitializerReal, CURRENT_SCHEMA_VERSION,

@@ -552,7 +552,6 @@ pub fn flushed_write(target: &mut dyn io::Write, string: &str) {
 }
 
 pub mod common_validators {
-    use crate::persistent_configuration::LOWEST_USABLE_INSECURE_PORT;
     use masq_lib::constants::LOWEST_USABLE_INSECURE_PORT;
     use regex::Regex;
     use tiny_hderive::bip44::DerivationPath;
@@ -774,8 +773,8 @@ mod tests {
         ArgsBuilder, ByteArrayWriter, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME,
     };
     use bip39::{Mnemonic, MnemonicType, Seed};
-    use masq_lib::environment_guard::EnvironmentGuard;
     use masq_lib::multi_config::MultiConfig;
+    use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};

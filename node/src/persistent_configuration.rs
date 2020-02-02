@@ -7,6 +7,7 @@ use crate::database::db_initializer::ConnectionWrapper;
 use crate::sub_lib::cryptde::PlainData;
 use crate::sub_lib::neighborhood::NodeDescriptor;
 use crate::sub_lib::wallet::Wallet;
+use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use rand::Rng;
 use rusqlite::Transaction;
 use rustc_hex::ToHex;

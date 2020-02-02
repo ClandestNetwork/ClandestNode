@@ -528,7 +528,7 @@ mod tests {
         route_to_proxy_server, DEFAULT_CHAIN_ID,
     };
     use actix::System;
-    use masq_lib::environment_guard::EnvironmentGuard;
+    use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use std::net::SocketAddr;
     use std::str::FromStr;
 

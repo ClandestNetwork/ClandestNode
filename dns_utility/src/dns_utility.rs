@@ -113,7 +113,7 @@ impl DnsUtility {
 mod tests {
     use super::*;
     use crate::dns_modifier::DnsModifier;
-    use masq_lib::fake_stream_holder::FakeStreamHolder;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::cell::RefCell;
     use std::io;
 

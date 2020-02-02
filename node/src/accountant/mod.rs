@@ -35,7 +35,7 @@ use actix::Recipient;
 use futures::future::Future;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use masq_lib::messages::UiMessageError::BadOpcode;
+use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::{FromMessageBody, ToMessageBody, UiFinancialsRequest, UiMessageError};
 use masq_lib::messages::{UiFinancialsResponse, UiPayableAccount, UiReceivableAccount};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
@@ -287,7 +287,7 @@ impl Handler<NodeFromUiMessage> for Accountant {
             UiFinancialsRequest::fmb(msg.body);
         match result {
             Ok((payload, context_id)) => self.handle_financials(client_id, context_id, payload),
-            Err(e) if e == BadOpcode => (),
+            Err(UnexpectedMessage(_, _)) => (),
             Err(e) => error!(
                 &self.logger,
                 "Bad {} request from client {}: {:?}", opcode, client_id, e

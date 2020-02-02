@@ -90,7 +90,7 @@ mod tests {
     use crate::sub_lib::udp_socket_wrapper::UdpSocketWrapperTrait;
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
-    use crate::test_utils::FakeStreamHolder;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::borrow::Borrow;
     use std::borrow::BorrowMut;
     use std::clone::Clone;

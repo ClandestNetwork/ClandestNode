@@ -7,12 +7,12 @@ use crate::node_configurator::{
     app_head, chain_arg, common_validators, config_file_arg, data_directory_arg, db_password_arg,
     earning_wallet_arg, initialize_database, real_user_arg, ui_port_arg, NodeConfigurator,
 };
-use crate::persistent_configuration::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use crate::sub_lib::crash_point::CrashPoint;
 use clap::{App, Arg};
 use indoc::indoc;
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
+use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
 pub struct NodeConfiguratorStandardPrivileged {}
@@ -295,7 +295,7 @@ pub mod standard {
         determine_config_file_path, mnemonic_seed_exists, real_user_data_directory_and_chain_id,
         request_existing_db_password,
     };
-    use crate::persistent_configuration::{PersistentConfiguration, HTTP_PORT, TLS_PORT};
+    use crate::persistent_configuration::PersistentConfiguration;
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
     use crate::sub_lib::cryptde_null::CryptDENull;
@@ -308,6 +308,7 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
+    use masq_lib::constants::{HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
@@ -725,7 +726,7 @@ pub mod standard {
 }
 
 mod validators {
-    use super::*;
+    use masq_lib::constants::LOWEST_USABLE_INSECURE_PORT;
     use regex::Regex;
     use std::net::IpAddr;
     use std::str::FromStr;
@@ -785,13 +786,14 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
+    use crate::test_utils::ByteArrayWriter;
     use crate::test_utils::{main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME};
     use crate::test_utils::{make_default_persistent_configuration, DEFAULT_CHAIN_ID};
-    use crate::test_utils::{ByteArrayWriter, FakeStreamHolder};
-    use masq_lib::environment_guard::EnvironmentGuard;
     use masq_lib::multi_config::{
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
     };
+    use masq_lib::test_utils::environment_guard::EnvironmentGuard;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rustc_hex::{FromHex, ToHex};
     use std::fs::File;

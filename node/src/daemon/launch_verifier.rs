@@ -3,6 +3,7 @@
 use crate::daemon::launch_verifier::LaunchVerification::{
     CleanFailure, DirtyFailure, InterventionRequired, Launched,
 };
+use masq_lib::messages::NODE_UI_PROTOCOL;
 use std::thread;
 use std::time::Duration;
 use sysinfo::{ProcessExt, ProcessStatus, Signal, SystemExt};

@@ -59,7 +59,7 @@ use gossip_producer::GossipProducer;
 use gossip_producer::GossipProducerReal;
 use itertools::Itertools;
 use masq_lib::messages::FromMessageBody;
-use masq_lib::messages::UiMessageError::BadOpcode;
+use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::{UiMessageError, UiShutdownOrder};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use neighborhood_database::NeighborhoodDatabase;
@@ -300,7 +300,7 @@ impl Handler<NodeFromUiMessage> for Neighborhood {
         let result: Result<(UiShutdownOrder, u64), UiMessageError> = UiShutdownOrder::fmb(msg.body);
         match result {
             Ok((payload, _)) => self.handle_shutdown_order(client_id, payload),
-            Err(e) if e == BadOpcode => (),
+            Err(UnexpectedMessage(_, _)) => (),
             Err(e) => error!(
                 &self.logger,
                 "Bad {} request from client {}: {:?}", opcode, client_id, e
@@ -1239,7 +1239,7 @@ mod tests {
     use crate::neighborhood::gossip::GossipBuilder;
     use crate::neighborhood::gossip::Gossip_0v1;
     use crate::neighborhood::node_record::NodeRecordInner_0v1;
-    use crate::persistent_configuration::{PersistentConfigError, TLS_PORT};
+    use crate::persistent_configuration::PersistentConfigError;
     use crate::stream_messages::{NonClandestineAttributes, RemovedStreamType};
     use crate::sub_lib::cryptde::{decodex, encodex, CryptData};
     use crate::sub_lib::cryptde_null::CryptDENull;
@@ -1272,6 +1272,7 @@ mod tests {
     use actix::Recipient;
     use actix::System;
     use itertools::Itertools;
+    use masq_lib::constants::TLS_PORT;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::OneWay;

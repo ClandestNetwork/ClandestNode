@@ -558,10 +558,11 @@ mod tests {
     use crate::test_utils::tokio_wrapper_mocks::ReadHalfWrapperMock;
     use crate::test_utils::tokio_wrapper_mocks::WriteHalfWrapperMock;
     use crate::test_utils::{assert_contains, rate_pack, ArgsBuilder};
-    use crate::test_utils::{main_cryptde, FakeStreamHolder, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{main_cryptde, DEFAULT_CHAIN_ID};
     use actix::Recipient;
     use actix::System;
     use lazy_static::lazy_static;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
     use std::cell::RefCell;

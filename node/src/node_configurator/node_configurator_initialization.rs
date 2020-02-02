@@ -5,10 +5,10 @@ use crate::node_configurator::{
     app_head, chain_arg, data_directory_arg, db_password_arg, real_user_arg, ui_port_arg,
     NodeConfigurator, CONFIG_FILE_HELP, DB_PASSWORD_HELP,
 };
-use crate::persistent_configuration::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
+use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use std::path::PathBuf;
 
 lazy_static! {
@@ -94,9 +94,10 @@ mod tests {
     use super::*;
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
-    use crate::test_utils::{ArgsBuilder, FakeStreamHolder};
-    use masq_lib::environment_guard::EnvironmentGuard;
+    use crate::test_utils::ArgsBuilder;
     use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
+    use masq_lib::test_utils::environment_guard::EnvironmentGuard;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::ui_gateway::DEFAULT_UI_PORT;
     use std::fs::File;

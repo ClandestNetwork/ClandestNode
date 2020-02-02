@@ -2,12 +2,12 @@
 
 pub mod utils;
 
-use masq_lib::messages::ToMessageBody;
+use masq_lib::messages::{ToMessageBody, NODE_UI_PROTOCOL};
 use masq_lib::messages::{
     UiFinancialsRequest, UiRedirect, UiSetup, UiShutdownOrder, UiStartOrder, UiStartResponse,
     NODE_NOT_RUNNING_ERROR,
 };
-use masq_lib::ui_connection::UiConnection;
+use masq_lib::test_utils::ui_connection::UiConnection;
 use masq_lib::utils::find_free_port;
 use node_lib::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 use node_lib::database::db_initializer::DATABASE_FILE;
