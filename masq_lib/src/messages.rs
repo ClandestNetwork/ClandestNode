@@ -144,45 +144,9 @@ macro_rules! two_way_message {
     };
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct UiPayableAccount {
-    pub wallet: String,
-    pub age: u64,
-    pub amount: u64,
-    #[serde(rename = "pendingTransaction")]
-    pub pending_transaction: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct UiReceivableAccount {
-    pub wallet: String,
-    pub age: u64,
-    pub amount: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct UiFinancialsRequest {
-    #[serde(rename = "payableMinimumAmount")]
-    pub payable_minimum_amount: u64,
-    #[serde(rename = "payableMaximumAge")]
-    pub payable_maximum_age: u64,
-    #[serde(rename = "receivableMinimumAmount")]
-    pub receivable_minimum_amount: u64,
-    #[serde(rename = "receivableMaximumAge")]
-    pub receivable_maximum_age: u64,
-}
-two_way_message!(UiFinancialsRequest, "financials");
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct UiFinancialsResponse {
-    pub payables: Vec<UiPayableAccount>,
-    #[serde(rename = "totalPayable")]
-    pub total_payable: u64,
-    pub receivables: Vec<UiReceivableAccount>,
-    #[serde(rename = "totalReceivable")]
-    pub total_receivable: u64,
-}
-two_way_message!(UiFinancialsResponse, "financials");
+///////////////////////////////////////////////////////////////////
+// These messages are sent only to and/or by the Daemon only
+///////////////////////////////////////////////////////////////////
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupValue {
@@ -231,10 +195,6 @@ pub struct UiStartResponse {
 }
 two_way_message!(UiStartResponse, "start");
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct UiShutdownOrder {}
-one_way_message!(UiShutdownOrder, "shutdownOrder");
-
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UiRedirect {
     pub port: u16,
@@ -245,6 +205,10 @@ pub struct UiRedirect {
 }
 one_way_message!(UiRedirect, "redirect");
 
+///////////////////////////////////////////////////////////////////
+// These messages are sent to or by both the Daemon and the Node
+///////////////////////////////////////////////////////////////////
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UiUnmarshalError {
     pub message: String,
@@ -252,6 +216,54 @@ pub struct UiUnmarshalError {
     pub bad_data: String,
 }
 one_way_message!(UiUnmarshalError, "unmarshalError");
+
+///////////////////////////////////////////////////////////////////
+// These messages are sent to or by the Node only
+///////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct UiPayableAccount {
+    pub wallet: String,
+    pub age: u64,
+    pub amount: u64,
+    #[serde(rename = "pendingTransaction")]
+    pub pending_transaction: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct UiReceivableAccount {
+    pub wallet: String,
+    pub age: u64,
+    pub amount: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct UiFinancialsRequest {
+    #[serde(rename = "payableMinimumAmount")]
+    pub payable_minimum_amount: u64,
+    #[serde(rename = "payableMaximumAge")]
+    pub payable_maximum_age: u64,
+    #[serde(rename = "receivableMinimumAmount")]
+    pub receivable_minimum_amount: u64,
+    #[serde(rename = "receivableMaximumAge")]
+    pub receivable_maximum_age: u64,
+}
+two_way_message!(UiFinancialsRequest, "financials");
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct UiFinancialsResponse {
+    pub payables: Vec<UiPayableAccount>,
+    #[serde(rename = "totalPayable")]
+    pub total_payable: u64,
+    pub receivables: Vec<UiReceivableAccount>,
+    #[serde(rename = "totalReceivable")]
+    pub total_receivable: u64,
+}
+two_way_message!(UiFinancialsResponse, "financials");
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct UiShutdownOrder {}
+one_way_message!(UiShutdownOrder, "shutdownOrder");
 
 #[cfg(test)]
 mod tests {

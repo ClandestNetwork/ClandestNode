@@ -1,7 +1,9 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::websockets_client::{ClientError, NodeConnection};
+use masq_lib::messages::{FromMessageBody, UiRedirect};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
+use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use std::io;
 use std::io::{Read, Write};
 
@@ -40,13 +42,23 @@ impl CommandContext for CommandContextReal {
 
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
-        match conversation.transact(message) {
-            Err(ClientError::ConnectionDropped(e)) => Err(ContextError::ConnectionDropped(e)),
-            Err(e) => Err(ContextError::Other(format!("{:?}", e))),
+        let ntum = match conversation.transact(message) {
+            Err(ClientError::ConnectionDropped(e)) => {
+                return Err(ContextError::ConnectionDropped(e))
+            }
+            Err(e) => return Err(ContextError::Other(format!("{:?}", e))),
             Ok(ntum) => match ntum.body.payload {
-                Err((code, msg)) => Err(ContextError::PayloadError(code, msg)),
-                Ok(_) => Ok(ntum),
+                Err((code, msg)) => return Err(ContextError::PayloadError(code, msg)),
+                Ok(_) => ntum,
             },
+        };
+        if ntum.body.opcode == "redirect".to_string() {
+            match UiRedirect::fmb(ntum.body) {
+                Ok((redirect, _)) => self.process_redirect(redirect),
+                Err(e) => unimplemented!("{:?}", e),
+            }
+        } else {
+            Ok(ntum)
         }
     }
 
@@ -77,6 +89,19 @@ impl CommandContextReal {
             stderr: Box::new(io::stderr()),
         }
     }
+
+    fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
+        let node_connection = match NodeConnection::new(redirect.port) {
+            Ok(nc) => nc,
+            Err(e) => unimplemented!("{:?}", e),
+        };
+        self.connection = node_connection;
+        let message = match UiTrafficConverter::new_unmarshal_from_ui(&redirect.payload, 0) {
+            Ok(msg) => msg,
+            Err(e) => unimplemented!("{:?}", e),
+        };
+        self.transact(message)
+    }
 }
 
 #[cfg(test)]
@@ -85,8 +110,10 @@ mod tests {
     use crate::command_context::ContextError::{ConnectionDropped, PayloadError};
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
-    use masq_lib::messages::FromMessageBody;
     use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{
+        FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect,
+    };
     use masq_lib::messages::{UiSetup, UiSetupValue, UiShutdownOrder};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
@@ -200,5 +227,60 @@ mod tests {
 
         let received = stop_handle.stop();
         assert_eq!(received, vec![Err("Close(None)".to_string())])
+    }
+
+    #[test]
+    fn can_follow_redirect() {
+        let node_port = find_free_port();
+        let node_server = MockWebSocketsServer::new(node_port).queue_response(NodeToUiMessage {
+            target: ClientId(0),
+            body: UiFinancialsResponse {
+                payables: vec![],
+                total_payable: 0,
+                receivables: vec![],
+                total_receivable: 0,
+            }
+            .tmb(1234),
+        });
+        let node_stop_handle = node_server.start();
+        let daemon_port = find_free_port();
+        let daemon_server = MockWebSocketsServer::new (daemon_port)
+            .queue_response (NodeToUiMessage {
+                target: ClientId(0),
+                body: UiRedirect {
+                    port: node_port,
+                    opcode: "booga".to_string(),
+                    context_id: Some(1234),
+                    payload: r#"{"opcode":"financials","contextId":1234,"payload":{"payableMinimumAmount":0,"payableMaximumAge":0,"receivableMinimumAmount":0,"receivableMaximumAge":0}}"#.to_string()
+                }.tmb(0)
+            });
+        let daemon_stop_handle = daemon_server.start();
+        let request = NodeFromUiMessage {
+            client_id: 0,
+            body: UiFinancialsRequest {
+                payable_minimum_amount: 0,
+                payable_maximum_age: 0,
+                receivable_minimum_amount: 0,
+                receivable_maximum_age: 0,
+            }
+            .tmb(1234),
+        };
+        let mut subject = CommandContextReal::new(daemon_port);
+
+        let result = subject.transact(request).unwrap();
+
+        node_stop_handle.stop();
+        daemon_stop_handle.stop();
+        assert_eq!(result.body.path, TwoWay(1234));
+        let (response, _) = UiFinancialsResponse::fmb(result.body).unwrap();
+        assert_eq!(
+            response,
+            UiFinancialsResponse {
+                payables: vec![],
+                total_payable: 0,
+                receivables: vec![],
+                total_receivable: 0
+            }
+        );
     }
 }
