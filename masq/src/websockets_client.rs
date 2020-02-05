@@ -129,8 +129,7 @@ impl NodeConversation {
     }
 
     pub fn close(&mut self) {
-        let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
-        let _ = client.send_message(&OwnedMessage::Close(None));
+        // Nothing yet
     }
 
     fn send_string(&mut self, string: String) -> Result<(), ClientError> {

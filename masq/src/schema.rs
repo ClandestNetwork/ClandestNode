@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
-use crate::commands::SetupCommand;
-use clap::{crate_description, crate_version, App, AppSettings, Arg, SubCommand};
+use crate::commands::{setup_subcommand, start_subcommand, shutdown_subcommand};
+use clap::{crate_description, crate_version, App, AppSettings, Arg};
 use lazy_static::lazy_static;
 use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use masq_lib::ui_gateway::DEFAULT_UI_PORT;
@@ -37,15 +37,9 @@ pub fn app() -> App<'static, 'static> {
             .validator(validate_ui_port)
             .help(UI_PORT_HELP.as_str())
         )
-        .subcommand (SubCommand::with_name("setup")
-            .setting(AppSettings::TrailingVarArg)
-            .about("Establishes and displays startup parameters for MASQNode. Only valid if Node is not already running.")
-            .arg(Arg::with_name("attribute")
-                .index(1)
-                .multiple(true)
-                .validator(SetupCommand::validator)
-            )
-        )
+        .subcommand (setup_subcommand())
+        .subcommand (start_subcommand())
+        .subcommand (shutdown_subcommand())
 }
 
 fn validate_ui_port(port: String) -> Result<(), String> {

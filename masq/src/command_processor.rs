@@ -134,23 +134,4 @@ mod tests {
             })]
         );
     }
-
-    #[test]
-    fn close_closes_connection() {
-        let port = find_free_port();
-        let args = [
-            "masq".to_string(),
-            "--ui-port".to_string(),
-            format!("{}", port),
-        ];
-        let factory = CommandProcessorFactoryReal::new();
-        let server = MockWebSocketsServer::new(port);
-        let stop_handle = server.start();
-        let mut subject = factory.make(&args);
-
-        subject.close();
-
-        let received = stop_handle.stop();
-        assert_eq!(received, vec![Err("Close(None)".to_string())]);
-    }
 }

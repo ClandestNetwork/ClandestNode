@@ -6,11 +6,13 @@ use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use std::io;
 use std::io::{Read, Write};
+use crate::command_context::ContextError::RedirectFailure;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
     ConnectionDropped(String),
     PayloadError(u64, String),
+    RedirectFailure(String),
     Other(String),
 }
 
@@ -52,7 +54,7 @@ impl CommandContext for CommandContextReal {
                 Ok(_) => ntum,
             },
         };
-        if ntum.body.opcode == "redirect".to_string() {
+        if ntum.body.opcode == "redirect" {
             match UiRedirect::fmb(ntum.body) {
                 Ok((redirect, _)) => self.process_redirect(redirect),
                 Err(e) => unimplemented!("{:?}", e),
@@ -93,12 +95,12 @@ impl CommandContextReal {
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
         let node_connection = match NodeConnection::new(redirect.port) {
             Ok(nc) => nc,
-            Err(e) => unimplemented!("{:?}", e),
+            Err(e) => return Err(RedirectFailure (format!("{:?}", e))),
         };
         self.connection = node_connection;
         let message = match UiTrafficConverter::new_unmarshal_from_ui(&redirect.payload, 0) {
             Ok(msg) => msg,
-            Err(e) => unimplemented!("{:?}", e),
+            Err(e) => return Err(RedirectFailure (format!("{:?}", e))),
         };
         self.transact(message)
     }
@@ -107,7 +109,7 @@ impl CommandContextReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command_context::ContextError::{ConnectionDropped, PayloadError};
+    use crate::command_context::ContextError::{ConnectionDropped, PayloadError, RedirectFailure};
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
     use masq_lib::messages::ToMessageBody;
@@ -217,19 +219,6 @@ mod tests {
     }
 
     #[test]
-    fn close_sends_websockets_close() {
-        let port = find_free_port();
-        let server = MockWebSocketsServer::new(port);
-        let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port);
-
-        subject.close();
-
-        let received = stop_handle.stop();
-        assert_eq!(received, vec![Err("Close(None)".to_string())])
-    }
-
-    #[test]
     fn can_follow_redirect() {
         let node_port = find_free_port();
         let node_server = MockWebSocketsServer::new(node_port).queue_response(NodeToUiMessage {
@@ -282,5 +271,75 @@ mod tests {
                 total_receivable: 0
             }
         );
+    }
+
+    #[test]
+    fn can_handle_redirect_deserialization_problem() {
+        let daemon_port = find_free_port();
+        let daemon_server = MockWebSocketsServer::new (daemon_port)
+            .queue_response(NodeToUiMessage {
+                target: ClientId(0),
+                body: UiRedirect {
+                    port: 1024,
+                    opcode: "booga".to_string(),
+                    context_id: Some(1234),
+                    payload: r#"}booga{"#.to_string()
+                }.tmb(0)
+            });
+        let daemon_stop_handle = daemon_server.start();
+        let request = NodeFromUiMessage {
+            client_id: 0,
+            body: UiFinancialsRequest {
+                payable_minimum_amount: 0,
+                payable_maximum_age: 0,
+                receivable_minimum_amount: 0,
+                receivable_maximum_age: 0,
+            }
+            .tmb(1234),
+        };
+        let mut subject = CommandContextReal::new(daemon_port);
+
+        let result = subject.transact(request);
+
+        daemon_stop_handle.stop();
+        match result {
+            Err(RedirectFailure(_)) => (),
+            x => panic! ("Expected RedirectFailure, got {:?}", x),
+        }
+    }
+
+    #[test]
+    fn redirect_can_handle_missing_target() {
+        let daemon_port = find_free_port();
+        let daemon_server = MockWebSocketsServer::new (daemon_port)
+            .queue_response (NodeToUiMessage {
+                target: ClientId(0),
+                body: UiRedirect {
+                    port: 1024,
+                    opcode: "booga".to_string(),
+                    context_id: Some(1234),
+                    payload: r#"{"opcode":"financials","contextId":1234,"payload":{"payableMinimumAmount":0,"payableMaximumAge":0,"receivableMinimumAmount":0,"receivableMaximumAge":0}}"#.to_string()
+                }.tmb(0)
+            });
+        let daemon_stop_handle = daemon_server.start();
+        let request = NodeFromUiMessage {
+            client_id: 0,
+            body: UiFinancialsRequest {
+                payable_minimum_amount: 0,
+                payable_maximum_age: 0,
+                receivable_minimum_amount: 0,
+                receivable_maximum_age: 0,
+            }
+                .tmb(1234),
+        };
+        let mut subject = CommandContextReal::new(daemon_port);
+
+        let result = subject.transact(request);
+
+        daemon_stop_handle.stop();
+        match result {
+            Err(RedirectFailure(_)) => (),
+            x => panic! ("Expected RedirectFailure, got {:?}", x),
+        }
     }
 }

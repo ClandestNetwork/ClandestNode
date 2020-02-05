@@ -50,9 +50,7 @@ impl Main {
     pub fn new() -> Self {
         Self {
             command_factory: Box::new(CommandFactoryReal::new()),
-            processor_factory: Box::new(CommandProcessorFactoryReal{
-//                command_context_factory: Box::new(CommandContextFactoryReal{})
-            }),
+            processor_factory: Box::new(CommandProcessorFactoryReal{}),
         }
     }
 

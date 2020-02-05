@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::thread;
 use std::time::Duration;
+use clap::{App, AppSettings, Arg, SubCommand};
 
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
@@ -26,6 +27,17 @@ pub enum CommandError {
 
 pub trait Command: Debug {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError>;
+}
+
+pub fn setup_subcommand() -> App<'static, 'static> {
+    SubCommand::with_name("setup")
+        .setting(AppSettings::TrailingVarArg)
+        .about("Establishes and displays startup parameters for MASQNode, in the form <name>=<value>. Only valid if Node is not already running.")
+        .arg(Arg::with_name("attribute")
+            .index(1)
+            .multiple(true)
+            .validator(SetupCommand::validator)
+        )
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,15 +81,17 @@ impl Command for SetupCommand {
 
 impl SetupCommand {
     pub fn new(pieces: Vec<String>) -> Self {
-        let values = pieces
+        let matches = setup_subcommand().get_matches_from(pieces);
+        let values = matches.values_of("attribute");
+        let value_map = values
             .into_iter()
-            .skip(1)
+            .flatten()
             .map(|attr| {
                 let pair: Vec<&str> = attr.split('=').collect();
                 (pair[0].to_string(), pair[1].to_string())
             })
             .collect::<HashMap<String, String>>();
-        Self { values }
+        Self { values: value_map }
     }
 
     pub fn validator(value: String) -> Result<(), String> {
@@ -87,6 +101,11 @@ impl SetupCommand {
             Ok(())
         }
     }
+}
+
+pub fn start_subcommand() -> App<'static, 'static> {
+    SubCommand::with_name("start")
+        .about("Starts a MASQNode with the parameters that have been established by 'setup.' Only valid if Node is not already running.")
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -120,12 +139,17 @@ impl StartCommand {
 }
 
 const DEFAULT_SHUTDOWN_ATTEMPT_INTERVAL: u64 = 250; // milliseconds
-const DEFAULT_SHUTDOWN_ATTEMPT_LIMIT: u64 = 4; // milliseconds
+const DEFAULT_SHUTDOWN_ATTEMPT_LIMIT: u64 = 4;
 
 #[derive(Debug, PartialEq)]
 pub struct ShutdownCommand {
     attempt_interval: u64,
     attempt_limit: u64,
+}
+
+pub fn shutdown_subcommand() -> App<'static, 'static> {
+    SubCommand::with_name("shutdown")
+        .about("Shuts down the running MASQNode. Only valid if Node is already running.")
 }
 
 impl Command for ShutdownCommand {
@@ -189,6 +213,7 @@ where
             "A one-way message should never produce a two-way error like PayloadError({}, {})",
             code, message
         ),
+        Err(ContextError::RedirectFailure(_)) => panic! ("RedirectFailure shouldn't happen here"),
         Err(ContextError::Other(msg)) => {
             writeln!(
                 context.stderr(),
@@ -213,6 +238,7 @@ where
         Ok(ntum) => ntum,
         Err(ContextError::ConnectionDropped(_)) => return Err(ConnectionDropped),
         Err(ContextError::PayloadError(code, message)) => return Err(Payload(code, message)),
+        Err(ContextError::RedirectFailure(_)) => panic! ("RedirectFailure shouldn't happen here"),
         Err(ContextError::Other(msg)) => {
             writeln!(
                 context.stderr(),
