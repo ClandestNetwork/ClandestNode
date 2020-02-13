@@ -1,12 +1,12 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
+use crate::command_context::ContextError::RedirectFailure;
 use crate::websockets_client::{ClientError, NodeConnection};
 use masq_lib::messages::{FromMessageBody, UiRedirect};
-use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage, MessageBody};
+use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
+use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
 use std::io;
 use std::io::{Read, Write};
-use crate::command_context::ContextError::RedirectFailure;
-use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -32,7 +32,6 @@ pub struct CommandContextReal {
 }
 
 impl CommandContext for CommandContextReal {
-
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
         let ntum = match conversation.transact(message) {
@@ -84,30 +83,29 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
-eprintln! ("Handling redirect to port {}", redirect.port);
+        eprintln!("Handling redirect to port {}", redirect.port);
         let node_connection = match NodeConnection::new(redirect.port) {
             Ok(nc) => nc,
-            Err(e) => return Err(RedirectFailure (format!("{:?}", e))),
+            Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
         };
-eprintln! ("Connecting to Node");
+        eprintln!("Connecting to Node");
         self.connection = node_connection;
         let message_body = MessageBody {
             opcode: redirect.opcode,
-            path: if let Some (context_id) = redirect.context_id {
+            path: if let Some(context_id) = redirect.context_id {
                 TwoWay(context_id)
-            }
-            else {
+            } else {
                 OneWay
             },
-            payload: Ok (redirect.payload)
+            payload: Ok(redirect.payload),
         };
         let message = NodeFromUiMessage {
             client_id: 0,
-            body: message_body
+            body: message_body,
         };
-eprintln! ("Retrying transaction");
+        eprintln!("Retrying transaction");
         let result = self.transact(message);
-eprintln! ("Transaction complete: {:?}", result);
+        eprintln!("Transaction complete: {:?}", result);
         result
     }
 }
@@ -118,11 +116,11 @@ mod tests {
     use crate::command_context::ContextError::{ConnectionDropped, PayloadError, RedirectFailure};
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
-    use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
+    use masq_lib::messages::UiSetup;
     use masq_lib::messages::{
         FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect,
     };
-    use masq_lib::messages::{UiSetup};
+    use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::TwoWay;
@@ -147,9 +145,7 @@ mod tests {
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
 
-        let response = subject
-            .transact(nfum(UiShutdownRequest {}))
-            .unwrap();
+        let response = subject.transact(nfum(UiShutdownRequest {})).unwrap();
         let mut input = String::new();
         subject.stdin().read_to_string(&mut input).unwrap();
         write!(subject.stdout(), "This is stdout.").unwrap();
@@ -158,7 +154,7 @@ mod tests {
         stop_handle.stop();
         assert_eq!(
             UiShutdownResponse::fmb(response.body).unwrap(),
-            (UiShutdownResponse{}, 1234)
+            (UiShutdownResponse {}, 1234)
         );
         assert_eq!(input, "This is stdin.".to_string());
         assert_eq!(
@@ -249,8 +245,8 @@ mod tests {
 
         let request_body = node_stop_handle.stop()[0].clone().unwrap().body;
         daemon_stop_handle.stop();
-        assert_eq! (
-            UiFinancialsRequest::fmb (request_body).unwrap().0,
+        assert_eq!(
+            UiFinancialsRequest::fmb(request_body).unwrap().0,
             UiFinancialsRequest {
                 payable_minimum_amount: 12,
                 payable_maximum_age: 23,
@@ -274,15 +270,16 @@ mod tests {
     #[test]
     fn can_handle_redirect_deserialization_problem() {
         let daemon_port = find_free_port();
-        let daemon_server = MockWebSocketsServer::new (daemon_port)
-            .queue_response(NodeToUiMessage {
+        let daemon_server =
+            MockWebSocketsServer::new(daemon_port).queue_response(NodeToUiMessage {
                 target: ClientId(0),
                 body: UiRedirect {
                     port: 1024,
                     opcode: "booga".to_string(),
                     context_id: Some(1234),
-                    payload: r#"}booga{"#.to_string()
-                }.tmb(0)
+                    payload: r#"}booga{"#.to_string(),
+                }
+                .tmb(0),
             });
         let daemon_stop_handle = daemon_server.start();
         let request = NodeFromUiMessage {
@@ -302,7 +299,7 @@ mod tests {
         daemon_stop_handle.stop();
         match result {
             Err(RedirectFailure(_)) => (),
-            x => panic! ("Expected RedirectFailure, got {:?}", x),
+            x => panic!("Expected RedirectFailure, got {:?}", x),
         }
     }
 
@@ -328,7 +325,7 @@ mod tests {
                 receivable_minimum_amount: 0,
                 receivable_maximum_age: 0,
             }
-                .tmb(1234),
+            .tmb(1234),
         };
         let mut subject = CommandContextReal::new(daemon_port);
 
@@ -337,7 +334,7 @@ mod tests {
         daemon_stop_handle.stop();
         match result {
             Err(RedirectFailure(_)) => (),
-            x => panic! ("Expected RedirectFailure, got {:?}", x),
+            x => panic!("Expected RedirectFailure, got {:?}", x),
         }
     }
 }

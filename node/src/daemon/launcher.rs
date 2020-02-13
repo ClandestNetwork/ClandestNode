@@ -23,6 +23,7 @@ impl Execer for ExecerReal {
             Ok(path) => path,
             Err(e) => return Err(format!("Cannot find executable: {:?}", e)),
         };
+        eprintln!("Executing {:?} with params {:?}", exe_path, params);
         match Command::new(exe_path).args(params).spawn() {
             Ok(child) => Ok(child.id()),
             Err(e) => Err(format!("Cannot execute command: {:?}", e)),

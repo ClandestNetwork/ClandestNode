@@ -72,13 +72,13 @@ mod tests {
     use crate::command_context::CommandContext;
     use crate::commands::SetupCommand;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use crate::websockets_client::{nfum};
+    use crate::websockets_client::nfum;
+    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse};
+    use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
     use masq_lib::utils::find_free_port;
     use std::collections::HashMap;
-    use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse};
-    use masq_lib::messages::ToMessageBody;
-    use masq_lib::ui_gateway::MessageTarget::ClientId;
 
     #[test]
     #[should_panic(expected = "masq was not properly initialized")]
@@ -105,9 +105,9 @@ mod tests {
 
     impl Command for TestCommand {
         fn execute<'a>(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
-            match context.transact (nfum(UiShutdownRequest {})) {
-                Ok (_) => Ok(()),
-                Err (e) => Err(CommandError::Other (format!("{:?}", e))),
+            match context.transact(nfum(UiShutdownRequest {})) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(CommandError::Other(format!("{:?}", e))),
             }
         }
     }
@@ -121,11 +121,10 @@ mod tests {
             format!("{}", port),
         ];
         let subject = CommandProcessorFactoryReal::new();
-        let server = MockWebSocketsServer::new(port)
-            .queue_response (NodeToUiMessage {
-                target: ClientId(0),
-                body: UiShutdownResponse {}.tmb(1),
-            });
+        let server = MockWebSocketsServer::new(port).queue_response(NodeToUiMessage {
+            target: ClientId(0),
+            body: UiShutdownResponse {}.tmb(1),
+        });
         let stop_handle = server.start();
 
         let mut result = subject.make(&args);

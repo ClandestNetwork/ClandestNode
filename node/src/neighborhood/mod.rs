@@ -13,6 +13,7 @@ pub mod node_record;
 use crate::blockchain::blockchain_interface::{chain_id_from_name, contract_address};
 use crate::bootstrapper::BootstrapperConfig;
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
+use crate::masq_lib::messages::FromMessageBody;
 use crate::neighborhood::gossip::{DotGossipEndpoint, GossipNodeRecord, Gossip_0v1};
 use crate::neighborhood::gossip_acceptor::GossipAcceptanceResult;
 use crate::neighborhood::node_record::NodeRecordInner_0v1;
@@ -58,9 +59,8 @@ use gossip_acceptor::GossipAcceptorReal;
 use gossip_producer::GossipProducer;
 use gossip_producer::GossipProducerReal;
 use itertools::Itertools;
-use masq_lib::messages::FromMessageBody;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
-use masq_lib::messages::{UiMessageError, UiShutdownOrder};
+use masq_lib::messages::{UiMessageError, UiShutdownRequest};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use neighborhood_database::NeighborhoodDatabase;
 use node_record::NodeRecord;
@@ -297,7 +297,8 @@ impl Handler<NodeFromUiMessage> for Neighborhood {
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
         let client_id = msg.client_id;
         let opcode = msg.body.opcode.clone();
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> = UiShutdownOrder::fmb(msg.body);
+        let result: Result<(UiShutdownRequest, u64), UiMessageError> =
+            UiShutdownRequest::fmb(msg.body);
         match result {
             Ok((payload, _)) => self.handle_shutdown_order(client_id, payload),
             Err(UnexpectedMessage(_, _)) => (),
@@ -1210,7 +1211,7 @@ impl Neighborhood {
     }
 
     #[allow(unreachable_code)]
-    fn handle_shutdown_order(&self, client_id: u64, _msg: UiShutdownOrder) {
+    fn handle_shutdown_order(&self, client_id: u64, _msg: UiShutdownRequest) {
         info!(
             self.logger,
             "Received shutdown order from client {}: shutting down hard", client_id
@@ -1275,7 +1276,7 @@ mod tests {
     use masq_lib::constants::TLS_PORT;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::ui_gateway::MessageBody;
-    use masq_lib::ui_gateway::MessagePath::OneWay;
+    use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
     use serde_cbor;
     use std::cell::RefCell;
     use std::convert::TryInto;
@@ -4243,8 +4244,8 @@ mod tests {
             .try_send(NodeFromUiMessage {
                 client_id: 1234,
                 body: MessageBody {
-                    opcode: "shutdownOrder".to_string(),
-                    path: OneWay,
+                    opcode: "shutdown".to_string(),
+                    path: TwoWay(4321),
                     payload: Ok("{}".to_string()),
                 },
             })

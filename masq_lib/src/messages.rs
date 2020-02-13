@@ -482,7 +482,7 @@ mod tests {
     fn ui_unmarshal_error_methods_were_correctly_generated() {
         let subject = UiUnmarshalError {
             message: "".to_string(),
-            bad_data: "".to_string()
+            bad_data: "".to_string(),
         };
 
         assert_eq!(subject.opcode(), "unmarshalError");
@@ -493,7 +493,7 @@ mod tests {
     fn can_serialize_ui_unmarshal_error() {
         let subject = UiUnmarshalError {
             message: "message".to_string(),
-            bad_data: "bad_data".to_string()
+            bad_data: "bad_data".to_string(),
         };
         let subject_json = serde_json::to_string(&subject).unwrap();
 
@@ -588,8 +588,15 @@ mod tests {
         let result: Result<(UiUnmarshalError, u64), UiMessageError> =
             UiUnmarshalError::fmb(message_body);
 
-        assert_eq!(result, Ok((UiUnmarshalError {
-            message: "message".to_string(), bad_data: "{}".to_string()
-        }, 0)));
+        assert_eq!(
+            result,
+            Ok((
+                UiUnmarshalError {
+                    message: "message".to_string(),
+                    bad_data: "{}".to_string()
+                },
+                0
+            ))
+        );
     }
 }

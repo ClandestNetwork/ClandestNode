@@ -50,7 +50,7 @@ impl Main {
     pub fn new() -> Self {
         Self {
             command_factory: Box::new(CommandFactoryReal::new()),
-            processor_factory: Box::new(CommandProcessorFactoryReal{}),
+            processor_factory: Box::new(CommandProcessorFactoryReal {}),
         }
     }
 
@@ -94,11 +94,11 @@ mod tests {
         CommandContextMock, CommandFactoryMock, CommandProcessorFactoryMock, CommandProcessorMock,
         MockCommand,
     };
+    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::UiShutdownRequest;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use std::sync::{Arc, Mutex};
-    use masq_lib::messages::UiShutdownRequest;
-    use masq_lib::messages::ToMessageBody;
 
     #[test]
     fn go_works_when_everything_is_copacetic() {

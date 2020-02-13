@@ -149,7 +149,11 @@ mod tests {
         };
         let second_expected_response = NodeToUiMessage {
             target: ClientId(0),
-            body: UiUnmarshalError { message: "message".to_string(), bad_data: "{}".to_string() }.tmb(0),
+            body: UiUnmarshalError {
+                message: "message".to_string(),
+                bad_data: "{}".to_string(),
+            }
+            .tmb(0),
         };
         let stop_handle = MockWebSocketsServer::new(port)
             .queue_response(first_expected_response.clone())

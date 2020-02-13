@@ -4,13 +4,16 @@ use crate::command_context::{CommandContext, ContextError};
 use crate::commands::CommandError::{
     ConnectionDropped, Other, Payload, Transmission, UnexpectedResponse,
 };
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiSetup, UiSetupValue, UiStartOrder, UiStartResponse, UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
+use clap::{App, AppSettings, Arg, SubCommand};
+use masq_lib::messages::{
+    FromMessageBody, ToMessageBody, UiMessageError, UiSetup, UiSetupValue, UiShutdownRequest,
+    UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
+};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::thread;
 use std::time::Duration;
-use clap::{App, AppSettings, Arg, SubCommand};
 
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
@@ -111,8 +114,7 @@ pub struct StartCommand {}
 impl Command for StartCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let out_message = UiStartOrder {};
-        let result: Result<UiStartResponse, CommandError> =
-            transaction(out_message, context);
+        let result: Result<UiStartResponse, CommandError> = transaction(out_message, context);
         match result {
             Ok(response) => {
                 writeln!(
@@ -154,7 +156,8 @@ impl Command for ShutdownCommand {
         let mut attempts_remaining = self.attempt_limit;
         let input = UiShutdownRequest {};
         loop {
-            let output: Result<UiShutdownResponse, CommandError> = transaction(input.clone(), context);
+            let output: Result<UiShutdownResponse, CommandError> =
+                transaction(input.clone(), context);
             match output {
                 Ok(_) => (),
                 Err(ConnectionDropped) => {
@@ -171,8 +174,8 @@ impl Command for ShutdownCommand {
                         context.stderr(),
                         "MASQNode is not running; therefore it cannot be shut down."
                     )
-                    .expect ("write! failed");
-                    return Err(Payload(code, message))
+                    .expect("write! failed");
+                    return Err(Payload(code, message));
                 }
                 Err(impossible) => panic!("Never happen: {:?}", impossible),
             }
@@ -217,7 +220,7 @@ where
         Ok(ntum) => ntum,
         Err(ContextError::ConnectionDropped(_)) => return Err(ConnectionDropped),
         Err(ContextError::PayloadError(code, message)) => return Err(Payload(code, message)),
-        Err(ContextError::RedirectFailure(e)) => panic! ("Couldn't redirect to Node: {:?}", e),
+        Err(ContextError::RedirectFailure(e)) => panic!("Couldn't redirect to Node: {:?}", e),
         Err(ContextError::Other(msg)) => {
             writeln!(
                 context.stderr(),
@@ -250,7 +253,10 @@ mod tests {
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::CommandError::{Other, Payload, Transmission, UnexpectedResponse};
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{UiStartOrder, UiStartResponse, UiShutdownResponse, UiShutdownRequest, NODE_NOT_RUNNING_ERROR};
+    use masq_lib::messages::{
+        UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
+        NODE_NOT_RUNNING_ERROR,
+    };
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
@@ -467,15 +473,22 @@ mod tests {
 
     #[test]
     fn shutdown_command_doesnt_work_if_node_is_not_running() {
-        let mut context = CommandContextMock::new()
-            .transact_result(Err(ContextError::PayloadError(NODE_NOT_RUNNING_ERROR, "irrelevant".to_string())));
+        let mut context = CommandContextMock::new().transact_result(Err(
+            ContextError::PayloadError(NODE_NOT_RUNNING_ERROR, "irrelevant".to_string()),
+        ));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let subject = ShutdownCommand::new();
 
         let result = subject.execute(&mut context);
 
-        assert_eq!(result, Err(CommandError::Payload(NODE_NOT_RUNNING_ERROR, "irrelevant".to_string())));
+        assert_eq!(
+            result,
+            Err(CommandError::Payload(
+                NODE_NOT_RUNNING_ERROR,
+                "irrelevant".to_string()
+            ))
+        );
         assert_eq!(
             stderr_arc.lock().unwrap().get_string(),
             "MASQNode is not running; therefore it cannot be shut down.\n"
@@ -488,7 +501,7 @@ mod tests {
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let msg = NodeToUiMessage {
             target: ClientId(0),
-            body: UiShutdownResponse{}.tmb(0)
+            body: UiShutdownResponse {}.tmb(0),
         };
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
@@ -533,7 +546,7 @@ mod tests {
     fn shutdown_command_uses_interval() {
         let mut context = CommandContextMock::new().transact_result(Ok(NodeToUiMessage {
             target: ClientId(0),
-            body: UiShutdownResponse{}.tmb(0)
+            body: UiShutdownResponse {}.tmb(0),
         }));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();

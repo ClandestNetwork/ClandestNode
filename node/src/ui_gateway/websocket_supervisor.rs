@@ -253,7 +253,9 @@ impl WebSocketSupervisorReal {
         let (outgoing, incoming) = client.split();
         // "Going synchronous" here to avoid calling .send() on an async Sink, which consumes it
         let sync_outgoing: Wait<SplitSink<_>> = outgoing.wait();
-        let client_wrapper = Box::new(ClientWrapperReal {delegate: sync_outgoing});
+        let client_wrapper = Box::new(ClientWrapperReal {
+            delegate: sync_outgoing,
+        });
         let mut locked_inner = inner.lock().expect("WebSocketSupervisor is poisoned");
         let client_id = locked_inner.next_client_id;
         locked_inner.next_client_id += 1;
@@ -261,7 +263,9 @@ impl WebSocketSupervisorReal {
             .client_id_by_socket_addr
             .insert(socket_addr, client_id);
         if old_protocol {
-            locked_inner.old_client_by_id.insert(client_id, client_wrapper);
+            locked_inner
+                .old_client_by_id
+                .insert(client_id, client_wrapper);
         } else {
             locked_inner.client_by_id.insert(client_id, client_wrapper);
         }
@@ -388,12 +392,21 @@ impl WebSocketSupervisorReal {
         let mut locked_inner = inner_arc.lock().expect("WebSocketSupervisor is poisoned");
         let client_id = match locked_inner.client_id_by_socket_addr.remove(&socket_addr) {
             None => {
-                error!(logger, "WebSocketSupervisor got a disconnect from a client that never connected!");
-                return err::<(), ()>(())
+                error!(
+                    logger,
+                    "WebSocketSupervisor got a disconnect from a client that never connected!"
+                );
+                return err::<(), ()>(());
             }
             Some(client_id) => client_id,
         };
-        info!(logger, "UI at {} (client ID {}) disconnected from port {}", socket_addr, client_id, locked_inner.port);
+        info!(
+            logger,
+            "UI at {} (client ID {}) disconnected from port {}",
+            socket_addr,
+            client_id,
+            locked_inner.port
+        );
         Self::close_connection(&mut locked_inner, client_id, socket_addr, &logger);
 
         err::<(), ()>(()) // end the stream
@@ -471,10 +484,10 @@ impl WebSocketSupervisorReal {
                 e
             ),
             Ok(_) => {
-//                client
-//                    .flush()
-//                    .unwrap_or_else(|_| panic!("Couldn't flush transmission to UI at {}", socket_addr));
-            },
+                //                client
+                //                    .flush()
+                //                    .unwrap_or_else(|_| panic!("Couldn't flush transmission to UI at {}", socket_addr));
+            }
         }
     }
 }
@@ -1004,7 +1017,7 @@ mod tests {
                 .client_id_by_socket_addr
                 .insert(socket_addr, client_id);
         }
-        let bad_message_json = r#"{"opcode":"shutdownOrder"}"#;
+        let bad_message_json = r#"{"opcode":"shutdown"}"#;
 
         let _ = WebSocketSupervisorReal::handle_text_message(
             &subject.inner,
@@ -1017,7 +1030,7 @@ mod tests {
         let expected_traffic_conversion_message =
             format!("Required field was missing: payload, error");
         let expected_unmarshal_message = format!(
-            "Error unmarshalling 'shutdownOrder' message: {}",
+            "Error unmarshalling 'shutdown' message: {}",
             expected_traffic_conversion_message
         );
         TestLogHandler::new().exists_log_containing(

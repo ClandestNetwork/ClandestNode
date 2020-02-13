@@ -18,7 +18,11 @@ use std::sync::{Arc, Mutex};
 lazy_static! {
     pub static ref ONE_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
         client_id: 0,
-        body: UiUnmarshalError {message: "message".to_string(), bad_data: "badData".to_string()}.tmb(0),
+        body: UiUnmarshalError {
+            message: "message".to_string(),
+            bad_data: "badData".to_string()
+        }
+        .tmb(0),
     };
     pub static ref TWO_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
         client_id: 0,

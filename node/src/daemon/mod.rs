@@ -228,10 +228,14 @@ impl Daemon {
     fn handle_unexpected_message(&mut self, client_id: u64, body: MessageBody) {
         match self.node_ui_port {
             Some(port) => {
-                info!(&self.logger, "Daemon is redirecting {} message from UI {} Node at port {}",
-                    body.opcode, client_id, port);
-                self
-                    .ui_gateway_sub
+                info!(
+                    &self.logger,
+                    "Daemon is redirecting {} message from UI {} Node at port {}",
+                    body.opcode,
+                    client_id,
+                    port
+                );
+                self.ui_gateway_sub
                     .as_ref()
                     .expect("UiGateway is unbound")
                     .try_send(NodeToUiMessage {
@@ -248,15 +252,18 @@ impl Daemon {
                                 Err((_code, _message)) => unimplemented!(),
                             },
                         }
-                            .tmb(0),
+                        .tmb(0),
                     })
                     .expect("UiGateway is dead")
-            },
+            }
             None => {
-                error!(&self.logger, "Daemon is sending redirect error for {} message to UI {}: Node is not running",
-                      body.opcode, client_id);
-                self
-                    .ui_gateway_sub
+                error!(
+                    &self.logger,
+                    "Daemon is sending redirect error for {} message to UI {}: Node is not running",
+                    body.opcode,
+                    client_id
+                );
+                self.ui_gateway_sub
                     .as_ref()
                     .expect("UiGateway is unbound")
                     .try_send(NodeToUiMessage {
@@ -266,12 +273,15 @@ impl Daemon {
                             path: OneWay,
                             payload: Err((
                                 NODE_NOT_RUNNING_ERROR,
-                                format!("Cannot handle {} request: Node is not running", body.opcode),
+                                format!(
+                                    "Cannot handle {} request: Node is not running",
+                                    body.opcode
+                                ),
                             )),
                         },
                     })
                     .expect("UiGateway is dead")
-            },
+            }
         }
     }
 
@@ -294,7 +304,7 @@ mod tests {
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use masq_lib::messages::{
-        UiFinancialsRequest, UiRedirect, UiSetup, UiSetupValue, UiShutdownOrder, UiStartOrder,
+        UiFinancialsRequest, UiRedirect, UiSetup, UiSetupValue, UiShutdownRequest, UiStartOrder,
         UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
     };
     use std::cell::RefCell;
@@ -713,7 +723,7 @@ mod tests {
         subject_addr
             .try_send(make_bind_message(ui_gateway))
             .unwrap();
-        let body: MessageBody = UiShutdownOrder {}.tmb(4321); // Context ID is irrelevant
+        let body: MessageBody = UiShutdownRequest {}.tmb(4321); // Context ID is irrelevant
 
         subject_addr
             .try_send(NodeFromUiMessage {

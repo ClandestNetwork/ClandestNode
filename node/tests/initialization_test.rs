@@ -2,10 +2,9 @@
 
 pub mod utils;
 
-use masq_lib::messages::{ToMessageBody, NODE_UI_PROTOCOL};
+use masq_lib::messages::{ToMessageBody, UiShutdownRequest, NODE_UI_PROTOCOL};
 use masq_lib::messages::{
-    UiFinancialsRequest, UiRedirect, UiSetup, UiShutdownOrder, UiStartOrder, UiStartResponse,
-    NODE_NOT_RUNNING_ERROR,
+    UiFinancialsRequest, UiRedirect, UiSetup, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
 };
 use masq_lib::test_utils::ui_connection::UiConnection;
 use masq_lib::utils::find_free_port;
@@ -90,7 +89,7 @@ fn initialization_sequence_integration() {
         serde_json::from_str(&running_financials_response.payload).unwrap();
     assert_eq!(actual_payload, expected_payload);
     let mut service_client = UiConnection::new(start_response.redirect_ui_port, NODE_UI_PROTOCOL);
-    service_client.send(UiShutdownOrder {});
+    service_client.send(UiShutdownRequest {});
     wait_for_process_end(start_response.new_process_id);
     let _ = daemon.kill();
     match daemon.wait_for_exit() {
@@ -105,7 +104,7 @@ fn wait_for_process_end(process_id: u32) {
     loop {
         if SystemTime::now().gt(&deadline) {
             panic!(
-                "Process {} not dead after receiving shutdownOrder",
+                "Process {} not dead after receiving shutdownRequest",
                 process_id
             )
         }
