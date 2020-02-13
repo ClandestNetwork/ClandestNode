@@ -8,7 +8,7 @@ use crate::commands::{Command, CommandError};
 use crate::websockets_client::nfum;
 use lazy_static::lazy_static;
 use masq_lib::messages::ToMessageBody;
-use masq_lib::messages::{UiSetup, UiShutdownOrder};
+use masq_lib::messages::{UiSetup, UiUnmarshalError};
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, ByteArrayWriterInner};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::cell::RefCell;
@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 lazy_static! {
     pub static ref ONE_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
         client_id: 0,
-        body: UiShutdownOrder {}.tmb(0),
+        body: UiUnmarshalError {message: "message".to_string(), bad_data: "badData".to_string()}.tmb(0),
     };
     pub static ref TWO_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
         client_id: 0,
@@ -59,8 +59,6 @@ impl CommandFactoryMock {
 }
 
 pub struct CommandContextMock {
-    send_params: Arc<Mutex<Vec<NodeFromUiMessage>>>,
-    send_results: RefCell<Vec<Result<(), ContextError>>>,
     transact_params: Arc<Mutex<Vec<NodeFromUiMessage>>>,
     transact_results: RefCell<Vec<Result<NodeToUiMessage, ContextError>>>,
     stdout: Box<dyn Write>,
@@ -70,11 +68,6 @@ pub struct CommandContextMock {
 }
 
 impl CommandContext for CommandContextMock {
-    fn send(&mut self, message: NodeFromUiMessage) -> Result<(), ContextError> {
-        self.send_params.lock().unwrap().push(message);
-        self.send_results.borrow_mut().remove(0)
-    }
-
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         self.transact_params.lock().unwrap().push(message);
         self.transact_results.borrow_mut().remove(0)
@@ -104,8 +97,6 @@ impl Default for CommandContextMock {
         let stderr = ByteArrayWriter::new();
         let stderr_arc = stderr.inner_arc();
         Self {
-            send_params: Arc::new(Mutex::new(vec![])),
-            send_results: RefCell::new(vec![]),
             transact_params: Arc::new(Mutex::new(vec![])),
             transact_results: RefCell::new(vec![]),
             stdout: Box::new(stdout),
@@ -119,16 +110,6 @@ impl Default for CommandContextMock {
 impl CommandContextMock {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn send_params(mut self, params: &Arc<Mutex<Vec<NodeFromUiMessage>>>) -> Self {
-        self.send_params = params.clone();
-        self
-    }
-
-    pub fn send_result(self, result: Result<(), ContextError>) -> Self {
-        self.send_results.borrow_mut().push(result);
-        self
     }
 
     pub fn transact_params(mut self, params: &Arc<Mutex<Vec<NodeFromUiMessage>>>) -> Self {

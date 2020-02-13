@@ -4,10 +4,7 @@ use crate::command_context::{CommandContext, ContextError};
 use crate::commands::CommandError::{
     ConnectionDropped, Other, Payload, Transmission, UnexpectedResponse,
 };
-use masq_lib::messages::{
-    FromMessageBody, ToMessageBody, UiMessageError, UiSetup, UiSetupValue, UiShutdownOrder,
-    UiStartOrder, UiStartResponse,
-};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiSetup, UiSetupValue, UiStartOrder, UiStartResponse, UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -58,7 +55,7 @@ impl Command for SetupCommand {
                 .expect("String comparison failed")
         });
         let out_message = UiSetup { values };
-        let result: Result<UiSetup, CommandError> = two_way_transaction(out_message, context);
+        let result: Result<UiSetup, CommandError> = transaction(out_message, context);
         match result {
             Ok(mut response) => {
                 response.values.sort_by(|a, b| {
@@ -115,7 +112,7 @@ impl Command for StartCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let out_message = UiStartOrder {};
         let result: Result<UiStartResponse, CommandError> =
-            two_way_transaction(out_message, context);
+            transaction(out_message, context);
         match result {
             Ok(response) => {
                 writeln!(
@@ -155,9 +152,10 @@ pub fn shutdown_subcommand() -> App<'static, 'static> {
 impl Command for ShutdownCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let mut attempts_remaining = self.attempt_limit;
-        let input = UiShutdownOrder {};
+        let input = UiShutdownRequest {};
         loop {
-            match one_way_transmission(input.clone(), context) {
+            let output: Result<UiShutdownResponse, CommandError> = transaction(input.clone(), context);
+            match output {
                 Ok(_) => (),
                 Err(ConnectionDropped) => {
                     writeln!(
@@ -168,6 +166,14 @@ impl Command for ShutdownCommand {
                     return Ok(());
                 }
                 Err(Transmission(msg)) => return Err(Transmission(msg)),
+                Err(Payload(code, message)) if code == NODE_NOT_RUNNING_ERROR => {
+                    writeln!(
+                        context.stderr(),
+                        "MASQNode is not running; therefore it cannot be shut down."
+                    )
+                    .expect ("write! failed");
+                    return Err(Payload(code, message))
+                }
                 Err(impossible) => panic!("Never happen: {:?}", impossible),
             }
             thread::sleep(Duration::from_millis(self.attempt_interval));
@@ -199,34 +205,7 @@ impl ShutdownCommand {
     }
 }
 
-fn one_way_transmission<I>(input: I, context: &mut dyn CommandContext) -> Result<(), CommandError>
-where
-    I: ToMessageBody,
-{
-    match context.send(NodeFromUiMessage {
-        client_id: 0,
-        body: input.tmb(0),
-    }) {
-        Ok(_) => Ok(()),
-        Err(ContextError::ConnectionDropped(_)) => Err(ConnectionDropped),
-        Err(ContextError::PayloadError(code, message)) => panic!(
-            "A one-way message should never produce a two-way error like PayloadError({}, {})",
-            code, message
-        ),
-        Err(ContextError::RedirectFailure(_)) => panic! ("RedirectFailure shouldn't happen here"),
-        Err(ContextError::Other(msg)) => {
-            writeln!(
-                context.stderr(),
-                "Couldn't send command to Node or Daemon: {}",
-                msg
-            )
-            .expect("write! failed");
-            Err(Transmission(msg))
-        }
-    }
-}
-
-fn two_way_transaction<I, O>(input: I, context: &mut dyn CommandContext) -> Result<O, CommandError>
+fn transaction<I, O>(input: I, context: &mut dyn CommandContext) -> Result<O, CommandError>
 where
     I: ToMessageBody,
     O: FromMessageBody,
@@ -238,7 +217,7 @@ where
         Ok(ntum) => ntum,
         Err(ContextError::ConnectionDropped(_)) => return Err(ConnectionDropped),
         Err(ContextError::PayloadError(code, message)) => return Err(Payload(code, message)),
-        Err(ContextError::RedirectFailure(_)) => panic! ("RedirectFailure shouldn't happen here"),
+        Err(ContextError::RedirectFailure(e)) => panic! ("Couldn't redirect to Node: {:?}", e),
         Err(ContextError::Other(msg)) => {
             writeln!(
                 context.stderr(),
@@ -271,7 +250,7 @@ mod tests {
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::CommandError::{Other, Payload, Transmission, UnexpectedResponse};
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{UiShutdownOrder, UiStartOrder, UiStartResponse};
+    use masq_lib::messages::{UiStartOrder, UiStartResponse, UiShutdownResponse, UiShutdownRequest, NODE_NOT_RUNNING_ERROR};
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
@@ -279,50 +258,12 @@ mod tests {
     use std::time::SystemTime;
 
     #[test]
-    fn one_way_transmission_passes_dropped_connection_error() {
-        let mut context = CommandContextMock::new()
-            .send_result(Err(ContextError::ConnectionDropped("booga".to_string())));
-
-        let result = one_way_transmission(UiShutdownOrder {}, &mut context);
-
-        assert_eq!(result, Err(ConnectionDropped));
-    }
-
-    #[test]
-    #[should_panic(
-        expected = "A one-way message should never produce a two-way error like PayloadError(10, booga)"
-    )]
-    fn one_way_transmission_panics_on_two_way_error() {
-        let mut context = CommandContextMock::new()
-            .send_result(Err(ContextError::PayloadError(10, "booga".to_string())));
-
-        let _ = one_way_transmission(UiShutdownOrder {}, &mut context);
-    }
-
-    #[test]
-    fn one_way_transmission_passes_other_error() {
-        let mut context =
-            CommandContextMock::new().send_result(Err(ContextError::Other("booga".to_string())));
-        let stdout_arc = context.stdout_arc();
-        let stderr_arc = context.stderr_arc();
-
-        let result = one_way_transmission(UiShutdownOrder {}, &mut context);
-
-        assert_eq!(result, Err(Transmission("booga".to_string())));
-        assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
-        assert_eq!(
-            stderr_arc.lock().unwrap().get_string(),
-            "Couldn't send command to Node or Daemon: booga\n".to_string()
-        );
-    }
-
-    #[test]
     fn two_way_transaction_passes_dropped_connection_error() {
         let mut context = CommandContextMock::new()
             .transact_result(Err(ContextError::ConnectionDropped("booga".to_string())));
 
         let result: Result<UiStartResponse, CommandError> =
-            two_way_transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context);
 
         assert_eq!(result, Err(ConnectionDropped));
     }
@@ -333,7 +274,7 @@ mod tests {
             .transact_result(Err(ContextError::PayloadError(10, "booga".to_string())));
 
         let result: Result<UiStartResponse, CommandError> =
-            two_way_transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context);
 
         assert_eq!(result, Err(Payload(10, "booga".to_string())));
     }
@@ -346,7 +287,7 @@ mod tests {
         let stderr_arc = context.stderr_arc();
 
         let result: Result<UiStartResponse, CommandError> =
-            two_way_transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context);
 
         assert_eq!(result, Err(Transmission("booga".to_string())));
         assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
@@ -370,7 +311,7 @@ mod tests {
         let stderr_arc = context.stderr_arc();
 
         let result: Result<UiStartResponse, CommandError> =
-            two_way_transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context);
 
         assert_eq!(
             result,
@@ -516,7 +457,7 @@ mod tests {
     fn testing_command_factory_here() {
         let factory = CommandFactoryReal::new();
         let mut context = CommandContextMock::new()
-            .send_result(Err(ContextError::ConnectionDropped("booga".to_string())));
+            .transact_result(Err(ContextError::ConnectionDropped("booga".to_string())));
         let subject = factory.make(vec!["shutdown".to_string()]).unwrap();
 
         let result = subject.execute(&mut context);
@@ -525,13 +466,35 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_command_happy_path() {
-        let send_params_arc = Arc::new(Mutex::new(vec![]));
+    fn shutdown_command_doesnt_work_if_node_is_not_running() {
         let mut context = CommandContextMock::new()
-            .send_params(&send_params_arc)
-            .send_result(Ok(()))
-            .send_result(Ok(()))
-            .send_result(Err(ContextError::ConnectionDropped("booga".to_string())));
+            .transact_result(Err(ContextError::PayloadError(NODE_NOT_RUNNING_ERROR, "irrelevant".to_string())));
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let subject = ShutdownCommand::new();
+
+        let result = subject.execute(&mut context);
+
+        assert_eq!(result, Err(CommandError::Payload(NODE_NOT_RUNNING_ERROR, "irrelevant".to_string())));
+        assert_eq!(
+            stderr_arc.lock().unwrap().get_string(),
+            "MASQNode is not running; therefore it cannot be shut down.\n"
+        );
+        assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
+    }
+
+    #[test]
+    fn shutdown_command_happy_path() {
+        let transact_params_arc = Arc::new(Mutex::new(vec![]));
+        let msg = NodeToUiMessage {
+            target: ClientId(0),
+            body: UiShutdownResponse{}.tmb(0)
+        };
+        let mut context = CommandContextMock::new()
+            .transact_params(&transact_params_arc)
+            .transact_result(Ok(msg.clone()))
+            .transact_result(Ok(msg.clone()))
+            .transact_result(Err(ContextError::ConnectionDropped("booga".to_string())));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let mut subject = ShutdownCommand::new();
@@ -541,21 +504,21 @@ mod tests {
         let result = subject.execute(&mut context);
 
         assert_eq!(result, Ok(()));
-        let send_params = send_params_arc.lock().unwrap();
+        let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
-            *send_params,
+            *transact_params,
             vec![
                 NodeFromUiMessage {
                     client_id: 0,
-                    body: UiShutdownOrder {}.tmb(0)
+                    body: UiShutdownRequest {}.tmb(0)
                 },
                 NodeFromUiMessage {
                     client_id: 0,
-                    body: UiShutdownOrder {}.tmb(0)
+                    body: UiShutdownRequest {}.tmb(0)
                 },
                 NodeFromUiMessage {
                     client_id: 0,
-                    body: UiShutdownOrder {}.tmb(0)
+                    body: UiShutdownRequest {}.tmb(0)
                 },
             ]
         );
@@ -568,7 +531,10 @@ mod tests {
 
     #[test]
     fn shutdown_command_uses_interval() {
-        let mut context = CommandContextMock::new().send_result(Ok(()));
+        let mut context = CommandContextMock::new().transact_result(Ok(NodeToUiMessage {
+            target: ClientId(0),
+            body: UiShutdownResponse{}.tmb(0)
+        }));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let mut subject = ShutdownCommand::new();

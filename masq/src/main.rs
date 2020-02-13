@@ -94,15 +94,15 @@ mod tests {
         CommandContextMock, CommandFactoryMock, CommandProcessorFactoryMock, CommandProcessorMock,
         MockCommand,
     };
-    use masq_lib::messages::ToMessageBody;
-    use masq_lib::messages::UiShutdownOrder;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use std::sync::{Arc, Mutex};
+    use masq_lib::messages::UiShutdownRequest;
+    use masq_lib::messages::ToMessageBody;
 
     #[test]
     fn go_works_when_everything_is_copacetic() {
-        let command = MockCommand::new(UiShutdownOrder {});
+        let command = MockCommand::new(UiShutdownRequest {});
         let c_make_params_arc = Arc::new(Mutex::new(vec![]));
         let command_factory = CommandFactoryMock::new()
             .make_params(&c_make_params_arc)
@@ -184,7 +184,7 @@ mod tests {
             *transact_params,
             vec![NodeFromUiMessage {
                 client_id: 0,
-                body: UiShutdownOrder {}.tmb(1),
+                body: UiShutdownRequest {}.tmb(0),
             }]
         );
         assert_eq!(
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn go_works_when_command_is_unhappy() {
-        let command = MockCommand::new(UiShutdownOrder {}).execute_result(Ok(())); // irrelevant
+        let command = MockCommand::new(UiShutdownRequest {}).execute_result(Ok(())); // irrelevant
         let command_factory = CommandFactoryMock::new().make_result(Ok(Box::new(command)));
         let process_params_arc = Arc::new(Mutex::new(vec![]));
         let processor = CommandProcessorMock::new()

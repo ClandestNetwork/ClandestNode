@@ -128,8 +128,8 @@ impl MockWebSocketsServerStopHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use masq_lib::messages::{FromMessageBody, ToMessageBody};
-    use masq_lib::messages::{UiSetup, UiSetupValue, UiShutdownOrder, NODE_UI_PROTOCOL};
+    use masq_lib::messages::{FromMessageBody, ToMessageBody, UiUnmarshalError};
+    use masq_lib::messages::{UiSetup, UiSetupValue, NODE_UI_PROTOCOL};
     use masq_lib::test_utils::ui_connection::UiConnection;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::utils::find_free_port;
@@ -149,7 +149,7 @@ mod tests {
         };
         let second_expected_response = NodeToUiMessage {
             target: ClientId(0),
-            body: UiShutdownOrder {}.tmb(0),
+            body: UiUnmarshalError { message: "message".to_string(), bad_data: "{}".to_string() }.tmb(0),
         };
         let stop_handle = MockWebSocketsServer::new(port)
             .queue_response(first_expected_response.clone())
@@ -167,7 +167,7 @@ mod tests {
             .transact_with_context_id(first_request_payload.clone(), 1234)
             .unwrap();
         connection.send_string("}: Bad request :{".to_string());
-        let second_actual_response: UiShutdownOrder = connection.receive().unwrap();
+        let second_actual_response: UiUnmarshalError = connection.receive().unwrap();
 
         let requests = stop_handle.stop();
         assert_eq!(
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(requests[1], Err("}: Bad request :{".to_string()));
         assert_eq!(
             (second_actual_response, 0),
-            UiShutdownOrder::fmb(second_expected_response.body).unwrap()
+            UiUnmarshalError::fmb(second_expected_response.body).unwrap()
         );
     }
 }

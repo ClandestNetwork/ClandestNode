@@ -227,43 +227,51 @@ impl Daemon {
 
     fn handle_unexpected_message(&mut self, client_id: u64, body: MessageBody) {
         match self.node_ui_port {
-            Some(port) => self
-                .ui_gateway_sub
-                .as_ref()
-                .expect("UiGateway is unbound")
-                .try_send(NodeToUiMessage {
-                    target: ClientId(client_id),
-                    body: UiRedirect {
-                        port,
-                        opcode: body.opcode,
-                        context_id: match body.path {
-                            OneWay => None,
-                            TwoWay(context_id) => Some(context_id),
+            Some(port) => {
+                info!(&self.logger, "Daemon is redirecting {} message from UI {} Node at port {}",
+                    body.opcode, client_id, port);
+                self
+                    .ui_gateway_sub
+                    .as_ref()
+                    .expect("UiGateway is unbound")
+                    .try_send(NodeToUiMessage {
+                        target: ClientId(client_id),
+                        body: UiRedirect {
+                            port,
+                            opcode: body.opcode,
+                            context_id: match body.path {
+                                OneWay => None,
+                                TwoWay(context_id) => Some(context_id),
+                            },
+                            payload: match body.payload {
+                                Ok(json) => json,
+                                Err((_code, _message)) => unimplemented!(),
+                            },
+                        }
+                            .tmb(0),
+                    })
+                    .expect("UiGateway is dead")
+            },
+            None => {
+                error!(&self.logger, "Daemon is sending redirect error for {} message to UI {}: Node is not running",
+                      body.opcode, client_id);
+                self
+                    .ui_gateway_sub
+                    .as_ref()
+                    .expect("UiGateway is unbound")
+                    .try_send(NodeToUiMessage {
+                        target: ClientId(client_id),
+                        body: MessageBody {
+                            opcode: "redirect".to_string(),
+                            path: OneWay,
+                            payload: Err((
+                                NODE_NOT_RUNNING_ERROR,
+                                format!("Cannot handle {} request: Node is not running", body.opcode),
+                            )),
                         },
-                        payload: match body.payload {
-                            Ok(json) => json,
-                            Err((_code, _message)) => unimplemented!(),
-                        },
-                    }
-                    .tmb(0),
-                })
-                .expect("UiGateway is dead"),
-            None => self
-                .ui_gateway_sub
-                .as_ref()
-                .expect("UiGateway is unbound")
-                .try_send(NodeToUiMessage {
-                    target: ClientId(client_id),
-                    body: MessageBody {
-                        opcode: "redirect".to_string(),
-                        path: OneWay,
-                        payload: Err((
-                            NODE_NOT_RUNNING_ERROR,
-                            format!("Cannot handle {} request: Node is not running", body.opcode),
-                        )),
-                    },
-                })
-                .expect("UiGateway is dead"),
+                    })
+                    .expect("UiGateway is dead")
+            },
         }
     }
 

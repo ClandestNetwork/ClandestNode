@@ -68,6 +68,7 @@ pub struct WebSocketSupervisorReal {
 }
 
 struct WebSocketSupervisorInner {
+    port: u16,
     next_client_id: u64,
     from_ui_message: Recipient<FromUiMessage>,
     from_ui_message_sub: Recipient<NodeFromUiMessage>,
@@ -101,6 +102,7 @@ impl WebSocketSupervisorReal {
         from_ui_message_sub: Recipient<NodeFromUiMessage>,
     ) -> WebSocketSupervisorReal {
         let inner = Arc::new(Mutex::new(WebSocketSupervisorInner {
+            port,
             next_client_id: 0,
             from_ui_message,
             from_ui_message_sub,
@@ -251,6 +253,7 @@ impl WebSocketSupervisorReal {
         let (outgoing, incoming) = client.split();
         // "Going synchronous" here to avoid calling .send() on an async Sink, which consumes it
         let sync_outgoing: Wait<SplitSink<_>> = outgoing.wait();
+        let client_wrapper = Box::new(ClientWrapperReal {delegate: sync_outgoing});
         let mut locked_inner = inner.lock().expect("WebSocketSupervisor is poisoned");
         let client_id = locked_inner.next_client_id;
         locked_inner.next_client_id += 1;
@@ -258,19 +261,9 @@ impl WebSocketSupervisorReal {
             .client_id_by_socket_addr
             .insert(socket_addr, client_id);
         if old_protocol {
-            locked_inner.old_client_by_id.insert(
-                client_id,
-                Box::new(ClientWrapperReal {
-                    delegate: sync_outgoing,
-                }),
-            );
+            locked_inner.old_client_by_id.insert(client_id, client_wrapper);
         } else {
-            locked_inner.client_by_id.insert(
-                client_id,
-                Box::new(ClientWrapperReal {
-                    delegate: sync_outgoing,
-                }),
-            );
+            locked_inner.client_by_id.insert(client_id, client_wrapper);
         }
         let incoming_future = incoming
             .then(move |result| Self::handle_websocket_errors(result, &logger_2, socket_addr))
@@ -392,14 +385,15 @@ impl WebSocketSupervisorReal {
         logger: &Logger,
         socket_addr: SocketAddr,
     ) -> FutureResult<(), ()> {
-        info!(logger, "UI at {} disconnected", socket_addr);
         let mut locked_inner = inner_arc.lock().expect("WebSocketSupervisor is poisoned");
         let client_id = match locked_inner.client_id_by_socket_addr.remove(&socket_addr) {
             None => {
-                panic!("WebSocketSupervisor got a disconnect from a client that never connected!")
+                error!(logger, "WebSocketSupervisor got a disconnect from a client that never connected!");
+                return err::<(), ()>(())
             }
             Some(client_id) => client_id,
         };
+        info!(logger, "UI at {} (client ID {}) disconnected from port {}", socket_addr, client_id, locked_inner.port);
         Self::close_connection(&mut locked_inner, client_id, socket_addr, &logger);
 
         err::<(), ()>(()) // end the stream
@@ -443,11 +437,12 @@ impl WebSocketSupervisorReal {
         socket_addr: SocketAddr,
     ) -> FutureResult<I, ()> {
         match result {
-            Err(_e) => {
+            Err(e) => {
                 warning!(
                     logger,
-                    "UI at {} violated protocol: terminating",
-                    socket_addr
+                    "UI at {} violated protocol ({:?}): terminating",
+                    socket_addr,
+                    e
                 );
                 err::<I, ()>(())
             }
@@ -461,9 +456,9 @@ impl WebSocketSupervisorReal {
         socket_addr: SocketAddr,
         logger: &Logger,
     ) {
-        let client = match locked_inner.client_by_id.get_mut(&client_id) {
+        let mut client = match locked_inner.client_by_id.remove(&client_id) {
             Some(client) => client,
-            None => match locked_inner.old_client_by_id.get_mut(&client_id) {
+            None => match locked_inner.old_client_by_id.remove(&client_id) {
                 Some(client) => client,
                 None => panic!("WebSocketSupervisor got a disconnect from a client that has disappeared from the stable!"),
             },
@@ -475,9 +470,11 @@ impl WebSocketSupervisorReal {
                 socket_addr,
                 e
             ),
-            Ok(_) => client
-                .flush()
-                .unwrap_or_else(|_| panic!("Couldn't flush transmission to UI at {}", socket_addr)),
+            Ok(_) => {
+//                client
+//                    .flush()
+//                    .unwrap_or_else(|_| panic!("Couldn't flush transmission to UI at {}", socket_addr));
+            },
         }
     }
 }
@@ -913,6 +910,7 @@ mod tests {
         let (from_ui_message, _, _) = make_recorder();
         let (ui_message_sub, _, _) = make_recorder();
         let subject_inner = WebSocketSupervisorInner {
+            port: 4321,
             next_client_id: 0,
             from_ui_message: from_ui_message.start().recipient::<FromUiMessage>(),
             from_ui_message_sub: ui_message_sub.start().recipient::<NodeFromUiMessage>(),
@@ -982,6 +980,7 @@ mod tests {
         let (from_ui_message, _, _) = make_recorder();
         let (ui_message_sub, _, _) = make_recorder();
         let subject_inner = WebSocketSupervisorInner {
+            port: 1234,
             next_client_id: 0,
             from_ui_message: from_ui_message.start().recipient::<FromUiMessage>(),
             from_ui_message_sub: ui_message_sub.start().recipient::<NodeFromUiMessage>(),
@@ -1051,6 +1050,7 @@ mod tests {
         let (from_ui_message, _, _) = make_recorder();
         let (ui_message_sub, _, _) = make_recorder();
         let subject_inner = WebSocketSupervisorInner {
+            port: 1234,
             next_client_id: 0,
             from_ui_message: from_ui_message.start().recipient::<FromUiMessage>(),
             from_ui_message_sub: ui_message_sub.start().recipient::<NodeFromUiMessage>(),

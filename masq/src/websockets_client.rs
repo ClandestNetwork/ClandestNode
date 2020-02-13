@@ -96,12 +96,6 @@ impl NodeConversation {
         self.context_id
     }
 
-    pub fn send(&mut self, outgoing_msg: NodeFromUiMessage) -> Result<(), ClientError> {
-        // TODO: drive in a check for outgoing_msg.body.path == OneWay
-        let outgoing_msg_json = UiTrafficConverter::new_marshal_from_ui(outgoing_msg);
-        self.send_string(outgoing_msg_json)
-    }
-
     #[allow(dead_code)]
     pub fn establish_receiver<F>(/*mut*/ self, _receiver: F) -> Result<(), ClientError>
     where
@@ -110,6 +104,7 @@ impl NodeConversation {
         unimplemented!();
     }
 
+    // Warning: both the client_id and the context_id are completely ignored by this method.
     pub fn transact(
         &mut self,
         mut outgoing_msg: NodeFromUiMessage,
@@ -132,6 +127,11 @@ impl NodeConversation {
         // Nothing yet
     }
 
+    fn send(&mut self, outgoing_msg: NodeFromUiMessage) -> Result<(), ClientError> {
+        let outgoing_msg_json = UiTrafficConverter::new_marshal_from_ui(outgoing_msg);
+        self.send_string(outgoing_msg_json)
+    }
+
     fn send_string(&mut self, string: String) -> Result<(), ClientError> {
         let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
         if let Err(e) = client.send_message(&OwnedMessage::Text(string)) {
@@ -144,6 +144,7 @@ impl NodeConversation {
     fn receive(&mut self) -> Result<NodeToUiMessage, ClientError> {
         let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
         let incoming_msg = client.recv_message();
+eprintln! ("Incoming message:\n{:?}\n", incoming_msg);
         let incoming_msg_json = match incoming_msg {
             Ok(OwnedMessage::Text(json)) => json,
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
@@ -169,8 +170,8 @@ mod tests {
     use super::*;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::ClientError::{ConnectionDropped, NoServer};
-    use masq_lib::messages::FromMessageBody;
-    use masq_lib::messages::{UiSetup, UiSetupValue, UiShutdownOrder};
+    use masq_lib::messages::{FromMessageBody, UiUnmarshalError};
+    use masq_lib::messages::{UiSetup, UiSetupValue};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_traffic_converter::TrafficConversionError::JsonSyntaxError;
@@ -266,11 +267,11 @@ mod tests {
         let connection = NodeConnection::new(port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiShutdownOrder {}));
+        let result = subject.transact(nfum(UiUnmarshalError { message: "".to_string(), bad_data: "".to_string() }));
 
         assert_eq!(
             result,
-            Err(MessageType("shutdownOrder".to_string(), OneWay))
+            Err(MessageType("unmarshalError".to_string(), OneWay))
         );
         stop_handle.stop();
     }
@@ -287,25 +288,6 @@ mod tests {
 
         match result {
             Err(ConnectionDropped(_)) => (),
-            x => panic!("Expected ConnectionDropped; got {:?} instead", x),
-        }
-    }
-
-    #[test]
-    fn handles_connection_dropped_by_server_before_send() {
-        let port = find_free_port();
-        let server = MockWebSocketsServer::new(port).queue_string("disconnect"); // magic value that causes disconnection
-        let stop_handle = server.start();
-        let connection = NodeConnection::new(port).unwrap();
-        let mut subject = connection.start_conversation();
-        let _ = subject.transact(nfum(UiSetup { values: vec![] }));
-        let _ = subject.send(nfum(UiShutdownOrder {})); // dunno why this doesn't blow up
-
-        let result = subject.send(nfum(UiShutdownOrder {})).err().unwrap();
-
-        stop_handle.stop();
-        match result {
-            ConnectionDropped(_) => (),
             x => panic!("Expected ConnectionDropped; got {:?} instead", x),
         }
     }

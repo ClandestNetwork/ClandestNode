@@ -2,11 +2,11 @@
 
 use crate::websockets_client::{ClientError, NodeConnection};
 use masq_lib::messages::{FromMessageBody, UiRedirect};
-use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
-use masq_lib::ui_traffic_converter::UiTrafficConverter;
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage, MessageBody};
 use std::io;
 use std::io::{Read, Write};
 use crate::command_context::ContextError::RedirectFailure;
+use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -17,7 +17,6 @@ pub enum ContextError {
 }
 
 pub trait CommandContext {
-    fn send(&mut self, message: NodeFromUiMessage) -> Result<(), ContextError>;
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError>;
     fn stdin(&mut self) -> &mut dyn Read;
     fn stdout(&mut self) -> &mut dyn Write;
@@ -33,14 +32,6 @@ pub struct CommandContextReal {
 }
 
 impl CommandContext for CommandContextReal {
-    fn send(&mut self, message: NodeFromUiMessage) -> Result<(), ContextError> {
-        let mut conversation = self.connection.start_conversation();
-        match conversation.send(message) {
-            Ok(_) => Ok(()),
-            Err(ClientError::ConnectionDropped(e)) => Err(ContextError::ConnectionDropped(e)),
-            Err(e) => Err(ContextError::Other(format!("{:?}", e))),
-        }
-    }
 
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
@@ -93,16 +84,31 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
+eprintln! ("Handling redirect to port {}", redirect.port);
         let node_connection = match NodeConnection::new(redirect.port) {
             Ok(nc) => nc,
             Err(e) => return Err(RedirectFailure (format!("{:?}", e))),
         };
+eprintln! ("Connecting to Node");
         self.connection = node_connection;
-        let message = match UiTrafficConverter::new_unmarshal_from_ui(&redirect.payload, 0) {
-            Ok(msg) => msg,
-            Err(e) => return Err(RedirectFailure (format!("{:?}", e))),
+        let message_body = MessageBody {
+            opcode: redirect.opcode,
+            path: if let Some (context_id) = redirect.context_id {
+                TwoWay(context_id)
+            }
+            else {
+                OneWay
+            },
+            payload: Ok (redirect.payload)
         };
-        self.transact(message)
+        let message = NodeFromUiMessage {
+            client_id: 0,
+            body: message_body
+        };
+eprintln! ("Retrying transaction");
+        let result = self.transact(message);
+eprintln! ("Transaction complete: {:?}", result);
+        result
     }
 }
 
@@ -112,11 +118,11 @@ mod tests {
     use crate::command_context::ContextError::{ConnectionDropped, PayloadError, RedirectFailure};
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
-    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::messages::{
         FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect,
     };
-    use masq_lib::messages::{UiSetup, UiSetupValue, UiShutdownOrder};
+    use masq_lib::messages::{UiSetup};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::TwoWay;
@@ -133,13 +139,7 @@ mod tests {
         let stderr_arc = stderr.inner_arc();
         let server = MockWebSocketsServer::new(port).queue_response(NodeToUiMessage {
             target: ClientId(0),
-            body: UiSetup {
-                values: vec![UiSetupValue {
-                    name: "Okay,".to_string(),
-                    value: "I did.".to_string(),
-                }],
-            }
-            .tmb(1234),
+            body: UiShutdownResponse {}.tmb(1234),
         });
         let stop_handle = server.start();
         let mut subject = CommandContextReal::new(port);
@@ -147,14 +147,8 @@ mod tests {
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
 
-        subject.send(nfum(UiShutdownOrder {})).unwrap();
         let response = subject
-            .transact(nfum(UiSetup {
-                values: vec![UiSetupValue {
-                    name: "Say something".to_string(),
-                    value: "to me.".to_string(),
-                }],
-            }))
+            .transact(nfum(UiShutdownRequest {}))
             .unwrap();
         let mut input = String::new();
         subject.stdin().read_to_string(&mut input).unwrap();
@@ -163,13 +157,8 @@ mod tests {
 
         stop_handle.stop();
         assert_eq!(
-            UiSetup::fmb(response.body).unwrap().0,
-            UiSetup {
-                values: vec![UiSetupValue {
-                    name: "Okay,".to_string(),
-                    value: "I did.".to_string(),
-                }]
-            }
+            UiShutdownResponse::fmb(response.body).unwrap(),
+            (UiShutdownResponse{}, 1234)
         );
         assert_eq!(input, "This is stdin.".to_string());
         assert_eq!(
@@ -225,9 +214,9 @@ mod tests {
             target: ClientId(0),
             body: UiFinancialsResponse {
                 payables: vec![],
-                total_payable: 0,
+                total_payable: 21,
                 receivables: vec![],
-                total_receivable: 0,
+                total_receivable: 32,
             }
             .tmb(1234),
         });
@@ -238,37 +227,46 @@ mod tests {
                 target: ClientId(0),
                 body: UiRedirect {
                     port: node_port,
-                    opcode: "booga".to_string(),
+                    opcode: "financials".to_string(),
                     context_id: Some(1234),
-                    payload: r#"{"opcode":"financials","contextId":1234,"payload":{"payableMinimumAmount":0,"payableMaximumAge":0,"receivableMinimumAmount":0,"receivableMaximumAge":0}}"#.to_string()
+                    payload: r#"{"payableMinimumAmount":12,"payableMaximumAge":23,"receivableMinimumAmount":34,"receivableMaximumAge":45}"#.to_string()
                 }.tmb(0)
             });
         let daemon_stop_handle = daemon_server.start();
         let request = NodeFromUiMessage {
-            client_id: 0,
+            client_id: 0, // will be ignored
             body: UiFinancialsRequest {
-                payable_minimum_amount: 0,
-                payable_maximum_age: 0,
-                receivable_minimum_amount: 0,
-                receivable_maximum_age: 0,
+                payable_minimum_amount: 12,
+                payable_maximum_age: 23,
+                receivable_minimum_amount: 34,
+                receivable_maximum_age: 45,
             }
-            .tmb(1234),
+            .tmb(1234), // will be ignored
         };
         let mut subject = CommandContextReal::new(daemon_port);
 
         let result = subject.transact(request).unwrap();
 
-        node_stop_handle.stop();
+        let request_body = node_stop_handle.stop()[0].clone().unwrap().body;
         daemon_stop_handle.stop();
+        assert_eq! (
+            UiFinancialsRequest::fmb (request_body).unwrap().0,
+            UiFinancialsRequest {
+                payable_minimum_amount: 12,
+                payable_maximum_age: 23,
+                receivable_minimum_amount: 34,
+                receivable_maximum_age: 45,
+            }
+        );
         assert_eq!(result.body.path, TwoWay(1234));
         let (response, _) = UiFinancialsResponse::fmb(result.body).unwrap();
         assert_eq!(
             response,
             UiFinancialsResponse {
                 payables: vec![],
-                total_payable: 0,
+                total_payable: 21,
                 receivables: vec![],
-                total_receivable: 0
+                total_receivable: 32
             }
         );
     }

@@ -262,8 +262,12 @@ pub struct UiFinancialsResponse {
 two_way_message!(UiFinancialsResponse, "financials");
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct UiShutdownOrder {}
-one_way_message!(UiShutdownOrder, "shutdownOrder");
+pub struct UiShutdownRequest {}
+two_way_message!(UiShutdownRequest, "shutdown");
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct UiShutdownResponse {}
+two_way_message!(UiShutdownResponse, "shutdown");
 
 #[cfg(test)]
 mod tests {
@@ -475,16 +479,22 @@ mod tests {
     }
 
     #[test]
-    fn ui_shutdown_order_methods_were_correctly_generated() {
-        let subject = UiShutdownOrder {};
+    fn ui_unmarshal_error_methods_were_correctly_generated() {
+        let subject = UiUnmarshalError {
+            message: "".to_string(),
+            bad_data: "".to_string()
+        };
 
-        assert_eq!(subject.opcode(), "shutdownOrder");
+        assert_eq!(subject.opcode(), "unmarshalError");
         assert_eq!(subject.is_two_way(), false);
     }
 
     #[test]
-    fn can_serialize_ui_shutdown_order() {
-        let subject = UiShutdownOrder {};
+    fn can_serialize_ui_unmarshal_error() {
+        let subject = UiUnmarshalError {
+            message: "message".to_string(),
+            bad_data: "bad_data".to_string()
+        };
         let subject_json = serde_json::to_string(&subject).unwrap();
 
         let result: MessageBody = subject.tmb(1357);
@@ -492,7 +502,7 @@ mod tests {
         assert_eq!(
             result,
             MessageBody {
-                opcode: "shutdownOrder".to_string(),
+                opcode: "unmarshalError".to_string(),
                 path: OneWay,
                 payload: Ok(subject_json)
             }
@@ -500,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn can_deserialize_ui_shutdown_order_with_bad_opcode() {
+    fn can_deserialize_ui_unmarshal_error_with_bad_opcode() {
         let json = "{}".to_string();
         let message_body = MessageBody {
             opcode: "booga".to_string(),
@@ -508,55 +518,55 @@ mod tests {
             payload: Ok(json),
         };
 
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> =
-            UiShutdownOrder::fmb(message_body);
+        let result: Result<(UiUnmarshalError, u64), UiMessageError> =
+            UiUnmarshalError::fmb(message_body);
 
         assert_eq!(result, Err(UnexpectedMessage("booga".to_string(), OneWay)))
     }
 
     #[test]
-    fn can_deserialize_ui_shutdown_order_with_bad_path() {
-        let json = "{}".to_string();
+    fn can_deserialize_ui_unmarshal_error_with_bad_path() {
+        let json = r#"{"message": "message", "badData": "{\"name\": 4}"}"#.to_string();
         let message_body = MessageBody {
-            opcode: "shutdownOrder".to_string(),
+            opcode: "unmarshalError".to_string(),
             path: TwoWay(0),
             payload: Ok(json),
         };
 
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> =
-            UiShutdownOrder::fmb(message_body);
+        let result: Result<(UiUnmarshalError, u64), UiMessageError> =
+            UiUnmarshalError::fmb(message_body);
 
         assert_eq!(
             result,
-            Err(UnexpectedMessage("shutdownOrder".to_string(), TwoWay(0)))
+            Err(UnexpectedMessage("unmarshalError".to_string(), TwoWay(0)))
         )
     }
 
     #[test]
-    fn can_deserialize_ui_shutdown_order_with_bad_payload() {
+    fn can_deserialize_ui_unmarshal_error_with_bad_payload() {
         let message_body = MessageBody {
-            opcode: "shutdownOrder".to_string(),
+            opcode: "unmarshalError".to_string(),
             path: OneWay,
             payload: Err((100, "error".to_string())),
         };
 
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> =
-            UiShutdownOrder::fmb(message_body);
+        let result: Result<(UiUnmarshalError, u64), UiMessageError> =
+            UiUnmarshalError::fmb(message_body);
 
         assert_eq!(result, Err(PayloadError(100, "error".to_string())))
     }
 
     #[test]
-    fn can_deserialize_unparseable_ui_shutdown_order() {
+    fn can_deserialize_unparseable_ui_unmarshal_error() {
         let json = "} - unparseable - {".to_string();
         let message_body = MessageBody {
-            opcode: "shutdownOrder".to_string(),
+            opcode: "unmarshalError".to_string(),
             path: OneWay,
             payload: Ok(json),
         };
 
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> =
-            UiShutdownOrder::fmb(message_body);
+        let result: Result<(UiUnmarshalError, u64), UiMessageError> =
+            UiUnmarshalError::fmb(message_body);
 
         assert_eq!(
             result,
@@ -567,17 +577,19 @@ mod tests {
     }
 
     #[test]
-    fn can_deserialize_ui_shutdown_order() {
-        let json = "{}".to_string();
+    fn can_deserialize_ui_unmarshal_error() {
+        let json = r#"{"message": "message", "badData": "{}"}"#.to_string();
         let message_body = MessageBody {
-            opcode: "shutdownOrder".to_string(),
+            opcode: "unmarshalError".to_string(),
             path: OneWay,
             payload: Ok(json),
         };
 
-        let result: Result<(UiShutdownOrder, u64), UiMessageError> =
-            UiShutdownOrder::fmb(message_body);
+        let result: Result<(UiUnmarshalError, u64), UiMessageError> =
+            UiUnmarshalError::fmb(message_body);
 
-        assert_eq!(result, Ok((UiShutdownOrder {}, 0)));
+        assert_eq!(result, Ok((UiUnmarshalError {
+            message: "message".to_string(), bad_data: "{}".to_string()
+        }, 0)));
     }
 }
