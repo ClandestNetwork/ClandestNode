@@ -484,9 +484,9 @@ impl WebSocketSupervisorReal {
                 e
             ),
             Ok(_) => {
-                //                client
-                //                    .flush()
-                //                    .unwrap_or_else(|_| panic!("Couldn't flush transmission to UI at {}", socket_addr));
+                client.flush().unwrap_or_else(|_| {
+                    panic!("Couldn't flush transmission to UI at {}", socket_addr)
+                });
             }
         }
     }

@@ -144,7 +144,6 @@ impl NodeConversation {
     fn receive(&mut self) -> Result<NodeToUiMessage, ClientError> {
         let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
         let incoming_msg = client.recv_message();
-        eprintln!("Incoming message:\n{:?}\n", incoming_msg);
         let incoming_msg_json = match incoming_msg {
             Ok(OwnedMessage::Text(json)) => json,
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
