@@ -83,12 +83,10 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
-        eprintln!("Handling redirect to port {}", redirect.port);
         let node_connection = match NodeConnection::new(redirect.port) {
             Ok(nc) => nc,
             Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
         };
-        eprintln!("Connecting to Node");
         self.connection = node_connection;
         let message_body = MessageBody {
             opcode: redirect.opcode,
@@ -103,10 +101,7 @@ impl CommandContextReal {
             client_id: 0,
             body: message_body,
         };
-        eprintln!("Retrying transaction");
-        let result = self.transact(message);
-        eprintln!("Transaction complete: {:?}", result);
-        result
+        self.transact(message)
     }
 }
 
