@@ -1,22 +1,28 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use std::process::{Child, Command, Stdio};
 use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 
+#[allow(dead_code)]
 pub struct DaemonProcess {}
 
+#[allow(dead_code)]
 impl DaemonProcess {
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 
-    pub fn start (self, port: u16) -> StopHandle {
-        let mut command = Command::new(executable_path(executable_name("masq")));
-        let command = command.args(vec!["--ui-port".to_string, format!("{}", port), "--initialization".to_string()]);
+    pub fn start(self, port: u16) -> StopHandle {
+        let mut command = Command::new(executable_path(executable_name("MASQNode")));
+        let command = command.args(vec![
+            "--ui-port".to_string(),
+            format!("{}", port),
+            "--initialization".to_string(),
+        ]);
         let child = child_from_command(command);
         StopHandle {
             name: "Daemon".to_string(),
-            child
+            child,
         }
     }
 }
@@ -29,13 +35,13 @@ impl MasqProcess {
         Self {}
     }
 
-    pub fn start_noninteractive(self, params: Vec<&str>) -> ProcessStopHandle {
+    pub fn start_noninteractive(self, params: Vec<&str>) -> StopHandle {
         let mut command = Command::new(executable_path(executable_name("masq")));
         let command = command.args(params);
         let child = child_from_command(command);
         StopHandle {
             name: "masq".to_string(),
-            child
+            child,
         }
     }
 }
@@ -45,6 +51,7 @@ pub struct StopHandle {
     child: Child,
 }
 
+#[allow(dead_code)]
 impl StopHandle {
     pub fn stop(self) -> (String, String, i32) {
         let output = self.child.wait_with_output();
@@ -61,17 +68,21 @@ impl StopHandle {
             }
         }
     }
+
+    pub fn kill(mut self) {
+        self.child.kill ().unwrap();
+    }
 }
 
-fn executable_name (root: &str) -> String {
+fn executable_name(root: &str) -> String {
     #[cfg(not(target_os = "windows"))]
     let result = root.to_string();
     #[cfg(target_os = "windows")]
     let result = format!("{}.exe", name);
-    return result
+    return result;
 }
 
-fn executable_path (executable_name: String) -> PathBuf {
+fn executable_path(executable_name: String) -> PathBuf {
     std::env::current_dir()
         .unwrap()
         .join("..")
@@ -81,7 +92,7 @@ fn executable_path (executable_name: String) -> PathBuf {
         .join(executable_name)
 }
 
-fn child_from_command (command: &mut Command) -> Child {
+fn child_from_command(command: &mut Command) -> Child {
     command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
