@@ -410,11 +410,11 @@ impl StoreWrapperReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fake_stream_holder::FakeStreamHolder;
     use crate::utils::get_parameters_from;
     use core_foundation::boolean::CFBoolean;
     use core_foundation::propertylist::CFPropertyListSubClass;
     use core_foundation::string::CFString;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::cell::RefCell;
     use std::sync::Arc;
     use std::sync::Mutex;
