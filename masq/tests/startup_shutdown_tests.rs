@@ -1,17 +1,17 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::utils::MasqProcess;
 use crate::utils::DaemonProcess;
-use std::time::Duration;
+use crate::utils::MasqProcess;
 use std::thread;
+use std::time::Duration;
 
 mod utils;
 
 #[test]
 fn handles_startup_and_shutdown_integration() {
-    let daemon_handle = DaemonProcess::new ().start(5333);
+    let daemon_handle = DaemonProcess::new().start(5333);
 
-    thread::sleep (Duration::from_millis (500));
+    thread::sleep(Duration::from_millis(500));
 
     let masq_handle =
         MasqProcess::new().start_noninteractive(vec!["setup", "neighborhood-mode=zero-hop"]);

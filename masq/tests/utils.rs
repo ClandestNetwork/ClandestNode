@@ -70,7 +70,7 @@ impl StopHandle {
     }
 
     pub fn kill(mut self) {
-        self.child.kill ().unwrap();
+        self.child.kill().unwrap();
     }
 }
 
