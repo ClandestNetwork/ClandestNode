@@ -196,7 +196,7 @@ impl DynamicStoreDnsModifier {
             String::from(SERVER_ADDRESSES),
             vec![String::from("127.0.0.1")],
         );
-        result.insert(String::from(SERVER_ADDRESSES_BAK), active_addresses.clone());
+        result.insert(String::from(SERVER_ADDRESSES_BAK), active_addresses);
         Ok(Some(result))
     }
 
