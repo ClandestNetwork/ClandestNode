@@ -410,7 +410,6 @@ impl StoreWrapperReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fake_stream_holder::FakeStreamHolder;
     use crate::utils::get_parameters_from;
     use core_foundation::boolean::CFBoolean;
     use core_foundation::propertylist::CFPropertyListSubClass;
