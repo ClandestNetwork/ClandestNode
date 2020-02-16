@@ -6,29 +6,12 @@ use crate::command_processor::{CommandProcessor, CommandProcessorFactory};
 use crate::commands::CommandError::Transmission;
 use crate::commands::{Command, CommandError};
 use crate::websockets_client::nfum;
-use lazy_static::lazy_static;
 use masq_lib::messages::ToMessageBody;
-use masq_lib::messages::{UiSetup, UiUnmarshalError};
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, ByteArrayWriterInner};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
-
-lazy_static! {
-    pub static ref ONE_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
-        client_id: 0,
-        body: UiUnmarshalError {
-            message: "message".to_string(),
-            bad_data: "badData".to_string()
-        }
-        .tmb(0),
-    };
-    pub static ref TWO_WAY_MESSAGE: NodeFromUiMessage = NodeFromUiMessage {
-        client_id: 0,
-        body: UiSetup { values: vec![] }.tmb(0),
-    };
-}
 
 #[derive(Default)]
 pub struct CommandFactoryMock {

@@ -48,29 +48,10 @@ impl CommandProcessor for CommandProcessorReal {
     }
 }
 
-impl CommandProcessorReal {
-    pub fn new(_args: &[String]) -> Self {
-        unimplemented!()
-    }
-}
-
-pub struct CommandProcessorNull {}
-
-impl CommandProcessor for CommandProcessorNull {
-    fn process(&mut self, _command: Box<dyn Command>) -> Result<(), CommandError> {
-        panic!("masq was not properly initialized")
-    }
-
-    fn close(&mut self) {
-        panic!("masq was not properly initialized")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::command_context::CommandContext;
-    use crate::commands::SetupCommand;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
     use masq_lib::messages::ToMessageBody;
@@ -78,27 +59,6 @@ mod tests {
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
     use masq_lib::utils::find_free_port;
-    use std::collections::HashMap;
-
-    #[test]
-    #[should_panic(expected = "masq was not properly initialized")]
-    fn null_command_processor_process_panics_properly() {
-        let mut subject = CommandProcessorNull {};
-
-        subject
-            .process(Box::new(SetupCommand {
-                values: HashMap::new(),
-            }))
-            .unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "masq was not properly initialized")]
-    fn null_command_processor_shutdown_panics_properly() {
-        let mut subject = CommandProcessorNull {};
-
-        subject.close();
-    }
 
     #[derive(Debug)]
     struct TestCommand {}

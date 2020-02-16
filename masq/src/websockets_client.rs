@@ -157,6 +157,7 @@ impl NodeConversation {
 }
 
 // Warning: this function does not properly set the context_id field.
+#[allow(dead_code)]
 pub fn nfum<T: ToMessageBody>(tmb: T) -> NodeFromUiMessage {
     NodeFromUiMessage {
         client_id: 0,

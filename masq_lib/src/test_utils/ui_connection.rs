@@ -9,7 +9,6 @@ use std::net::TcpStream;
 use websocket::sync::Client;
 use websocket::{ClientBuilder, OwnedMessage};
 
-// covered with tests.
 pub struct UiConnection {
     context_id: u64,
     client: Client<TcpStream>,

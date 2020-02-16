@@ -45,9 +45,13 @@ impl CommandContext for CommandContextReal {
             },
         };
         if ntum.body.opcode == "redirect" {
+            let ntum_body_string = format!("{:?}", ntum.body);
             match UiRedirect::fmb(ntum.body) {
                 Ok((redirect, _)) => self.process_redirect(redirect),
-                Err(e) => unimplemented!("{:?}", e),
+                Err(e) => panic!(
+                    "Unexpected error making UiRedirect from MessageBody {}: {:?}",
+                    ntum_body_string, e
+                ),
             }
         } else {
             Ok(ntum)
@@ -83,6 +87,7 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
+        eprintln!("Processing redirect: {:?}", redirect);
         let node_connection = match NodeConnection::new(redirect.port) {
             Ok(nc) => nc,
             Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
