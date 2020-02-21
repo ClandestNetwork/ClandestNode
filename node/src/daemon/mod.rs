@@ -2,8 +2,10 @@
 
 pub mod daemon_initializer;
 pub mod launch_verifier;
-mod launch_verifier_mock;
 mod launcher;
+
+#[cfg(test)]
+mod mocks;
 
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
@@ -20,6 +22,7 @@ use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::sync::mpsc::{Receiver, Sender};
+use crate::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -70,6 +73,7 @@ pub struct Daemon {
     ui_gateway_sub: Option<Recipient<NodeToUiMessage>>,
     node_process_id: Option<u32>,
     node_ui_port: Option<u16>,
+    verifier_tools: Box<dyn VerifierTools>,
     logger: Logger,
 }
 
@@ -150,6 +154,7 @@ impl Daemon {
             ui_gateway_sub: None,
             node_process_id: None,
             node_ui_port: None,
+            verifier_tools: Box::new(VerifierToolsReal::new()),
             logger: Logger::new("Daemon"),
         }
     }
@@ -228,6 +233,13 @@ impl Daemon {
     fn handle_unexpected_message(&mut self, client_id: u64, body: MessageBody) {
         match self.node_ui_port {
             Some(port) => {
+                if let Some(process_id) = self.node_process_id {
+                    self.verifier_tools.process_is_running(process_id);
+                    // TODO: More goes here
+                }
+                else {
+                    unimplemented! ("node_ui_port is populated, but node_process_id isn't")
+                }
                 info!(
                     &self.logger,
                     "Daemon is redirecting {} message from UI {} Node at port {}",
@@ -310,6 +322,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
+    use crate::daemon::mocks::{VerifierToolsMock};
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<HashMap<String, String>>>>,
@@ -431,7 +444,9 @@ mod tests {
     fn accepts_full_setup_and_returns_settings_then_remembers_them() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
-        let subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
+        let verifier_tools = VerifierToolsMock::new ();
+        let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -500,7 +515,9 @@ mod tests {
     fn overrides_defaults() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
-        let subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
+        let verifier_tools = VerifierToolsMock::new ();
+        let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -546,11 +563,13 @@ mod tests {
                 new_process_id: 2345,
                 redirect_ui_port: 5432,
             })));
+        let verifier_tools = VerifierToolsMock::new ();
         let system = System::new("test");
         let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
         subject
             .params
             .insert("db-password".to_string(), "goober".to_string());
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -595,11 +614,13 @@ mod tests {
     fn accepts_start_order_launches_and_replies_child_success() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let launcher = LauncherMock::new().launch_result(Ok(None));
+        let verifier_tools = VerifierToolsMock::new ();
         let system = System::new("test");
         let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
         subject
             .params
             .insert("db-password".to_string(), "goober".to_string());
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -622,11 +643,13 @@ mod tests {
     fn accepts_start_order_launches_and_replies_failure() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let launcher = LauncherMock::new().launch_result(Err("booga".to_string()));
+        let verifier_tools = VerifierToolsMock::new ();
         let system = System::new("test");
         let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
         subject
             .params
             .insert("db-password".to_string(), "goober".to_string());
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -658,8 +681,10 @@ mod tests {
             new_process_id: 54321,
             redirect_ui_port: 7777,
         })));
+        let verifier_tools = VerifierToolsMock::new ();
         let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
         subject.ui_gateway_sub = Some(ui_gateway.start().recipient());
+        subject.verifier_tools = Box::new (verifier_tools);
 
         subject.handle_start_order(1234, 2345);
 
@@ -671,8 +696,14 @@ mod tests {
     fn accepts_financials_request_after_start_and_returns_redirect() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
+        let process_is_running_params_arc = Arc::new(Mutex::new(vec![]));
+        let verifier_tools = VerifierToolsMock::new ()
+            .process_is_running_params(&process_is_running_params_arc)
+            .process_is_running_result(true);
         let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
         subject.node_ui_port = Some(7777);
+        subject.node_process_id = Some(5555);
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -711,14 +742,22 @@ mod tests {
                 payload: body.payload.unwrap(),
             }
         );
+        let process_is_running_params = process_is_running_params_arc.lock().unwrap();
+        assert_eq! (*process_is_running_params, vec![5555])
     }
 
     #[test]
     fn accepts_shutdown_order_after_start_and_returns_redirect() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
+        let process_is_running_params_arc = Arc::new(Mutex::new(vec![]));
+        let verifier_tools = VerifierToolsMock::new ()
+            .process_is_running_params(&process_is_running_params_arc)
+            .process_is_running_result(true);
         let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
         subject.node_ui_port = Some(7777);
+        subject.node_process_id = Some(8888);
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -747,18 +786,23 @@ mod tests {
             UiRedirect {
                 port: 7777,
                 opcode: body.opcode,
-                context_id: None,
+                context_id: Some(4321),
                 payload: body.payload.unwrap(),
             }
         );
+        let process_is_running_params = process_is_running_params_arc.lock().unwrap();
+        assert_eq! (*process_is_running_params, vec![8888])
     }
 
     #[test]
     fn accepts_financials_request_before_start_and_returns_error() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
+        let verifier_tools = VerifierToolsMock::new ();
         let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
         subject.node_ui_port = None;
+        subject.node_process_id = None;
+        subject.verifier_tools = Box::new (verifier_tools);
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
