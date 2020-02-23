@@ -12,7 +12,7 @@ use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupValue, UiStartOrder, UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, UiSetupResponse};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupValue, UiStartOrder, UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, UiSetupResponse, NODE_ALREADY_RUNNING_ERROR};
 use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage, MessagePath};
@@ -210,7 +210,16 @@ impl Daemon {
 
     fn handle_start_order(&mut self, client_id: u64, context_id: u64) {
         match self.port_if_node_is_running() {
-            Some(_) => unimplemented!(),
+            Some(_) => {
+                self.respond_to_ui(
+                    client_id,
+                    MessageBody {
+                        opcode: "start".to_string(),
+                        path: TwoWay(context_id),
+                        payload: Err((NODE_ALREADY_RUNNING_ERROR, format!("Could not launch Node: already running"))),
+                    },
+                )
+            },
             None => match self.launcher.launch(self.params.drain().collect()) {
                 Ok(Some(success)) => {
                     self.node_process_id = Some(success.new_process_id);
@@ -297,17 +306,17 @@ impl Daemon {
         );
         self.send_node_is_not_running_error(client_id, "redirect", &opcode, OneWay);
     }
-
-    fn send_node_is_not_running_message(&self, client_id: u64, msg_opcode: &str, err_opcode: &str,
-                                        path: MessagePath) {
-        error!(
-            &self.logger,
-            "Daemon is sending error for {} message to UI {}: Node is not running",
-            err_opcode,
-            client_id
-        );
-        self.send_node_is_not_running_error(client_id, &msg_opcode, &err_opcode, path);
-    }
+//
+//    fn send_node_is_not_running_message(&self, client_id: u64, msg_opcode: &str, err_opcode: &str,
+//                                        path: MessagePath) {
+//        error!(
+//            &self.logger,
+//            "Daemon is sending error for {} message to UI {}: Node is not running",
+//            err_opcode,
+//            client_id
+//        );
+//        self.send_node_is_not_running_error(client_id, &msg_opcode, &err_opcode, path);
+//    }
 
     fn send_node_is_not_running_error(&self, client_id: u64, msg_opcode: &str, err_opcode: &str,
                                       path: MessagePath) {
@@ -349,7 +358,7 @@ mod tests {
     use crate::daemon::LaunchSuccess;
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
-    use masq_lib::messages::{UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupValue, UiShutdownRequest, UiStartOrder, UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, UiSetupResponse};
+    use masq_lib::messages::{UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupValue, UiShutdownRequest, UiStartOrder, UiStartResponse, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, UiSetupResponse, NODE_ALREADY_RUNNING_ERROR};
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
@@ -860,6 +869,45 @@ mod tests {
         let (code, message) = record.body.payload.err().unwrap();
         assert_eq!(code, NODE_LAUNCH_ERROR);
         assert_eq!(message, "Could not launch Node: booga".to_string());
+    }
+
+    #[test]
+    fn rejects_start_order_when_node_is_already_running() {
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let launcher = LauncherMock::new().launch_result(Err("booga".to_string()));
+        let verifier_tools = VerifierToolsMock::new ()
+            .process_is_running_result(true);
+        let system = System::new("test");
+        let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
+        subject
+            .params
+            .insert("db-password".to_string(), "goober".to_string());
+        subject.node_ui_port = Some (1234);
+        subject.node_process_id = Some (3421);
+        subject.verifier_tools = Box::new (verifier_tools);
+        let subject_addr = subject.start();
+        subject_addr
+            .try_send(make_bind_message(ui_gateway))
+            .unwrap();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiStartOrder {}.tmb(4321),
+            })
+            .unwrap();
+
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let record = ui_gateway_recording
+            .get_record::<NodeToUiMessage>(0)
+            .clone();
+        assert_eq!(record.target, ClientId(1234));
+        assert_eq!(&record.body.opcode, "start");
+        let (code, message) = record.body.payload.err().unwrap();
+        assert_eq!(code, NODE_ALREADY_RUNNING_ERROR);
+        assert_eq!(message, "Could not launch Node: already running".to_string());
     }
 
     #[test]
