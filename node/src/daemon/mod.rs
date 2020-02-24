@@ -220,7 +220,7 @@ impl Daemon {
                     },
                 )
             },
-            None => match self.launcher.launch(self.params.drain().collect()) {
+            None => match self.launcher.launch(self.params.clone()) {
                 Ok(Some(success)) => {
                     self.node_process_id = Some(success.new_process_id);
                     self.node_ui_port = Some(success.redirect_ui_port);
@@ -282,17 +282,22 @@ impl Daemon {
     }
 
     fn port_if_node_is_running(&mut self) -> Option<u16> {
+eprintln! ("Checking to see if Node is running");
         if let Some(process_id) = self.node_process_id {
+eprintln! ("We have a process ID for it ({}); is that process running?", process_id);
             if self.verifier_tools.process_is_running(process_id) {
+eprintln! ("Yes it is. Port is {:?}", self.node_ui_port);
                 Some (self.node_ui_port.expect ("Internal error: node_process_id is set but node_ui_port is not"))
             }
             else {
+eprintln! ("No it isn't. Clearing out process ID and UI port");
                 self.node_process_id = None;
                 self.node_ui_port = None;
                 None
             }
         }
         else {
+eprintln! ("No process ID; must not be running.");
             None
         }
     }
@@ -834,6 +839,66 @@ mod tests {
         system.run();
         let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
         assert_eq!(ui_gateway_recording.len(), 0);
+    }
+
+    #[test]
+    fn maintains_setup_through_start_order() {
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let launcher = LauncherMock::new()
+            .launch_result(Ok(Some(LaunchSuccess {
+                new_process_id: 2345,
+                redirect_ui_port: 5432,
+            })));
+        let verifier_tools = VerifierToolsMock::new ()
+            .process_is_running_result(false)
+            .process_is_running_result(false)
+            .process_is_running_result(false);
+        let system = System::new("test");
+        let mut subject = Daemon::new(&HashMap::new(), Box::new(launcher));
+        subject
+            .params
+            .insert("db-password".to_string(), "goober".to_string());
+        subject.verifier_tools = Box::new (verifier_tools);
+        let subject_addr = subject.start();
+        subject_addr
+            .try_send(make_bind_message(ui_gateway))
+            .unwrap();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiSetupRequest {values: vec![]}.tmb(4321)
+            }).unwrap();
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiStartOrder {}.tmb(4321),
+            })
+            .unwrap();
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiSetupRequest {values: vec![]}.tmb(4321)
+            }).unwrap();
+
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let record = ui_gateway_recording
+            .get_record::<NodeToUiMessage>(0)
+            .clone();
+        let (setup_before, _) = UiSetupResponse::fmb(record.body).unwrap();
+        let setup_before_pairs = setup_before.values.into_iter()
+            .map (|pair| (pair.name, pair.value))
+            .collect::<HashSet<(String, String)>> ();
+        let record = ui_gateway_recording
+            .get_record::<NodeToUiMessage>(2)
+            .clone();
+        let (setup_after, _) = UiSetupResponse::fmb(record.body).unwrap();
+        let setup_after_pairs = setup_after.values.into_iter()
+            .map (|pair| (pair.name, pair.value))
+            .collect::<HashSet<(String, String)>> ();
+        assert_eq! (setup_after_pairs, setup_before_pairs);
     }
 
     #[test]

@@ -5,10 +5,7 @@ use crate::commands::CommandError::{
     ConnectionDropped, Other, Payload, Transmission, UnexpectedResponse,
 };
 use clap::{App, AppSettings, Arg, SubCommand};
-use masq_lib::messages::{
-    FromMessageBody, ToMessageBody, UiMessageError, UiSetup, UiSetupValue, UiShutdownRequest,
-    UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
-};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiSetupValue, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR, UiSetupRequest, UiSetupResponse};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -58,8 +55,8 @@ impl Command for SetupCommand {
                 .partial_cmp(&b.name)
                 .expect("String comparison failed")
         });
-        let out_message = UiSetup { values };
-        let result: Result<UiSetup, CommandError> = transaction(out_message, context);
+        let out_message = UiSetupRequest { values };
+        let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context);
         match result {
             Ok(mut response) => {
                 response.values.sort_by(|a, b| {
@@ -67,6 +64,7 @@ impl Command for SetupCommand {
                         .partial_cmp(&b.name)
                         .expect("String comparison failed")
                 });
+                // TODO: If running = true, write some kind of message
                 writeln!(context.stdout(), "NAME                      VALUE")
                     .expect("write! failed");
                 response.values.into_iter().for_each(|value| {
@@ -255,10 +253,7 @@ mod tests {
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::CommandError::{Other, Payload, Transmission, UnexpectedResponse};
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{
-        UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
-        NODE_NOT_RUNNING_ERROR,
-    };
+    use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR, UiSetupRequest, UiSetupResponse};
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
@@ -376,7 +371,8 @@ mod tests {
             .transact_params(&transact_params_arc)
             .transact_result(Ok(NodeToUiMessage {
                 target: ClientId(0),
-                body: UiSetup {
+                body: UiSetupResponse {
+                    running: false,
                     values: vec![
                         UiSetupValue::new("c", "3"),
                         UiSetupValue::new("dddd", "4444"),
@@ -403,7 +399,7 @@ mod tests {
             *transact_params,
             vec![NodeFromUiMessage {
                 client_id: 0,
-                body: UiSetup {
+                body: UiSetupRequest {
                     values: vec![
                         UiSetupValue::new("a", "1"),
                         UiSetupValue::new("bbbb", "2222"),

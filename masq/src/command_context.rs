@@ -121,10 +121,7 @@ mod tests {
     };
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
-    use masq_lib::messages::UiSetup;
-    use masq_lib::messages::{
-        FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect,
-    };
+    use masq_lib::messages::{FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupRequest};
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
@@ -199,7 +196,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = CommandContextReal::new(port).unwrap();
 
-        let response = subject.transact(nfum(UiSetup { values: vec![] }));
+        let response = subject.transact(nfum(UiSetupRequest { values: vec![] }));
 
         assert_eq!(response, Err(PayloadError(101, "booga".to_string())));
         stop_handle.stop();
@@ -212,7 +209,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = CommandContextReal::new(port).unwrap();
 
-        let response = subject.transact(nfum(UiSetup { values: vec![] }));
+        let response = subject.transact(nfum(UiSetupRequest { values: vec![] }));
 
         stop_handle.stop();
         match response {

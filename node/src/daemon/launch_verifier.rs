@@ -36,7 +36,11 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn process_is_running(&self, process_id: u32) -> bool {
-        match Self::system_with_process(process_id).get_process(Self::convert_pid(process_id)) {
+eprintln! ("process_is_running ({})", process_id);
+        let system = Self::system();
+        let process_info_opt = system.get_process(Self::convert_pid(process_id));
+eprintln! ("Information about process {}: {:?}", process_id, process_info_opt);
+        match process_info_opt {
             None => false,
             Some(process) => Self::is_alive(process.status()),
         }
@@ -44,7 +48,7 @@ impl VerifierTools for VerifierToolsReal {
 
     fn kill_process(&self, process_id: u32) {
         if let Some(process) =
-            Self::system_with_process(process_id).get_process(Self::convert_pid(process_id))
+            Self::system().get_process(Self::convert_pid(process_id))
         {
             process.kill(Signal::Kill);
         }
@@ -60,10 +64,9 @@ impl VerifierToolsReal {
         Self {}
     }
 
-    fn system_with_process(process_id: u32) -> sysinfo::System {
-        let process_id = Self::convert_pid(process_id);
-        let mut system: sysinfo::System = sysinfo::SystemExt::new();
-        system.refresh_process(process_id);
+    fn system() -> sysinfo::System {
+        let mut system: sysinfo::System = sysinfo::System::new_all();
+        system.refresh_processes();
         system
     }
 
@@ -79,11 +82,13 @@ impl VerifierToolsReal {
 
     #[cfg(target_os = "linux")]
     fn is_alive(process_status: ProcessStatus) -> bool {
-        match process_status {
+        let result = match process_status {
             ProcessStatus::Dead => false,
             ProcessStatus::Zombie => false,
             _ => true,
-        }
+        };
+eprintln! ("is_alive interprets process status {:?} as {}", process_status, result);
+        result
     }
 
     #[cfg(target_os = "macos")]
