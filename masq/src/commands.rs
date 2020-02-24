@@ -5,7 +5,10 @@ use crate::commands::CommandError::{
     ConnectionDropped, Other, Payload, Transmission, UnexpectedResponse,
 };
 use clap::{App, AppSettings, Arg, SubCommand};
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiSetupValue, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR, UiSetupRequest, UiSetupResponse};
+use masq_lib::messages::{
+    FromMessageBody, ToMessageBody, UiMessageError, UiSetupRequest, UiSetupResponse, UiSetupValue,
+    UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
+};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -256,7 +259,10 @@ mod tests {
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::CommandError::{Other, Payload, Transmission, UnexpectedResponse};
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR, UiSetupRequest, UiSetupResponse};
+    use masq_lib::messages::{
+        UiSetupRequest, UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder,
+        UiStartResponse, NODE_NOT_RUNNING_ERROR,
+    };
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};

@@ -45,9 +45,7 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn kill_process(&self, process_id: u32) {
-        if let Some(process) =
-            Self::system().get_process(Self::convert_pid(process_id))
-        {
+        if let Some(process) = Self::system().get_process(Self::convert_pid(process_id)) {
             process.kill(Signal::Kill);
         }
     }
@@ -80,12 +78,11 @@ impl VerifierToolsReal {
 
     #[cfg(target_os = "linux")]
     fn is_alive(process_status: ProcessStatus) -> bool {
-        let result = match process_status {
+        match process_status {
             ProcessStatus::Dead => false,
             ProcessStatus::Zombie => false,
             _ => true,
-        };
-        result
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -186,13 +183,13 @@ mod tests {
     use crate::daemon::launch_verifier::LaunchVerification::{
         CleanFailure, InterventionRequired, Launched,
     };
+    use crate::daemon::mocks::VerifierToolsMock;
     use masq_lib::utils::{find_free_port, localhost};
     use std::net::SocketAddr;
     use std::process::{Child, Command};
     use std::sync::{Arc, Mutex};
     use std::time::Instant;
     use websocket::server::sync::Server;
-    use crate::daemon::mocks::VerifierToolsMock;
 
     #[test]
     fn detects_successful_launch_after_two_attempts() {

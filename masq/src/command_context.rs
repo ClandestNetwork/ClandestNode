@@ -121,7 +121,9 @@ mod tests {
     };
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::nfum;
-    use masq_lib::messages::{FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupRequest};
+    use masq_lib::messages::{
+        FromMessageBody, UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupRequest,
+    };
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;

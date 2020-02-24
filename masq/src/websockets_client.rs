@@ -170,13 +170,13 @@ mod tests {
     use super::*;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::ClientError::{ConnectionDropped, NoServer};
-    use masq_lib::messages::{UiUnmarshalError, UiSetupResponse, UiSetupRequest};
-    use masq_lib::messages::{UiSetupValue};
+    use masq_lib::messages::FromMessageBody;
+    use masq_lib::messages::UiSetupValue;
+    use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiUnmarshalError};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::TwoWay;
     use masq_lib::ui_traffic_converter::TrafficConversionError::JsonSyntaxError;
     use masq_lib::ui_traffic_converter::UnmarshalError::Critical;
-    use masq_lib::messages::FromMessageBody;
     use masq_lib::utils::find_free_port;
 
     #[allow(dead_code)]
@@ -342,7 +342,9 @@ mod tests {
         let connection = NodeConnection::new(port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiSetupRequest { values: vec![] })).unwrap();
+        let result = subject
+            .transact(nfum(UiSetupRequest { values: vec![] }))
+            .unwrap();
 
         stop_handle.stop();
         assert_eq!(result.body.payload, Err((101, "booga".to_string())));

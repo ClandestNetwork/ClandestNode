@@ -2,7 +2,7 @@
 
 pub mod utils;
 
-use masq_lib::messages::{ToMessageBody, UiShutdownRequest, NODE_UI_PROTOCOL, UiSetupRequest};
+use masq_lib::messages::{ToMessageBody, UiSetupRequest, UiShutdownRequest, NODE_UI_PROTOCOL};
 use masq_lib::messages::{
     UiFinancialsRequest, UiRedirect, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
 };
