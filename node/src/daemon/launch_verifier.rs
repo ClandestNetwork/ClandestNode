@@ -36,10 +36,8 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn process_is_running(&self, process_id: u32) -> bool {
-eprintln! ("process_is_running ({})", process_id);
         let system = Self::system();
         let process_info_opt = system.get_process(Self::convert_pid(process_id));
-eprintln! ("Information about process {}: {:?}", process_id, process_info_opt);
         match process_info_opt {
             None => false,
             Some(process) => Self::is_alive(process.status()),
@@ -87,7 +85,6 @@ impl VerifierToolsReal {
             ProcessStatus::Zombie => false,
             _ => true,
         };
-eprintln! ("is_alive interprets process status {:?} as {}", process_status, result);
         result
     }
 

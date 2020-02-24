@@ -282,22 +282,17 @@ impl Daemon {
     }
 
     fn port_if_node_is_running(&mut self) -> Option<u16> {
-eprintln! ("Checking to see if Node is running");
         if let Some(process_id) = self.node_process_id {
-eprintln! ("We have a process ID for it ({}); is that process running?", process_id);
             if self.verifier_tools.process_is_running(process_id) {
-eprintln! ("Yes it is. Port is {:?}", self.node_ui_port);
                 Some (self.node_ui_port.expect ("Internal error: node_process_id is set but node_ui_port is not"))
             }
             else {
-eprintln! ("No it isn't. Clearing out process ID and UI port");
                 self.node_process_id = None;
                 self.node_ui_port = None;
                 None
             }
         }
         else {
-eprintln! ("No process ID; must not be running.");
             None
         }
     }
@@ -311,17 +306,6 @@ eprintln! ("No process ID; must not be running.");
         );
         self.send_node_is_not_running_error(client_id, "redirect", &opcode, OneWay);
     }
-//
-//    fn send_node_is_not_running_message(&self, client_id: u64, msg_opcode: &str, err_opcode: &str,
-//                                        path: MessagePath) {
-//        error!(
-//            &self.logger,
-//            "Daemon is sending error for {} message to UI {}: Node is not running",
-//            err_opcode,
-//            client_id
-//        );
-//        self.send_node_is_not_running_error(client_id, &msg_opcode, &err_opcode, path);
-//    }
 
     fn send_node_is_not_running_error(&self, client_id: u64, msg_opcode: &str, err_opcode: &str,
                                       path: MessagePath) {

@@ -64,12 +64,15 @@ impl Command for SetupCommand {
                         .partial_cmp(&b.name)
                         .expect("String comparison failed")
                 });
-                // TODO: If running = true, write some kind of message
+                if response.running {
+                    writeln!(context.stdout(), "Note: no changes were made to the setup because the Node is currently running.")
+                        .expect ("writeln! failed");
+                }
                 writeln!(context.stdout(), "NAME                      VALUE")
-                    .expect("write! failed");
+                    .expect("writeln! failed");
                 response.values.into_iter().for_each(|value| {
                     writeln!(context.stdout(), "{:26}{}", value.name, value.value)
-                        .expect("write! failed")
+                        .expect("writeln! failed")
                 });
                 Ok(())
             }
@@ -365,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn setup_command_happy_path() {
+    fn setup_command_happy_path_with_node_not_running() {
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
@@ -410,6 +413,55 @@ mod tests {
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
             "NAME                      VALUE\nc                         3\ndddd                      4444\n");
+        assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
+    }
+
+    #[test]
+    fn setup_command_happy_path_with_node_running() {
+        let transact_params_arc = Arc::new(Mutex::new(vec![]));
+        let mut context = CommandContextMock::new()
+            .transact_params(&transact_params_arc)
+            .transact_result(Ok(NodeToUiMessage {
+                target: ClientId(0),
+                body: UiSetupResponse {
+                    running: true,
+                    values: vec![
+                        UiSetupValue::new("c", "3"),
+                        UiSetupValue::new("dddd", "4444"),
+                    ],
+                }
+                .tmb(0),
+            }));
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let factory = CommandFactoryReal::new();
+        let subject = factory
+            .make(vec![
+                "setup".to_string(),
+                "a=1".to_string(),
+                "bbbb=2222".to_string(),
+            ])
+            .unwrap();
+
+        let result = subject.execute(&mut context);
+
+        assert_eq!(result, Ok(()));
+        let transact_params = transact_params_arc.lock().unwrap();
+        assert_eq!(
+            *transact_params,
+            vec![NodeFromUiMessage {
+                client_id: 0,
+                body: UiSetupRequest {
+                    values: vec![
+                        UiSetupValue::new("a", "1"),
+                        UiSetupValue::new("bbbb", "2222"),
+                    ]
+                }
+                .tmb(0)
+            }]
+        );
+        assert_eq! (stdout_arc.lock().unwrap().get_string(),
+            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE\nc                         3\ndddd                      4444\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 
