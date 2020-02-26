@@ -2,7 +2,7 @@ name: ci-matrix
 
 on:
   pull_request:
-    types: [assigned, opened, synchronize, reopened]
+    types: [opened, synchronize]
     branches:
       - master
       - release/*
