@@ -8,6 +8,7 @@ pushd "$CI_DIR/.."
 case "$OSTYPE" in
     msys)
         echo "Windows"
+        wmic process list
         ci/run_integration_tests.sh
         ;;
     Darwin | darwin*)
