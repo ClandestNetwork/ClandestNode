@@ -55,11 +55,6 @@ function build_tiny() {
   "$CARGO" build
 }
 
-if [[ ! "$GITHUB_TOKEN" == "" ]]; then
-  echo "$GITHUB_TOKEN" | cut -c -5
-  echo "$GITHUB_TOKEN" | cut -c -5
-fi
-
 case "$OSTYPE" in
   msys)
     install_windows
