@@ -32,7 +32,8 @@ if [[ "$RESULTS_REPO_NAME" == "" ]]; then
   exit 0
 fi
 
-RESULTS_LABEL=$(echo "$GITHUB_REF" | sed "s%refs/heads/%%")
+git status
+RESULTS_LABEL=$(git status | head -n 1 | sed "s/On branch //")
 GENERATED_NAME="generated-$GENERATED_TYPE"
 
 pushd "$CI_DIR/../results"
