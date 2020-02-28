@@ -32,6 +32,7 @@ if [[ "$RESULTS_REPO_NAME" == "" ]]; then
   exit 0
 fi
 
+RESULTS_LABEL=$(git status -b --porcelain | head -n 1 | sed "s/## \(.*\)\.\.\..*/\1/")
 GENERATED_NAME="generated-$GENERATED_TYPE"
 
 pushd "$CI_DIR/../results"
@@ -39,7 +40,6 @@ rm -rf repo || echo "No leftover repo to delete"
 git clone "https://$RESULTS_REPO_OWNER:$PUBLISH_TOKEN@github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME.git" repo
 cd repo
 cp README.md README.md.old
-RESULTS_LABEL=$(git status -b --porcelain | head -n 1 | sed "s/## \(.*\)\.\.\..*/\1/")
 NEW_LINE="* $(date -u) - $RESULTS_LABEL ($GENERATED_TYPE) - $STATUS: [$GENERATED_NAME.tar.gz](https://github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME/blob/master/results/$RESULTS_LABEL/$GENERATED_NAME.tar.gz?raw=true)"
 cat README.md.old | grep -v "$RESULTS_LABEL ($GENERATED_TYPE)" > README.md.clean
 cat README.md.clean | sed -e '/\(Results Marker\)/q' > README.md
