@@ -33,7 +33,7 @@ if [[ "$RESULTS_REPO_NAME" == "" ]]; then
 fi
 
 git status
-RESULTS_LABEL=$(git status | head -n 1 | sed "s/On branch //")
+RESULTS_LABEL="$GITHUB_HEAD_REF"
 GENERATED_NAME="generated-$GENERATED_TYPE"
 
 pushd "$CI_DIR/../results"
