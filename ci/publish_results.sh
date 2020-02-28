@@ -32,7 +32,7 @@ if [[ "$RESULTS_REPO_NAME" == "" ]]; then
   exit 0
 fi
 
-RESULTS_LABEL=$(git status -b --porcelain | head -n 1 | sed "s/## \(.*\)\.\.\..*/\1/")
+RESULTS_LABEL=$(echo "$GITHUB_REF" | sed "s%refs/heads/%%")
 GENERATED_NAME="generated-$GENERATED_TYPE"
 
 pushd "$CI_DIR/../results"
