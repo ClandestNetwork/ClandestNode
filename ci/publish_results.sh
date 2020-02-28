@@ -17,12 +17,10 @@ case "$OSTYPE" in
     GENERATED_TYPE="unknown"
     ;;
 esac
-if [[ "$GITHUB_TOKEN" == "" ]]; then
-  echo "No GITHUB_TOKEN set; can't publish results"
+if [[ "$PUBLISH_TOKEN" == "" ]]; then
+  echo "No PUBLISH_TOKEN set; can't publish results"
   exit 0
 fi
-
-echo "FIRST${GITHUB_TOKEN}" | cut -c -6
 
 if [[ "$RESULTS_REPO_OWNER" == "" ]]; then
   echo "No RESULTS_REPO_OWNER set; can't publish results"
@@ -38,7 +36,7 @@ GENERATED_NAME="generated-$GENERATED_TYPE"
 
 pushd "$CI_DIR/../results"
 rm -rf repo || echo "No leftover repo to delete"
-git clone "https://$RESULTS_REPO_OWNER:$GITHUB_TOKEN@github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME.git" repo
+git clone "https://$RESULTS_REPO_OWNER:$PUBLISH_TOKEN@github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME.git" repo
 cd repo
 cp README.md README.md.old
 if [[ "$SYSTEM_PULLREQUEST_SOURCEBRANCH" == "" ]]; then

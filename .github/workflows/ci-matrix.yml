@@ -21,5 +21,13 @@ jobs:
           rustup show
           rustup update stable
           ./ci/all.sh
-          ./ci/multinode_integration_test.sh
         shell: bash
+      - name: Publish ${{ matrix.os }}
+        run: |
+          ./ci/collect_results.sh
+          ./ci/publish_results.sh
+        shell: bash
+        env:
+          RESULTS_REPO_OWNER: masq-results
+          RESULTS_REPO_NAME: MASQ-results
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
