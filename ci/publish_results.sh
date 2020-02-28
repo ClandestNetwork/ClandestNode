@@ -22,8 +22,7 @@ if [[ "$GITHUB_TOKEN" == "" ]]; then
   exit 0
 fi
 
-echo "FIRST$GITHUB_TOKEN" | cut -c -6
-echo "$GITHUB_TOKEN" | cut -c 2-
+echo "FIRST${GITHUB_TOKEN}" | cut -c -6
 
 if [[ "$RESULTS_REPO_OWNER" == "" ]]; then
   echo "No RESULTS_REPO_OWNER set; can't publish results"
