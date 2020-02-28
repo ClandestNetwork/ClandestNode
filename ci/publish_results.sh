@@ -39,11 +39,7 @@ rm -rf repo || echo "No leftover repo to delete"
 git clone "https://$RESULTS_REPO_OWNER:$PUBLISH_TOKEN@github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME.git" repo
 cd repo
 cp README.md README.md.old
-if [[ "$SYSTEM_PULLREQUEST_SOURCEBRANCH" == "" ]]; then
-  RESULTS_LABEL="$BUILD_SOURCEBRANCH"
-else
-  RESULTS_LABEL="$SYSTEM_PULLREQUEST_SOURCEBRANCH"
-fi
+RESULTS_LABEL=$(git status -b --porcelain | head -n 1 | sed "s/## \(.*\)\.\.\..*/\1/")
 NEW_LINE="* $(date -u) - $RESULTS_LABEL ($GENERATED_TYPE) - $STATUS: [$GENERATED_NAME.tar.gz](https://github.com/$RESULTS_REPO_OWNER/$RESULTS_REPO_NAME/blob/master/results/$RESULTS_LABEL/$GENERATED_NAME.tar.gz?raw=true)"
 cat README.md.old | grep -v "$RESULTS_LABEL ($GENERATED_TYPE)" > README.md.clean
 cat README.md.clean | sed -e '/\(Results Marker\)/q' > README.md
@@ -52,6 +48,8 @@ cat README.md.clean | sed -n '/\(Results Marker\)/,$p' | tail -n+2 >> README.md
 
 mkdir -p "results/$RESULTS_LABEL"
 cp ../generated.tar.gz "results/$RESULTS_LABEL/$GENERATED_NAME.tar.gz"
+git config user.email "developers@masq.ai"
+git config user.name "MASQ"
 git checkout --orphan new-master
 git add README.md results
 git commit -m "Latest results for $RESULTS_LABEL ($GENERATED_TYPE) - $STATUS"
