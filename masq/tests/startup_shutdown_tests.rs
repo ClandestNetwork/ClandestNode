@@ -7,7 +7,6 @@ use std::time::Duration;
 
 mod utils;
 
-
 #[test]
 fn masq_without_daemon_integration() {
     let masq_handle = MasqProcess::new().start_noninteractive(vec!["setup"]);
