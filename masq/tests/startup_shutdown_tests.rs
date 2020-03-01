@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::utils::{DaemonProcess, StopHandle};
 use crate::utils::MasqProcess;
+use crate::utils::{DaemonProcess, StopHandle};
 use std::thread;
 use std::time::Duration;
 

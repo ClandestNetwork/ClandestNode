@@ -74,7 +74,7 @@ impl StopHandle {
         Self::taskkill();
     }
 
-    pub fn taskkill () {
+    pub fn taskkill() {
         #[cfg(target_os = "windows")]
         {
             let mut command = Command::new("taskkill");
