@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::utils::DaemonProcess;
+use crate::utils::{DaemonProcess, StopHandle};
 use crate::utils::MasqProcess;
 use std::thread;
 use std::time::Duration;
@@ -9,6 +9,7 @@ mod utils;
 
 #[test]
 fn masq_without_daemon_integration() {
+    StopHandle::taskkill(); // for Windows
     let masq_handle = MasqProcess::new().start_noninteractive(vec!["setup"]);
 
     let (stdout, stderr, exit_code) = masq_handle.stop();
@@ -20,6 +21,7 @@ fn masq_without_daemon_integration() {
 
 #[test]
 fn handles_startup_and_shutdown_integration() {
+    StopHandle::taskkill(); // for Windows
     let daemon_handle = DaemonProcess::new().start(5333);
 
     thread::sleep(Duration::from_millis(500));
