@@ -8,6 +8,7 @@ use std::time::Duration;
 mod utils;
 
 #[test]
+#[ignore]
 fn masq_without_daemon_integration() {
     StopHandle::taskkill(); // for Windows
     let masq_handle = MasqProcess::new().start_noninteractive(vec!["setup"]);
