@@ -9,6 +9,9 @@ ci/build.sh # Build here before sudo to make sure we don't produce any root-owne
 case "$OSTYPE" in
     msys)
         echo "Windows"
+        tasklist
+        taskkill //IM MASQNode.exe //F //T
+        tasklist
         ci/run_integration_tests.sh
         ;;
     Darwin | darwin*)
