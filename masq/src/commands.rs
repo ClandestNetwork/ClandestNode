@@ -623,7 +623,7 @@ mod tests {
             subject.attempt_interval
         );
         assert!(
-            interval < (subject.attempt_interval as u128 * 2),
+            interval < (subject.attempt_interval as u128 * 5),
             "Waiting too long per attempt: {} >> {}",
             interval,
             subject.attempt_interval
