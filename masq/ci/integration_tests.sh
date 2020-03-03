@@ -10,7 +10,7 @@ case "$OSTYPE" in
     msys)
         echo "Windows"
         tasklist
-        taskkill //IM MASQNode.exe //F //T
+        taskkill //IM MASQNode.exe //F //T || echo "Kill failed"
         tasklist
         ci/run_integration_tests.sh
         ;;

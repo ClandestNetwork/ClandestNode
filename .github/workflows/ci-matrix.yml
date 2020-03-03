@@ -20,6 +20,7 @@ jobs:
           rustup show
           rustup update stable
           ./ci/all.sh
+          ./ci/multinode_integration_test.sh
         shell: bash
       - name: Publish ${{ matrix.os }}
         run: |
