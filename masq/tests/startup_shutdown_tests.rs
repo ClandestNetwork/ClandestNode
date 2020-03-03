@@ -10,10 +10,12 @@ mod utils;
 #[test]
 fn masq_without_daemon_integration() {
     #[cfg(target_os = "windows")]
-    if std::env::var("GITHUB_ACTIONS") {
-        // For some reason this test won't pass on Windows in GitHub Actions. It will find
-        // a Daemon running somewhere, and I can't figure out how to kill it.
-        return;
+    {
+        if std::env::var("GITHUB_ACTIONS") {
+            // For some reason this test won't pass on Windows in GitHub Actions. It will find
+            // a Daemon running somewhere, and I can't figure out how to kill it.
+            return;
+        }
     }
     let masq_handle = MasqProcess::new().start_noninteractive(vec!["setup"]);
 
