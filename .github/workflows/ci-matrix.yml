@@ -20,7 +20,7 @@ jobs:
         env:
           cache-name: cache-node-modules
         with:
-          path: $HOME/.cargo/cache
+          path: ~/.cargo/cache
           key: ${{ runner.os }}-0001
       - name: Build ${{ matrix.os }}
         run: |
