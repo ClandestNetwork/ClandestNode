@@ -3,9 +3,8 @@
 use multinode_integration_tests_lib::masq_node::MASQNode;
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
 use multinode_integration_tests_lib::multinode_gossip::GossipType;
-use multinode_integration_tests_lib::multinode_gossip::{
-    parse_gossip, MultinodeGossip, SingleNode, Standard,
-};
+use multinode_integration_tests_lib::multinode_gossip::{parse_gossip, MultinodeGossip, SingleNode,
+                                                        Standard};
 use multinode_integration_tests_lib::neighborhood_constructor::construct_neighborhood;
 use node_lib::neighborhood::gossip::GossipBuilder;
 use node_lib::neighborhood::neighborhood_database::NeighborhoodDatabase;
@@ -91,8 +90,10 @@ fn debut_target_does_not_pass_to_known_neighbors() {
         let mut dest_db = db_from_node(&make_node_record(3456, true));
         common_neighbors.iter().for_each(|node| {
             dest_db.add_node(node.clone()).unwrap();
-            dest_db
-                .add_arbitrary_full_neighbor(subject_node_record.public_key(), node.public_key());
+            dest_db.add_arbitrary_full_neighbor(
+                subject_node_record.public_key(),
+                node.public_key(),
+            );
         });
         dest_db
     };

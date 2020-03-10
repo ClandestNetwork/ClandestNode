@@ -15,7 +15,7 @@ use std::time::Duration;
 
 #[test]
 #[allow(unused_variables)] // 'node' below must not become '_' or disappear, or the
-                           // MASQNode will be immediately reclaimed.
+// MASQNode will be immediately reclaimed.
 fn tls_through_node_integration() {
     let node = utils::MASQNode::start_standard(None);
     let mut tls_stream = {
@@ -52,9 +52,9 @@ fn tls_through_node_integration() {
         tls_stream.expect("Couldn't handshake")
     };
     let request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".as_bytes();
-    tls_stream
-        .write(request.clone())
-        .expect("Could not write request to TLS stream");
+    tls_stream.write(request.clone()).expect(
+        "Could not write request to TLS stream",
+    );
     let buf = read_until_timeout(&mut tls_stream);
     let _ = tls_stream.shutdown().is_ok(); // Can't do anything about an error here
 

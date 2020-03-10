@@ -1,6 +1,5 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use crate::blockchain::blockchain_interface::chain_name_from_id;
 use crate::daemon::launcher::LauncherReal;
 use crate::daemon::{
     ChannelFactory, ChannelFactoryReal, Daemon, DaemonBindMessage, Launcher, Recipients,
@@ -16,6 +15,8 @@ use itertools::Itertools;
 use masq_lib::command::{Command, StdStreams};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
+use crate::bootstrapper::RealUser;
+use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
 
 pub trait RecipientsFactory {
     fn make(
@@ -117,8 +118,8 @@ impl DaemonInitializer {
         rerunner: Box<dyn Rerunner>,
     ) -> DaemonInitializer {
         LoggerInitializerWrapperReal {}.init(
-            config.data_directory.clone(),
-            &config.real_user,
+            RealDirsWrapper {}.data_dir().expect ("No data directory"),
+            &RealUser::null().populate(),
             LevelFilter::Trace,
             Some("daemon"),
         );
@@ -134,7 +135,6 @@ impl DaemonInitializer {
         let launcher = LauncherReal::new(sender);
         let mut params = HashMap::new();
         params.insert("dns-servers".to_string(), "1.1.1.1".to_string()); // TODO: This should be the regular system DNS server
-        params.extend(self.seed_params());
         let recipients =
             self.recipients_factory
                 .make(&params, Box::new(launcher), self.config.ui_port);
@@ -159,45 +159,17 @@ impl DaemonInitializer {
             .collect_vec();
         self.rerunner.rerun(param_vec);
     }
-
-    fn seed_params(&self) -> HashMap<String, String> {
-        let mut seed_params = HashMap::new();
-        if let Some(db_password) = self.config.db_password_opt.clone() {
-            seed_params.insert("db-password".to_string(), db_password);
-        };
-        seed_params.insert(
-            "data-directory".to_string(),
-            self.config.data_directory.to_string_lossy().to_string(),
-        );
-        seed_params.insert("real-user".to_string(), self.config.real_user.to_string());
-        seed_params.insert(
-            "chain".to_string(),
-            chain_name_from_id(self.config.chain_id).to_string(),
-        );
-        if let Some(config_file) = self.config.config_file_opt.clone() {
-            seed_params.insert(
-                "config-file".to_string(),
-                config_file.to_string_lossy().to_string(),
-            );
-        }
-        seed_params
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blockchain::blockchain_interface::chain_id_from_name;
-    use crate::bootstrapper::RealUser;
     use crate::daemon::{ChannelFactory, Recipients};
     use crate::node_configurator::node_configurator_initialization::InitializationConfig;
-    use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use std::cell::RefCell;
     use std::iter::FromIterator;
-    use std::path::PathBuf;
-    use std::str::FromStr;
     use std::sync::{Arc, Mutex};
 
     struct RecipientsFactoryMock {
@@ -305,11 +277,6 @@ mod tests {
     #[test]
     fn bind_incorporates_seed_params() {
         let config = InitializationConfig {
-            chain_id: chain_id_from_name("ropsten"),
-            config_file_opt: Some(PathBuf::from("not_default.toml")),
-            data_directory: PathBuf::from("not_default_data"),
-            db_password_opt: Some("booga".to_string()),
-            real_user: RealUser::from_str("123:456:not_default_home").unwrap(),
             ui_port: 1234,
         };
         let make_params_arc = Arc::new(Mutex::new(vec![]));
@@ -325,18 +292,7 @@ mod tests {
 
         subject.bind(std::sync::mpsc::channel().0);
 
-        let expected_seed_params = HashMap::from_iter(
-            vec![
-                ("chain", "ropsten"),
-                ("config-file", "not_default.toml"),
-                ("data-directory", "not_default_data"),
-                ("db-password", "booga"),
-                ("real-user", "123:456:not_default_home"),
-                ("dns-servers", "1.1.1.1"),
-            ]
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string())),
-        );
+        let expected_seed_params = HashMap::new ();
         let mut make_params = make_params_arc.lock().unwrap();
         let (seed_params, _, port) = make_params.remove(0);
         assert_eq!(seed_params, expected_seed_params);
@@ -350,11 +306,6 @@ mod tests {
         let system = System::new("test");
         let recipients = make_recipients(ui_gateway, daemon);
         let config = InitializationConfig {
-            chain_id: 0,                         // irrelevant
-            config_file_opt: Default::default(), // irrelevant
-            data_directory: RealDirsWrapper {}.data_dir().unwrap(),
-            db_password_opt: None, // irrelevant
-            real_user: Default::default(),
             ui_port: 1234,
         };
         let channel_factory = ChannelFactoryMock::new();
@@ -383,11 +334,6 @@ mod tests {
     fn split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args() {
         let system = System::new("test");
         let config = InitializationConfig {
-            chain_id: 0,                         // irrelevant
-            config_file_opt: Default::default(), // irrelevant
-            data_directory: RealDirsWrapper {}.data_dir().unwrap(),
-            db_password_opt: None, // irrelevant
-            real_user: Default::default(),
             ui_port: 1234,
         };
         let (sender, receiver) = std::sync::mpsc::channel::<HashMap<String, String>>();

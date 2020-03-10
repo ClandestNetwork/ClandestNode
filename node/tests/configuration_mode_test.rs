@@ -5,21 +5,17 @@ pub mod utils;
 use bip39::{Language, Mnemonic, Seed};
 use masq_lib::test_utils::environment_guard::EnvironmentGuard;
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
-use node_lib::database::db_initializer::{
-    DbInitializer, DbInitializerReal, CURRENT_SCHEMA_VERSION,
-};
+use node_lib::database::db_initializer::{DbInitializer, DbInitializerReal, CURRENT_SCHEMA_VERSION};
 use node_lib::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
-use node_lib::sub_lib::wallet::{
-    Wallet, DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
-};
+use node_lib::sub_lib::wallet::{Wallet, DEFAULT_CONSUMING_DERIVATION_PATH,
+                                DEFAULT_EARNING_DERIVATION_PATH};
 use node_lib::test_utils::{assert_string_contains, DEFAULT_CHAIN_ID};
 use regex::Regex;
 use std::str::FromStr;
 use utils::CommandConfig;
 use utils::MASQNode;
 
-const PHRASE: &str =
-    "snake gorilla marine couch wheel decline stamp glass aunt antenna transfer exit";
+const PHRASE: &str = "snake gorilla marine couch wheel decline stamp glass aunt antenna transfer exit";
 const PASSPHRASE: &str = "passphrase";
 const PASSWORD: &str = "password";
 const EARNING_PATH: &str = "m/44'/60'/3'/2/1";
@@ -52,10 +48,12 @@ fn wallet_from_phrase_and_path(phrase: &str, path: &str) -> Wallet {
 fn phrase_from_console_log(console_log: &str) -> String {
     let regex = Regex::new("if you provided one\\.\\s+(.+)[\r\n]").unwrap();
     match regex.captures(console_log) {
-        None => panic!(
-            "Couldn't parse phrase out of console output:\n{}",
-            console_log
-        ),
+        None => {
+            panic!(
+                "Couldn't parse phrase out of console output:\n{}",
+                console_log
+            )
+        }
         Some(captures) => captures.get(1).unwrap().as_str().to_string(),
     }
 }
@@ -273,7 +271,7 @@ fn create_database_generating_neither_derivation_path_integration() {
         persistent_config.earning_wallet_from_address(),
         Some(wallet_from_phrase_and_path(
             &phrase,
-            DEFAULT_EARNING_DERIVATION_PATH
+            DEFAULT_EARNING_DERIVATION_PATH,
         ))
     );
     assert_eq!(persistent_config.consuming_wallet_public_key(), None);
@@ -344,7 +342,7 @@ fn create_database_generating_only_consuming_derivation_path_integration() {
         persistent_config.earning_wallet_from_address(),
         Some(wallet_from_phrase_and_path(
             &phrase,
-            DEFAULT_EARNING_DERIVATION_PATH
+            DEFAULT_EARNING_DERIVATION_PATH,
         ))
     );
     assert_eq!(persistent_config.consuming_wallet_public_key(), None);

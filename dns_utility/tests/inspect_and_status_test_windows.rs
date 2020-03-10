@@ -14,11 +14,10 @@ fn winreg_inspect_and_status_user_integration() {
     let interfaces = modifier.find_interfaces_to_inspect().unwrap();
     let dns_server_list_csv = modifier.find_dns_server_list(interfaces).unwrap();
     let dns_server_list = dns_server_list_csv.split(",");
-    let expected_inspect_output = dns_server_list
-        .into_iter()
-        .fold(String::new(), |so_far, dns_server| {
-            format!("{}{}\n", so_far, dns_server)
-        });
+    let expected_inspect_output = dns_server_list.into_iter().fold(String::new(), |so_far,
+     dns_server| {
+        format!("{}{}\n", so_far, dns_server)
+    });
     let expected_status_output = if expected_inspect_output == "127.0.0.1\n" {
         "subverted\n".to_string()
     } else {

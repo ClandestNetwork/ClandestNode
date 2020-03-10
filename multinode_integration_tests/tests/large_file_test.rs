@@ -2,9 +2,8 @@
 
 use multinode_integration_tests_lib::masq_node::MASQNode;
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
-use multinode_integration_tests_lib::masq_real_node::{
-    make_consuming_wallet_info, MASQRealNode, NodeStartupConfigBuilder,
-};
+use multinode_integration_tests_lib::masq_real_node::{make_consuming_wallet_info, MASQRealNode,
+                                                      NodeStartupConfigBuilder};
 use multinode_integration_tests_lib::rest_utils::RestServer;
 use node_lib::blockchain::blockchain_interface::chain_name_from_id;
 use std::thread;

@@ -76,15 +76,13 @@ fn server_relays_cores_package() {
         cryptde,
         Some(make_paying_wallet(b"consuming")),
         Some(contract_address(cluster.chain_id)),
-    )
-    .unwrap();
+    ).unwrap();
     let incipient = IncipientCoresPackage::new(
         cryptde,
         route.clone(),
         make_meaningless_message_type(),
         &cryptde.public_key(),
-    )
-    .unwrap();
+    ).unwrap();
 
     client.transmit_package(incipient, &masquerader, cryptde.public_key().clone());
     let package = server.wait_for_package(Duration::from_millis(1000));
@@ -121,15 +119,13 @@ fn one_mock_node_talks_to_another() {
         cryptde,
         Some(make_paying_wallet(b"consuming")),
         Some(contract_address(cluster.chain_id)),
-    )
-    .unwrap();
+    ).unwrap();
     let incipient_cores_package = IncipientCoresPackage::new(
         cryptde,
         route,
         make_meaningless_message_type(),
         &mock_node_2.main_public_key(),
-    )
-    .unwrap();
+    ).unwrap();
 
     mock_node_1
         .transmit_package(
@@ -160,9 +156,12 @@ fn one_mock_node_talks_to_another() {
 }
 
 fn check_node(cluster: &MASQNodeCluster, name: &str, ip_address: &str, port: u16) {
-    let node = cluster
-        .get_node_by_name(name)
-        .expect(format!("Couldn't find node {} to check", name).as_str());
+    let node = cluster.get_node_by_name(name).expect(
+        format!(
+            "Couldn't find node {} to check",
+            name
+        ).as_str(),
+    );
     assert_eq!(node.name(), name);
     assert_eq!(
         format!("{}", node.node_reference()).contains(ip_address),

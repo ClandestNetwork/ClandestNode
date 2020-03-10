@@ -3,10 +3,9 @@
 use itertools::Itertools;
 use multinode_integration_tests_lib::masq_node::MASQNode;
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
-use multinode_integration_tests_lib::masq_real_node::{
-    default_consuming_wallet_info, make_consuming_wallet_info, MASQRealNode,
-    NodeStartupConfigBuilder,
-};
+use multinode_integration_tests_lib::masq_real_node::{default_consuming_wallet_info,
+                                                      make_consuming_wallet_info, MASQRealNode,
+                                                      NodeStartupConfigBuilder};
 use native_tls::HandshakeError;
 use native_tls::TlsConnector;
 use native_tls::TlsStream;
@@ -146,10 +145,8 @@ fn tls_end_to_end_routing_test() {
                 "{}:{}",
                 &nodes[5].node_addr().ip_addr().to_string(),
                 "8443"
-            ))
-            .unwrap(),
-        )
-        .expect(&format!(
+            )).unwrap(),
+        ).expect(&format!(
             "Could not connect to {}:8443",
             &nodes[5].node_addr().ip_addr().to_string()
         ));
@@ -183,9 +180,9 @@ fn tls_end_to_end_routing_test() {
         tls_stream.expect("Couldn't handshake")
     };
     let request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".as_bytes();
-    tls_stream
-        .write(request.clone())
-        .expect("Could not write request to TLS stream");
+    tls_stream.write(request.clone()).expect(
+        "Could not write request to TLS stream",
+    );
     let buf = read_until_timeout(&mut tls_stream);
     let _ = tls_stream.shutdown().is_ok(); // Can't do anything about an error here
 
@@ -249,7 +246,8 @@ fn tls_routing_failure_produces_internal_error_response() {
             .build(),
     );
     let mut client = originating_node.make_client(8443);
-    let client_hello = vec![
+    let client_hello =
+        vec![
         0x16, // content_type: Handshake
         0x03, 0x03, // TLS 1.2
         0x00, 0x3F, // length
@@ -314,9 +312,8 @@ fn multiple_stream_zero_hop_test() {
     assert_eq!(
         index_of(
             &another_response,
-            &b"FALLING FALLING .COM BY RAFAEL ROZENDAAL"[..]
-        )
-        .is_some(),
+            &b"FALLING FALLING .COM BY RAFAEL ROZENDAAL"[..],
+        ).is_some(),
         true,
         "Actual response:\n{}",
         String::from_utf8(another_response).unwrap()

@@ -1,9 +1,9 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 use multinode_integration_tests_lib::masq_node::{MASQNode, MASQNodeUtils, NodeReference};
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
-use multinode_integration_tests_lib::masq_real_node::{
-    make_consuming_wallet_info, make_earning_wallet_info, MASQRealNode, NodeStartupConfigBuilder,
-};
+use multinode_integration_tests_lib::masq_real_node::{make_consuming_wallet_info,
+                                                      make_earning_wallet_info, MASQRealNode,
+                                                      NodeStartupConfigBuilder};
 use node_lib::accountant::payable_dao::{PayableAccount, PayableDao, PayableDaoReal};
 use node_lib::accountant::receivable_dao::{ReceivableAccount, ReceivableDao, ReceivableDaoReal};
 use node_lib::blockchain::blockchain_interface::chain_name_from_id;
@@ -20,7 +20,9 @@ fn provided_and_consumed_services_are_recorded_in_databases() {
     let originating_node = start_lonely_real_node(&mut cluster);
     let non_originating_nodes = (0..6)
         .into_iter()
-        .map(|_| start_real_node(&mut cluster, originating_node.node_reference()))
+        .map(|_| {
+            start_real_node(&mut cluster, originating_node.node_reference())
+        })
         .collect::<Vec<MASQRealNode>>();
 
     thread::sleep(Duration::from_millis(2000));
@@ -43,9 +45,9 @@ fn provided_and_consumed_services_are_recorded_in_databases() {
     let receivable_balances = non_originating_nodes
         .iter()
         .flat_map(|node| {
-            receivables(node, cluster.chain_id)
-                .into_iter()
-                .map(move |receivable_account| (node.earning_wallet(), receivable_account.balance))
+            receivables(node, cluster.chain_id).into_iter().map(
+                move |receivable_account| (node.earning_wallet(), receivable_account.balance),
+            )
         })
         .collect::<HashMap<Wallet, i64>>();
 

@@ -42,8 +42,10 @@ fn neighborhood_notified_of_newly_missing_node() {
             .chain(chain_name_from_id(cluster.chain_id))
             .build(),
     );
-    let witness_node = cluster
-        .start_mock_node_with_public_key(vec![find_free_port()], &PublicKey::new(&[5, 6, 7, 8]));
+    let witness_node = cluster.start_mock_node_with_public_key(
+        vec![find_free_port()],
+        &PublicKey::new(&[5, 6, 7, 8]),
+    );
     witness_node.transmit_debut(&originating_node).unwrap();
     let (introductions, _) = witness_node
         .wait_for_gossip(Duration::from_millis(1000))
@@ -54,12 +56,12 @@ fn neighborhood_notified_of_newly_missing_node() {
         introductions.to_dot_graph(
             (
                 originating_node.main_public_key(),
-                &Some(originating_node.node_addr())
+                &Some(originating_node.node_addr()),
             ),
             (
                 witness_node.main_public_key(),
-                &Some(witness_node.node_addr())
-            )
+                &Some(witness_node.node_addr()),
+            ),
         )
     );
 
@@ -94,13 +96,15 @@ fn neighborhood_notified_of_newly_missing_node() {
     let disappearance_agrs: Vec<AccessibleGossipRecord> = disappearance_gossip.try_into().unwrap();
     let originating_node_agr = disappearance_agrs
         .into_iter()
-        .find(|agr| &agr.inner.public_key == originating_node.main_public_key())
+        .find(|agr| {
+            &agr.inner.public_key == originating_node.main_public_key()
+        })
         .unwrap();
     assert!(
-        !originating_node_agr
-            .inner
-            .neighbors
-            .contains(&disappearing_node.main_public_key()),
+        !originating_node_agr.inner.neighbors.contains(
+            &disappearing_node
+                .main_public_key(),
+        ),
         "Originating Node {} should not be connected to the disappeared Node {}, but is: {}",
         originating_node.main_public_key(),
         disappearing_node.main_public_key(),

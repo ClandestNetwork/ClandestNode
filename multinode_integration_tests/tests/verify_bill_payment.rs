@@ -5,15 +5,13 @@ use multinode_integration_tests_lib::blockchain::BlockchainServer;
 use multinode_integration_tests_lib::command::Command;
 use multinode_integration_tests_lib::masq_node::{MASQNode, MASQNodeUtils};
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
-use multinode_integration_tests_lib::masq_real_node::{
-    ConsumingWalletInfo, EarningWalletInfo, MASQRealNode, NodeStartupConfigBuilder,
-};
+use multinode_integration_tests_lib::masq_real_node::{ConsumingWalletInfo, EarningWalletInfo,
+                                                      MASQRealNode, NodeStartupConfigBuilder};
 use node_lib::accountant::payable_dao::{PayableDao, PayableDaoReal};
 use node_lib::accountant::receivable_dao::{ReceivableDao, ReceivableDaoReal};
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
-use node_lib::blockchain::blockchain_interface::{
-    contract_address, BlockchainInterface, BlockchainInterfaceNonClandestine,
-};
+use node_lib::blockchain::blockchain_interface::{contract_address, BlockchainInterface,
+                                                 BlockchainInterfaceNonClandestine};
 use node_lib::blockchain::raw_transaction::RawTransaction;
 use node_lib::database::db_initializer::{DbInitializer, DbInitializerReal};
 use node_lib::sub_lib::wallet::Wallet;
@@ -36,9 +34,7 @@ fn verify_bill_payment() {
         Err(_) => panic!(""),
     };
 
-    let blockchain_server = BlockchainServer {
-        name: "ganache-cli",
-    };
+    let blockchain_server = BlockchainServer { name: "ganache-cli" };
     cluster.chain_id = 2u8;
     blockchain_server.start();
     blockchain_server.wait_until_ready();
@@ -68,10 +64,9 @@ fn verify_bill_payment() {
         .blockchain_service_url(blockchain_server.service_url())
         .chain("dev")
         .consuming_wallet_info(ConsumingWalletInfo::PrivateKey(contract_owner_secret_key))
-        .earning_wallet_info(EarningWalletInfo::Address(format!(
-            "{}",
-            contract_owner_wallet.clone()
-        )))
+        .earning_wallet_info(EarningWalletInfo::Address(
+            format!("{}", contract_owner_wallet.clone()),
+        ))
         .build();
 
     let (serving_node_1_wallet, serving_node_1_secret) =
@@ -80,10 +75,9 @@ fn verify_bill_payment() {
         .blockchain_service_url(blockchain_server.service_url())
         .chain("dev")
         .consuming_wallet_info(ConsumingWalletInfo::PrivateKey(serving_node_1_secret))
-        .earning_wallet_info(EarningWalletInfo::Address(format!(
-            "{}",
-            serving_node_1_wallet.clone()
-        )))
+        .earning_wallet_info(EarningWalletInfo::Address(
+            format!("{}", serving_node_1_wallet.clone()),
+        ))
         .build();
 
     let (serving_node_2_wallet, serving_node_2_secret) =
@@ -92,10 +86,9 @@ fn verify_bill_payment() {
         .blockchain_service_url(blockchain_server.service_url())
         .chain("dev")
         .consuming_wallet_info(ConsumingWalletInfo::PrivateKey(serving_node_2_secret))
-        .earning_wallet_info(EarningWalletInfo::Address(format!(
-            "{}",
-            serving_node_2_wallet.clone()
-        )))
+        .earning_wallet_info(EarningWalletInfo::Address(
+            format!("{}", serving_node_2_wallet.clone()),
+        ))
         .build();
 
     let (serving_node_3_wallet, serving_node_3_secret) =
@@ -104,14 +97,15 @@ fn verify_bill_payment() {
         .blockchain_service_url(blockchain_server.service_url())
         .chain("dev")
         .consuming_wallet_info(ConsumingWalletInfo::PrivateKey(serving_node_3_secret))
-        .earning_wallet_info(EarningWalletInfo::Address(format!(
-            "{}",
-            serving_node_3_wallet.clone()
-        )))
+        .earning_wallet_info(EarningWalletInfo::Address(
+            format!("{}", serving_node_3_wallet.clone()),
+        ))
         .build();
 
-    let amount = 10u64
-        * u64::try_from(node_lib::accountant::PAYMENT_CURVES.permanent_debt_allowed_gwub).unwrap();
+    let amount = 10u64 *
+        u64::try_from(
+            node_lib::accountant::PAYMENT_CURVES.permanent_debt_allowed_gwub,
+        ).unwrap();
 
     let project_root = MASQNodeUtils::find_project_root();
     let (consuming_node_name, consuming_node_index) = cluster.prepare_real_node(&consuming_config);
@@ -274,26 +268,26 @@ fn verify_bill_payment() {
         );
     }
 
-    test_utils::wait_for(Some(1000), Some(15000), || {
-        if let Some(status) = serving_node_1_receivable_dao.account_status(&contract_owner_wallet) {
-            status.balance == 0
-        } else {
-            false
-        }
+    test_utils::wait_for(Some(1000), Some(15000), || if let Some(status) =
+        serving_node_1_receivable_dao.account_status(&contract_owner_wallet)
+    {
+        status.balance == 0
+    } else {
+        false
     });
-    test_utils::wait_for(Some(1000), Some(15000), || {
-        if let Some(status) = serving_node_2_receivable_dao.account_status(&contract_owner_wallet) {
-            status.balance == 0
-        } else {
-            false
-        }
+    test_utils::wait_for(Some(1000), Some(15000), || if let Some(status) =
+        serving_node_2_receivable_dao.account_status(&contract_owner_wallet)
+    {
+        status.balance == 0
+    } else {
+        false
     });
-    test_utils::wait_for(Some(1000), Some(15000), || {
-        if let Some(status) = serving_node_3_receivable_dao.account_status(&contract_owner_wallet) {
-            status.balance == 0
-        } else {
-            false
-        }
+    test_utils::wait_for(Some(1000), Some(15000), || if let Some(status) =
+        serving_node_3_receivable_dao.account_status(&contract_owner_wallet)
+    {
+        status.balance == 0
+    } else {
+        false
     });
 }
 
@@ -332,18 +326,16 @@ fn deploy_smart_contract(wallet: &Wallet, web3: &Web3<Http>, chain_id: u8) -> Ad
         data,
     };
 
-    match web3
-        .eth()
+    match web3.eth()
         .send_raw_transaction(Bytes(tx.sign(&wallet, chain_id)))
-        .wait()
-    {
-        Ok(tx_hash) => match web3.eth().transaction_receipt(tx_hash).wait() {
-            Ok(Some(tx_receipt)) => Address {
-                0: tx_receipt.contract_address.unwrap().0,
-            },
-            Ok(None) => panic!("Contract deployment failed Ok(None)"),
-            Err(e) => panic!("Contract deployment failed {:?}", e),
-        },
+        .wait() {
+        Ok(tx_hash) => {
+            match web3.eth().transaction_receipt(tx_hash).wait() {
+                Ok(Some(tx_receipt)) => Address { 0: tx_receipt.contract_address.unwrap().0 },
+                Ok(None) => panic!("Contract deployment failed Ok(None)"),
+                Err(e) => panic!("Contract deployment failed {:?}", e),
+            }
+        }
         Err(e) => panic!("Contract deployment failed {:?}", e),
     }
 }
@@ -369,15 +361,12 @@ fn expire_payables(path: PathBuf, chain_id: u8) {
     let conn = DbInitializerReal::new()
         .initialize(&path, chain_id)
         .unwrap();
-    let mut statement = conn
-        .prepare(
-            "update payable set last_paid_timestamp = 0 where pending_payment_transaction is null",
-        )
-        .unwrap();
+    let mut statement = conn.prepare(
+        "update payable set last_paid_timestamp = 0 where pending_payment_transaction is null",
+    ).unwrap();
     statement.execute(NO_PARAMS).unwrap();
 
-    let mut config_stmt = conn
-        .prepare("update config set value = '0' where name = 'start_block'")
+    let mut config_stmt = conn.prepare("update config set value = '0' where name = 'start_block'")
         .unwrap();
     config_stmt.execute(NO_PARAMS).unwrap();
 }
@@ -386,13 +375,11 @@ fn expire_receivables(path: PathBuf, chain_id: u8) {
     let conn = DbInitializerReal::new()
         .initialize(&path, chain_id)
         .unwrap();
-    let mut statement = conn
-        .prepare("update receivable set last_received_timestamp = 0")
+    let mut statement = conn.prepare("update receivable set last_received_timestamp = 0")
         .unwrap();
     statement.execute(NO_PARAMS).unwrap();
 
-    let mut config_stmt = conn
-        .prepare("update config set value = '0' where name = 'start_block'")
+    let mut config_stmt = conn.prepare("update config set value = '0' where name = 'start_block'")
         .unwrap();
     config_stmt.execute(NO_PARAMS).unwrap();
 }
@@ -401,13 +388,13 @@ fn open_all_file_permissions(dir: PathBuf) {
     match Command::new(
         "chmod",
         Command::strings(vec!["-R", "777", dir.to_str().unwrap()]),
-    )
-    .wait_for_exit()
-    {
+    ).wait_for_exit() {
         0 => (),
-        _ => panic!(
-            "Couldn't chmod 777 files in directory {}",
-            dir.to_str().unwrap()
-        ),
+        _ => {
+            panic!(
+                "Couldn't chmod 777 files in directory {}",
+                dir.to_str().unwrap()
+            )
+        }
     }
 }

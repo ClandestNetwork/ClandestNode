@@ -39,9 +39,9 @@ fn perform_query(record_type: RecordType, rdata: &[u8]) {
     };
 
     let socket = UdpSocket::bind(&format!("0.0.0.0:0")).expect("Couldn't bind socket");
-    socket
-        .connect(&format!("127.0.0.1:53"))
-        .expect("Couldn't connect");
+    socket.connect(&format!("127.0.0.1:53")).expect(
+        "Couldn't connect",
+    );
     let transmit_count = socket.send(&buf[..length]).expect("Couldn't send");
     assert_eq!(transmit_count, length);
     socket
