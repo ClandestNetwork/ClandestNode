@@ -1,10 +1,11 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::node_configurator::{app_head, ui_port_arg, NodeConfigurator};
+use crate::node_configurator::{app_head, NodeConfigurator};
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
 use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
+use masq_lib::shared_schema::ui_port_arg;
 
 lazy_static! {
     static ref UI_PORT_HELP: String = format!(
@@ -63,8 +64,8 @@ pub fn app() -> App<'static, 'static> {
 mod initialization {
     use super::*;
     use clap::value_t;
+    use masq_lib::constants::DEFAULT_UI_PORT;
     use masq_lib::multi_config::MultiConfig;
-    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
     pub fn parse_args(
         multi_config: &MultiConfig,
@@ -87,9 +88,9 @@ mod initialization {
 mod tests {
     use super::*;
     use crate::test_utils::ArgsBuilder;
+    use masq_lib::constants::DEFAULT_UI_PORT;
     use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
-    use masq_lib::ui_gateway::DEFAULT_UI_PORT;
 
     #[test]
     fn parse_args_creates_configuration_with_defaults() {
