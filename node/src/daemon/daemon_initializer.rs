@@ -118,7 +118,10 @@ impl DaemonInitializer {
         rerunner: Box<dyn Rerunner>,
     ) -> DaemonInitializer {
         LoggerInitializerWrapperReal {}.init(
-            RealDirsWrapper {}.data_dir().expect("No data directory"),
+            RealDirsWrapper {}
+                .data_dir()
+                .expect("No data directory")
+                .join("MASQ"),
             &RealUser::null().populate(),
             LevelFilter::Trace,
             Some("daemon"),
