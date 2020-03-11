@@ -13,9 +13,9 @@ use winreg::RegKey;
 // Any integration tests that should be run as root should have names ending in '_sudo_integration'
 fn windows_subvert_and_revert_sudo_integration() {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let interfaces = hklm.open_subkey(
-        "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
-    ).unwrap();
+    let interfaces = hklm
+        .open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
+        .unwrap();
     let gateway_interfaces: Vec<RegKey> = interfaces
         .enum_keys()
         .map(|interface_name| {

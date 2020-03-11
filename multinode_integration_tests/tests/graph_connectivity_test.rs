@@ -3,8 +3,9 @@
 use multinode_integration_tests_lib::masq_node::MASQNode;
 use multinode_integration_tests_lib::masq_node_cluster::MASQNodeCluster;
 use multinode_integration_tests_lib::masq_real_node::{MASQRealNode, NodeStartupConfigBuilder};
-use multinode_integration_tests_lib::multinode_gossip::{parse_gossip, GossipType, MultinodeGossip,
-                                                        StandardBuilder};
+use multinode_integration_tests_lib::multinode_gossip::{
+    parse_gossip, GossipType, MultinodeGossip, StandardBuilder,
+};
 use multinode_integration_tests_lib::neighborhood_constructor::construct_neighborhood;
 use node_lib::blockchain::blockchain_interface::chain_name_from_id;
 use node_lib::neighborhood::gossip_acceptor::MAX_DEGREE;
@@ -68,12 +69,8 @@ fn graph_connects_but_does_not_over_connect() {
         .into_iter()
         .filter(|key| !dont_count_these.contains(&key))
         .map(|key| standard_gossip.agr(&key).unwrap())
-        .filter(|agr| {
-            agr.inner.neighbors.len() < 2 || agr.inner.neighbors.len() > 5
-        })
-        .map(|agr| {
-            (agr.inner.public_key.clone(), agr.inner.neighbors.len())
-        })
+        .filter(|agr| agr.inner.neighbors.len() < 2 || agr.inner.neighbors.len() > 5)
+        .map(|agr| (agr.inner.public_key.clone(), agr.inner.neighbors.len()))
         .collect::<Vec<(PublicKey, usize)>>();
     assert!(
         problems.is_empty(),

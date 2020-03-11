@@ -178,7 +178,7 @@ pub fn app() -> App<'static, 'static> {
                 .takes_value(true)
                 .help(BLOCKCHAIN_SERVICE_HELP),
         )
-        .arg (chain_arg())
+        .arg(chain_arg())
         .arg(
             Arg::with_name("clandestine-port")
                 .long("clandestine-port")

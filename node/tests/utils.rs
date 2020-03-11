@@ -148,12 +148,10 @@ impl MASQNode {
                 self.output = Some(output);
                 self.output.clone()
             }
-            (Some(child), None) => {
-                match child.wait_with_output() {
-                    Ok(output) => Some(output),
-                    Err(e) => panic!("{:?}", e),
-                }
-            }
+            (Some(child), None) => match child.wait_with_output() {
+                Ok(output) => Some(output),
+                Err(e) => panic!("{:?}", e),
+            },
             (Some(_), Some(_)) => panic!("Internal error: Inconsistent MASQ Node state"),
             (None, None) => None,
         }
@@ -198,13 +196,10 @@ impl MASQNode {
         match std::fs::remove_file(database.clone()) {
             Ok(_) => (),
             Err(ref e) if e.kind() == io::ErrorKind::NotFound => (),
-            Err(e) => {
-                panic!(
-                    "Couldn't remove preexisting database at {:?}: {}",
-                    database,
-                    e
-                )
-            }
+            Err(e) => panic!(
+                "Couldn't remove preexisting database at {:?}: {}",
+                database, e
+            ),
         }
     }
 
@@ -219,7 +214,10 @@ impl MASQNode {
         Self::remove_database();
         let mut command = command_to_start();
         let mut args = Self::daemon_args();
-        args.extend(match config {Some (c) => c.args, None => vec![]});
+        args.extend(match config {
+            Some(c) => c.args,
+            None => vec![],
+        });
         command.args(&args);
         command
     }

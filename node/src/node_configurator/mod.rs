@@ -766,6 +766,7 @@ fn exit(code: i32, message: &str) {
 mod tests {
     use super::*;
     use crate::blockchain::bip32::Bip32ECKeyPair;
+    use crate::node_configurator::node_configurator_standard::app;
     use crate::node_test_utils::MockDirsWrapper;
     use crate::sub_lib::wallet::{Wallet, DEFAULT_EARNING_DERIVATION_PATH};
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
@@ -779,7 +780,6 @@ mod tests {
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
     use tiny_hderive::bip44::DerivationPath;
-    use crate::node_configurator::node_configurator_standard::app;
 
     #[test]
     fn validate_ethereum_address_requires_an_address_that_is_42_characters_long() {
@@ -1024,8 +1024,8 @@ mod tests {
 
         let (_, directory, chain_id) = real_user_data_directory_and_chain_id(&multi_config);
 
-        assert_eq! (directory, PathBuf::from ("booga"));
-        assert_eq! (chain_id, chain_id_from_name (DEFAULT_CHAIN_NAME));
+        assert_eq!(directory, PathBuf::from("booga"));
+        assert_eq!(chain_id, chain_id_from_name(DEFAULT_CHAIN_NAME));
     }
 
     #[test]

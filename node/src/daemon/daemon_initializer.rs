@@ -1,10 +1,12 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
+use crate::bootstrapper::RealUser;
 use crate::daemon::launcher::LauncherReal;
 use crate::daemon::{
     ChannelFactory, ChannelFactoryReal, Daemon, DaemonBindMessage, Launcher, Recipients,
 };
 use crate::node_configurator::node_configurator_initialization::InitializationConfig;
+use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
 use crate::server_initializer::{LoggerInitializerWrapper, LoggerInitializerWrapperReal};
 use crate::sub_lib::main_tools::main_with_args;
 use crate::sub_lib::ui_gateway::UiGatewayConfig;
@@ -15,8 +17,6 @@ use itertools::Itertools;
 use masq_lib::command::{Command, StdStreams};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use crate::bootstrapper::RealUser;
-use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
 
 pub trait RecipientsFactory {
     fn make(
@@ -118,7 +118,7 @@ impl DaemonInitializer {
         rerunner: Box<dyn Rerunner>,
     ) -> DaemonInitializer {
         LoggerInitializerWrapperReal {}.init(
-            RealDirsWrapper {}.data_dir().expect ("No data directory"),
+            RealDirsWrapper {}.data_dir().expect("No data directory"),
             &RealUser::null().populate(),
             LevelFilter::Trace,
             Some("daemon"),
@@ -276,9 +276,7 @@ mod tests {
 
     #[test]
     fn bind_incorporates_seed_params() {
-        let config = InitializationConfig {
-            ui_port: 1234,
-        };
+        let config = InitializationConfig { ui_port: 1234 };
         let make_params_arc = Arc::new(Mutex::new(vec![]));
         let recipients_factory = RecipientsFactoryMock::new()
             .make_params(&make_params_arc)
@@ -292,7 +290,7 @@ mod tests {
 
         subject.bind(std::sync::mpsc::channel().0);
 
-        let expected_seed_params = HashMap::new ();
+        let expected_seed_params = HashMap::new();
         let mut make_params = make_params_arc.lock().unwrap();
         let (seed_params, _, port) = make_params.remove(0);
         assert_eq!(seed_params, expected_seed_params);
@@ -305,9 +303,7 @@ mod tests {
         let (daemon, _, daemon_recording_arc) = make_recorder();
         let system = System::new("test");
         let recipients = make_recipients(ui_gateway, daemon);
-        let config = InitializationConfig {
-            ui_port: 1234,
-        };
+        let config = InitializationConfig { ui_port: 1234 };
         let channel_factory = ChannelFactoryMock::new();
         let addr_factory = RecipientsFactoryMock::new().make_result(recipients);
         let rerunner = RerunnerMock::new();
@@ -333,9 +329,7 @@ mod tests {
     #[test]
     fn split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args() {
         let system = System::new("test");
-        let config = InitializationConfig {
-            ui_port: 1234,
-        };
+        let config = InitializationConfig { ui_port: 1234 };
         let (sender, receiver) = std::sync::mpsc::channel::<HashMap<String, String>>();
         let channel_factory = ChannelFactoryMock::new();
         let addr_factory = RecipientsFactoryMock::new();

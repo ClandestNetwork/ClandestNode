@@ -17,9 +17,9 @@ pub fn get_nameserver_entries(contents: &str) -> Vec<String> {
 }
 
 pub fn get_file_contents() -> io::Result<String> {
-    let path = Path::new("/").join(Path::new("etc")).join(Path::new(
-        "resolv.conf",
-    ));
+    let path = Path::new("/")
+        .join(Path::new("etc"))
+        .join(Path::new("resolv.conf"));
     let mut file = File::open(path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;

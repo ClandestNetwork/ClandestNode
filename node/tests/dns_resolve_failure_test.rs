@@ -31,8 +31,7 @@ fn dns_resolve_failure_tls_response_integration() {
     stream
         .set_read_timeout(Some(Duration::from_millis(100)))
         .unwrap();
-    let client_hello =
-        vec![
+    let client_hello = vec![
         0x16, // content_type: Handshake
         0x03, 0x03, // TLS 1.2
         0x00, 0x44, // length: 68
