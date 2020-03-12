@@ -58,6 +58,7 @@ impl IdWrapper for IdWrapperReal {
 pub trait PrivilegeDropper: Send {
     fn drop_privileges(&self, real_user: &RealUser);
     fn chown(&self, file: &PathBuf, real_user: &RealUser);
+    fn has_administrative_privilege(&self) -> bool;
 }
 
 pub struct PrivilegeDropperReal {
@@ -127,6 +128,14 @@ impl PrivilegeDropper for PrivilegeDropperReal {
     fn chown(&self, _file: &PathBuf, _real_user: &RealUser) {
         // Windows doesn't need chown: it runs as administrator the whole way
     }
+
+    fn has_administrative_privilege(&self) -> bool {
+        #[cfg(not(target_os = "windows"))]
+        return self.is_root();
+
+        #[cfg(target_os = "windows")]
+        return Self::is_administrator();
+    }
 }
 
 impl PrivilegeDropperReal {
@@ -134,6 +143,16 @@ impl PrivilegeDropperReal {
         PrivilegeDropperReal {
             id_wrapper: Box::new(IdWrapperReal {}),
         }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn is_root (&self) -> bool {
+        self.id_wrapper.getuid() == 0
+    }
+
+    #[cfg(target_os = "windows")]
+    fn is_administrator () -> bool {
+        unimplemented!() // Try running net session? Should fail if not admin
     }
 }
 
@@ -260,5 +279,14 @@ mod tests {
         assert!(setuid_params.is_empty());
         let setgid_params = setgid_params_arc.lock().unwrap();
         assert!(setgid_params.is_empty());
+    }
+
+    #[test]
+    fn can_tell_when_not_root_or_admin() {
+        let subject = PrivilegeDropperReal::new();
+
+        let result = subject.has_administrative_privilege();
+
+        assert_eq! (result, false);
     }
 }

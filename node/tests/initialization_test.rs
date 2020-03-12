@@ -10,10 +10,21 @@ use masq_lib::test_utils::ui_connection::UiConnection;
 use masq_lib::utils::find_free_port;
 use node_lib::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 use node_lib::database::db_initializer::DATABASE_FILE;
+use node_lib::privilege_drop::{PrivilegeDropperReal, PrivilegeDropper};
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
 use utils::CommandConfig;
 use utils::MASQNode;
+
+#[test]
+fn can_tell_when_root_or_admin() {
+    let subject = PrivilegeDropperReal::new();
+
+    let result = subject.has_administrative_privilege();
+
+    assert_eq! (result, true);
+}
+
 
 #[test]
 fn clap_help_does_not_initialize_database_integration() {

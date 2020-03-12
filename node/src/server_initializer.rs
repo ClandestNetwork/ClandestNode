@@ -238,10 +238,12 @@ pub mod test_utils {
     use log::LevelFilter;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
+    use std::cell::RefCell;
 
     pub struct PrivilegeDropperMock {
         drop_privileges_params: Arc<Mutex<Vec<RealUser>>>,
         chown_params: Arc<Mutex<Vec<(PathBuf, RealUser)>>>,
+        has_administrative_privilege_results: RefCell<Vec<bool>>,
     }
 
     impl PrivilegeDropper for PrivilegeDropperMock {
@@ -258,6 +260,10 @@ pub mod test_utils {
                 .unwrap()
                 .push((file.clone(), real_user.clone()));
         }
+
+        fn has_administrative_privilege(&self) -> bool {
+            return self.has_administrative_privilege_results.borrow_mut().remove(0);
+        }
     }
 
     impl PrivilegeDropperMock {
@@ -265,6 +271,7 @@ pub mod test_utils {
             Self {
                 drop_privileges_params: Arc::new(Mutex::new(vec![])),
                 chown_params: Arc::new(Mutex::new(vec![])),
+                has_administrative_privilege_results: RefCell::new (vec![]),
             }
         }
 
@@ -275,6 +282,11 @@ pub mod test_utils {
 
         pub fn chown_params(mut self, params: &Arc<Mutex<Vec<(PathBuf, RealUser)>>>) -> Self {
             self.chown_params = params.clone();
+            self
+        }
+
+        pub fn has_administrative_privileges_result (self, result: bool) -> Self {
+            self.has_administrative_privilege_results.borrow_mut().push (result);
             self
         }
     }
