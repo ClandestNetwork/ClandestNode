@@ -13,6 +13,7 @@ extern "C" {
 
 use crate::bootstrapper::RealUser;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub trait IdWrapper: Send {
     fn getuid(&self) -> i32;
@@ -152,7 +153,10 @@ impl PrivilegeDropperReal {
 
     #[cfg(target_os = "windows")]
     fn is_administrator () -> bool {
-        unimplemented!() // Try running net session? Should fail if not admin
+        let mut command = Command::new("net");
+        let command = command.args(vec!["session"]);
+        let status = command.status().expect ("net session command didn't return status");
+        status.success()
     }
 }
 
@@ -162,13 +166,16 @@ impl Default for PrivilegeDropperReal {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {
+    #![allow(unreachable_code)]
+    #![allow(dead_code)]
+    #![allow(unused_imports)]
     use super::*;
     use crate::node_test_utils::IdWrapperMock;
     use std::sync::{Arc, Mutex};
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     #[should_panic(expected = "Error code 47 resetting group id")]
     fn gid_error_code_causes_panic() {
@@ -261,6 +268,7 @@ mod tests {
         assert_eq!(*setgid_params, vec![202]);
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn works_okay_as_not_root() {
         let setuid_params_arc = Arc::new(Mutex::new(vec![]));
