@@ -22,78 +22,91 @@ enum Mode {
     RunTheNode,
 }
 
-pub fn go(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    match determine_mode(args) {
-        Mode::GenerateWallet => generate_wallet(args, streams),
-        Mode::RecoverWallet => recover_wallet(args, streams),
-        Mode::DumpConfig => dump_config(args, streams),
-        Mode::Initialization => initialization(args, streams),
-        Mode::RunTheNode => run_service(args, streams),
+pub struct RunModes {
+    privilege_dropper: Box<dyn PrivilegeDropper>
+}
+
+impl RunModes {
+    pub fn new () -> Self {
+        Self {
+            privilege_dropper: Box::new(PrivilegeDropperReal::new())
+        }
     }
-}
 
-fn determine_mode(args: &Vec<String>) -> Mode {
-    if args.contains(&"--dump-config".to_string()) {
-        Mode::DumpConfig
-    } else if args.contains(&"--recover-wallet".to_string()) {
-        Mode::RecoverWallet
-    } else if args.contains(&"--generate-wallet".to_string()) {
-        Mode::GenerateWallet
-    } else if args.contains(&"--initialization".to_string()) {
-        Mode::Initialization
-    } else {
-        Mode::RunTheNode
+    pub fn go(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        match self.determine_mode(args) {
+            Mode::GenerateWallet => self.generate_wallet(args, streams),
+            Mode::RecoverWallet => self.recover_wallet(args, streams),
+            Mode::DumpConfig => self.dump_config(args, streams),
+            Mode::Initialization => self.initialization(args, streams),
+            Mode::RunTheNode => self.run_service(args, streams),
+        }
     }
-}
 
-fn run_service(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    let system = System::new("main");
+    fn determine_mode(&self, args: &Vec<String>) -> Mode {
+        if args.contains(&"--dump-config".to_string()) {
+            Mode::DumpConfig
+        } else if args.contains(&"--recover-wallet".to_string()) {
+            Mode::RecoverWallet
+        } else if args.contains(&"--generate-wallet".to_string()) {
+            Mode::GenerateWallet
+        } else if args.contains(&"--initialization".to_string()) {
+            Mode::Initialization
+        } else {
+            Mode::RunTheNode
+        }
+    }
 
-    let mut server_initializer = ServerInitializer::new();
-    server_initializer.go(streams, args);
+    fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let system = System::new("main");
 
-    actix::spawn(server_initializer.map_err(|_| {
-        System::current().stop_with_code(1);
-    }));
+        let mut server_initializer = ServerInitializer::new();
+        server_initializer.go(streams, args);
 
-    system.run()
-}
+        actix::spawn(server_initializer.map_err(|_| {
+            System::current().stop_with_code(1);
+        }));
 
-fn generate_wallet(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    let configurator = NodeConfiguratorGenerateWallet::new();
-    configuration_run(args, streams, &configurator)
-}
+        system.run()
+    }
 
-fn recover_wallet(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    let configurator = NodeConfiguratorRecoverWallet::new();
-    configuration_run(args, streams, &configurator)
-}
+    fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let configurator = NodeConfiguratorGenerateWallet::new();
+        self.configuration_run(args, streams, &configurator)
+    }
 
-fn dump_config(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    config_dumper::dump_config(args, streams)
-}
+    fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let configurator = NodeConfiguratorRecoverWallet::new();
+        self.configuration_run(args, streams, &configurator)
+    }
 
-fn initialization(args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-    let configurator = NodeConfiguratorInitialization {};
-    let config = configurator.configure(args, streams);
-    let mut initializer = DaemonInitializer::new(
-        config,
-        Box::new(ChannelFactoryReal::new()),
-        Box::new(RecipientsFactoryReal::new()),
-        Box::new(RerunnerReal::new()),
-    );
-    initializer.go(streams, args);
-    1
-}
+    fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        config_dumper::dump_config(args, streams)
+    }
 
-fn configuration_run(
-    args: &Vec<String>,
-    streams: &mut StdStreams<'_>,
-    configurator: &dyn NodeConfigurator<WalletCreationConfig>,
-) -> i32 {
-    let config = configurator.configure(args, streams);
-    PrivilegeDropperReal::new().drop_privileges(&config.real_user);
-    0
+    fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let configurator = NodeConfiguratorInitialization {};
+        let config = configurator.configure(args, streams);
+        let mut initializer = DaemonInitializer::new(
+            config,
+            Box::new(ChannelFactoryReal::new()),
+            Box::new(RecipientsFactoryReal::new()),
+            Box::new(RerunnerReal::new()),
+        );
+        initializer.go(streams, args);
+        1
+    }
+
+    fn configuration_run(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+        configurator: &dyn NodeConfigurator<WalletCreationConfig>,
+    ) -> i32 {
+        let config = configurator.configure(args, streams);
+        self.privilege_dropper.drop_privileges(&config.real_user);
+        panic!();//0
+    }
 }
 
 #[cfg(test)]
@@ -187,8 +200,9 @@ mod tests {
         augmented_args.extend(args);
         augmented_args.push("--unrelated");
         let args = strs_to_strings(augmented_args);
+        let subject = RunModes::new();
 
-        let actual_mode = determine_mode(&args);
+        let actual_mode = subject.determine_mode(&args);
 
         assert_eq!(actual_mode, expected_mode, "args: {:?}", args);
     }

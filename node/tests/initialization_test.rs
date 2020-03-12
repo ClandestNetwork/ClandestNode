@@ -17,7 +17,7 @@ use utils::CommandConfig;
 use utils::MASQNode;
 
 #[test]
-fn can_tell_when_root_or_admin() {
+fn can_tell_when_root_or_admin_integration() {
     let subject = PrivilegeDropperReal::new();
 
     let result = subject.has_administrative_privilege();
