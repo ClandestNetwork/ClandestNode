@@ -23,13 +23,15 @@ enum Mode {
 }
 
 pub struct RunModes {
-    privilege_dropper: Box<dyn PrivilegeDropper>
+    privilege_dropper: Box<dyn PrivilegeDropper>,
+    runner: Box<dyn Runner>
 }
 
 impl RunModes {
     pub fn new () -> Self {
         Self {
-            privilege_dropper: Box::new(PrivilegeDropperReal::new())
+            privilege_dropper: Box::new(PrivilegeDropperReal::new()),
+            runner: Box::new (RunnerReal::new())
         }
     }
 
@@ -38,25 +40,27 @@ impl RunModes {
         let privilege_as_expected = self.privilege_dropper.expect_privilege(privilege_required);
         if !privilege_as_expected {
             let (requirement, recommendation) = if privilege_required {
-                ("must", "sudo")
+                ("must run with", "sudo")
             } else {
-                ("must not", "without sudo")
+                ("does not require", "without sudo next time")
             };
             writeln! (
                 streams.stderr,
-                "MASQNode in {:?} mode {} run with root privilege; try {}",
+                "MASQNode in {:?} mode {} root privilege; try {}",
                 mode,
                 requirement,
                 recommendation
             ).expect("writeln! failed");
-            return 1
+            if privilege_required {
+                return 1
+            }
         }
         match mode {
             Mode::GenerateWallet => self.generate_wallet(args, streams),
             Mode::RecoverWallet => self.recover_wallet(args, streams),
-            Mode::DumpConfig => self.dump_config(args, streams),
-            Mode::Initialization => self.initialization(args, streams),
-            Mode::Service => self.run_service(args, streams),
+            Mode::DumpConfig => self.runner.dump_config(args, streams),
+            Mode::Initialization => self.runner.initialization(args, streams),
+            Mode::Service => self.runner.run_service(args, streams),
         }
     }
 
@@ -74,6 +78,34 @@ impl RunModes {
         }
     }
 
+    fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let configurator = NodeConfiguratorGenerateWallet::new();
+        self.runner.configuration_run(args, streams, &configurator, &self.privilege_dropper)
+    }
+
+    fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
+        let configurator = NodeConfiguratorRecoverWallet::new();
+        self.runner.configuration_run(args, streams, &configurator, &self.privilege_dropper)
+    }
+}
+
+trait Runner {
+    fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32;
+    fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32;
+    fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32;
+    fn configuration_run(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+        configurator: &dyn NodeConfigurator<WalletCreationConfig>,
+        privilege_dropper: &Box<dyn PrivilegeDropper>,
+    ) -> i32;
+}
+
+struct RunnerReal {}
+
+impl Runner for RunnerReal {
+
     fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let system = System::new("main");
 
@@ -85,16 +117,6 @@ impl RunModes {
         }));
 
         system.run()
-    }
-
-    fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-        let configurator = NodeConfiguratorGenerateWallet::new();
-        self.configuration_run(args, streams, &configurator)
-    }
-
-    fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-        let configurator = NodeConfiguratorRecoverWallet::new();
-        self.configuration_run(args, streams, &configurator)
     }
 
     fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
@@ -119,10 +141,17 @@ impl RunModes {
         args: &Vec<String>,
         streams: &mut StdStreams<'_>,
         configurator: &dyn NodeConfigurator<WalletCreationConfig>,
+        privilege_dropper: &Box<dyn PrivilegeDropper>,
     ) -> i32 {
         let config = configurator.configure(args, streams);
-        self.privilege_dropper.drop_privileges(&config.real_user);
-        panic!();//0
+        privilege_dropper.drop_privileges(&config.real_user);
+        0
+    }
+}
+
+impl RunnerReal {
+    pub fn new () -> Self {
+        Self {}
     }
 }
 
@@ -134,33 +163,93 @@ mod tests {
     use crate::server_initializer::test_utils::PrivilegeDropperMock;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 
-    struct NodeConfiguratorMock {
-        configure_params: Arc<Mutex<Vec<Vec<String>>>>,
-        configure_results: RefCell<Vec<String>>
+    pub struct RunnerMock {
+        run_service_params: Arc<Mutex<Vec<Vec<String>>>>,
+        run_service_results: RefCell<Vec<i32>>,
+        dump_config_params: Arc<Mutex<Vec<Vec<String>>>>,
+        dump_config_results: RefCell<Vec<i32>>,
+        initialization_params: Arc<Mutex<Vec<Vec<String>>>>,
+        initialization_results: RefCell<Vec<i32>>,
+        configuration_run_params: Arc<Mutex<Vec<Vec<String>>>>,
+        configuration_run_results: RefCell<Vec<i32>>,
+
     }
 
-    impl NodeConfigurator<String> for NodeConfiguratorMock {
-        fn configure(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> String {
-            self.configure_params.lock().unwrap().push(args.clone());
-            self.configure_results.borrow_mut().remove (0)
+    impl Runner for RunnerMock {
+
+        fn run_service(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
+            self.run_service_params.lock().unwrap().push (args.clone());
+            self.run_service_results.borrow_mut().remove(0)
+        }
+
+        fn dump_config(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
+            self.dump_config_params.lock().unwrap().push (args.clone());
+            self.dump_config_results.borrow_mut().remove(0)
+        }
+
+        fn initialization(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
+            self.initialization_params.lock().unwrap().push (args.clone());
+            self.initialization_results.borrow_mut().remove(0)
+        }
+
+        fn configuration_run(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>, _configurator: &dyn NodeConfigurator<WalletCreationConfig>, _privilege_dropper: &Box<dyn PrivilegeDropper>) -> i32 {
+            self.configuration_run_params.lock().unwrap().push (args.clone());
+            self.configuration_run_results.borrow_mut().remove(0)
         }
     }
 
-    impl NodeConfiguratorMock {
-        pub fn _new () -> Self {
+    #[allow(dead_code)]
+    impl RunnerMock {
+        pub fn new () -> Self {
             Self {
-                configure_params: Arc::new (Mutex::new (vec![])),
-                configure_results: RefCell::new (vec![]),
+                run_service_params: Arc::new(Mutex::new(vec![])),
+                run_service_results: RefCell::new(vec![]),
+                dump_config_params: Arc::new(Mutex::new(vec![])),
+                dump_config_results: RefCell::new(vec![]),
+                initialization_params: Arc::new(Mutex::new(vec![])),
+                initialization_results: RefCell::new(vec![]),
+                configuration_run_params: Arc::new(Mutex::new(vec![])),
+                configuration_run_results: RefCell::new(vec![])
             }
         }
 
-        pub fn _configure_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
-            self.configure_params = params.clone();
+        pub fn run_service_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+            self.run_service_params = params.clone();
             self
         }
 
-        pub fn _configure_result (self, result: String) -> Self {
-            self.configure_results.borrow_mut ().push (result);
+        pub fn run_service_result (self, result: i32) -> Self {
+            self.run_service_results.borrow_mut().push (result);
+            self
+        }
+
+        pub fn dump_config_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+            self.dump_config_params = params.clone();
+            self
+        }
+
+        pub fn dump_config_result (self, result: i32) -> Self {
+            self.dump_config_results.borrow_mut().push (result);
+            self
+        }
+
+        pub fn initialization_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+            self.initialization_params = params.clone();
+            self
+        }
+
+        pub fn initialization_result (self, result: i32) -> Self {
+            self.initialization_results.borrow_mut().push (result);
+            self
+        }
+
+        pub fn configuration_run_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+            self.configuration_run_params = params.clone();
+            self
+        }
+
+        pub fn configuration_run_result (self, result: i32) -> Self {
+            self.configuration_run_results.borrow_mut().push (result);
             self
         }
     }
@@ -250,6 +339,7 @@ mod tests {
     #[test]
     fn initialization_and_service_modes_complain_without_privilege() {
         let mut subject = RunModes::new ();
+        subject.runner = Box::new (RunnerMock::new()); // No prepared results: any calls to this will cause panics
         let params_arc = Arc::new (Mutex::new (vec![]));
         let privilege_dropper = PrivilegeDropperMock::new()
             .expect_privilege_params (&params_arc)
@@ -273,11 +363,19 @@ mod tests {
     }
 
     #[test]
-    fn modes_other_than_initialization_and_service_complain_about_privilege() {
+    fn modes_other_than_initialization_and_service_mention_privilege_but_do_not_abort() {
         let mut subject = RunModes::new ();
-        let params_arc = Arc::new (Mutex::new (vec![]));
+        let runner_params_arc = Arc::new(Mutex::new(vec![]));
+        let runner = RunnerMock::new ()
+            .dump_config_params (&runner_params_arc)
+            .dump_config_result (0)
+            .configuration_run_params (&runner_params_arc)
+            .configuration_run_result (0)
+            .configuration_run_result (0);
+        subject.runner = Box::new (runner);
+        let dropper_params_arc = Arc::new (Mutex::new (vec![]));
         let privilege_dropper = PrivilegeDropperMock::new()
-            .expect_privilege_params (&params_arc)
+            .expect_privilege_params (&dropper_params_arc)
             .expect_privilege_result(false)
             .expect_privilege_result(false)
             .expect_privilege_result(false);
@@ -290,17 +388,23 @@ mod tests {
         let recover_wallet_exit_code = subject.go (&vec!["--recover-wallet".to_string()], &mut recover_wallet_holder.streams());
         let dump_config_exit_code = subject.go (&vec!["--dump-config".to_string()], &mut dump_config_holder.streams());
 
-        assert_eq! (generate_wallet_exit_code, 1);
+        assert_eq! (generate_wallet_exit_code, 0);
         assert_eq! (generate_wallet_holder.stdout.get_string (), "");
-        assert_eq! (generate_wallet_holder.stderr.get_string (), "MASQNode in GenerateWallet mode must not run with root privilege; try without sudo\n");
-        assert_eq! (recover_wallet_exit_code, 1);
+        assert_eq! (generate_wallet_holder.stderr.get_string (), "MASQNode in GenerateWallet mode does not require root privilege; try without sudo next time\n");
+        assert_eq! (recover_wallet_exit_code, 0);
         assert_eq! (recover_wallet_holder.stdout.get_string (), "");
-        assert_eq! (recover_wallet_holder.stderr.get_string (), "MASQNode in RecoverWallet mode must not run with root privilege; try without sudo\n");
-        assert_eq! (dump_config_exit_code, 1);
+        assert_eq! (recover_wallet_holder.stderr.get_string (), "MASQNode in RecoverWallet mode does not require root privilege; try without sudo next time\n");
+        assert_eq! (dump_config_exit_code, 0);
         assert_eq! (dump_config_holder.stdout.get_string (), "");
-        assert_eq! (dump_config_holder.stderr.get_string (), "MASQNode in DumpConfig mode must not run with root privilege; try without sudo\n");
-        let params = params_arc.lock().unwrap();
-        assert_eq! (*params, vec![false, false, false])
+        assert_eq! (dump_config_holder.stderr.get_string (), "MASQNode in DumpConfig mode does not require root privilege; try without sudo next time\n");
+        let params = dropper_params_arc.lock().unwrap();
+        assert_eq! (*params, vec![false, false, false]);
+        let params = runner_params_arc.lock().unwrap();
+        assert_eq! (*params, vec![
+            vec!["--generate-wallet"],
+            vec!["--recover-wallet"],
+            vec!["--dump-config"]
+        ])
     }
 
     fn check_mode(args: &[&str], expected_mode: Mode, privilege_required: bool) {
