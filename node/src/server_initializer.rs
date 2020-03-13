@@ -243,7 +243,8 @@ pub mod test_utils {
     pub struct PrivilegeDropperMock {
         drop_privileges_params: Arc<Mutex<Vec<RealUser>>>,
         chown_params: Arc<Mutex<Vec<(PathBuf, RealUser)>>>,
-        has_administrative_privilege_results: RefCell<Vec<bool>>,
+        expect_privilege_params: Arc<Mutex<Vec<bool>>>,
+        expect_privilege_results: RefCell<Vec<bool>>,
     }
 
     impl PrivilegeDropper for PrivilegeDropperMock {
@@ -261,8 +262,9 @@ pub mod test_utils {
                 .push((file.clone(), real_user.clone()));
         }
 
-        fn has_administrative_privilege(&self) -> bool {
-            return self.has_administrative_privilege_results.borrow_mut().remove(0);
+        fn expect_privilege(&self, privilege_expected: bool) -> bool {
+            self.expect_privilege_params.lock().unwrap().push(privilege_expected);
+            self.expect_privilege_results.borrow_mut().remove (0)
         }
     }
 
@@ -271,7 +273,8 @@ pub mod test_utils {
             Self {
                 drop_privileges_params: Arc::new(Mutex::new(vec![])),
                 chown_params: Arc::new(Mutex::new(vec![])),
-                has_administrative_privilege_results: RefCell::new (vec![]),
+                expect_privilege_params: Arc::new(Mutex::new(vec![])),
+                expect_privilege_results: RefCell::new (vec![]),
             }
         }
 
@@ -285,8 +288,13 @@ pub mod test_utils {
             self
         }
 
-        pub fn has_administrative_privileges_result (self, result: bool) -> Self {
-            self.has_administrative_privilege_results.borrow_mut().push (result);
+        pub fn expect_privilege_params(mut self, params: &Arc<Mutex<Vec<bool>>>) -> Self {
+            self.expect_privilege_params = params.clone();
+            self
+        }
+
+        pub fn expect_privilege_result (self, result: bool) -> Self {
+            self.expect_privilege_results.borrow_mut().push (result);
             self
         }
     }

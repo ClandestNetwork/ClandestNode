@@ -13,7 +13,6 @@ extern "C" {
 
 use crate::bootstrapper::RealUser;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub trait IdWrapper: Send {
     fn getuid(&self) -> i32;
@@ -59,7 +58,7 @@ impl IdWrapper for IdWrapperReal {
 pub trait PrivilegeDropper: Send {
     fn drop_privileges(&self, real_user: &RealUser);
     fn chown(&self, file: &PathBuf, real_user: &RealUser);
-    fn has_administrative_privilege(&self) -> bool;
+    fn expect_privilege(&self, privilege_expected: bool) -> bool;
 }
 
 pub struct PrivilegeDropperReal {
@@ -130,12 +129,14 @@ impl PrivilegeDropper for PrivilegeDropperReal {
         // Windows doesn't need chown: it runs as administrator the whole way
     }
 
-    fn has_administrative_privilege(&self) -> bool {
-        #[cfg(not(target_os = "windows"))]
-        return self.is_root();
+    #[cfg(target_os = "windows")]
+    fn expect_privilege(&self, privilege_expected: bool) -> bool {
+        true
+    }
 
-        #[cfg(target_os = "windows")]
-        return Self::is_administrator();
+    #[cfg(not(target_os = "windows"))]
+    fn expect_privilege(&self, privilege_expected: bool) -> bool {
+        (self.id_wrapper.getuid() == 0) == privilege_expected
     }
 }
 
@@ -289,12 +290,21 @@ mod tests {
         assert!(setgid_params.is_empty());
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
-    fn can_tell_when_not_root_or_admin() {
+    fn expect_privilege_works_outside_windows() {
         let subject = PrivilegeDropperReal::new();
 
-        let result = subject.has_administrative_privilege();
+        assert_eq! (subject.expect_privilege(true), false);
+        assert_eq! (subject.expect_privilege(false), true);
+    }
 
-        assert_eq! (result, false);
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn expect_privilege_does_not_work_outside_windows() {
+        let subject = PrivilegeDropperReal::new();
+
+        assert_eq! (subject.expect_privilege(true), true);
+        assert_eq! (subject.expect_privilege(false), true);
     }
 }

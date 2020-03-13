@@ -16,13 +16,23 @@ use std::time::{Duration, SystemTime};
 use utils::CommandConfig;
 use utils::MASQNode;
 
+
+#[cfg(not(target_os = "windows"))]
 #[test]
-fn can_tell_when_root_or_admin_integration() {
+fn expect_privilege_works_outside_windows_integration() {
     let subject = PrivilegeDropperReal::new();
 
-    let result = subject.has_administrative_privilege();
+    assert_eq! (subject.expect_privilege(true), true);
+    assert_eq! (subject.expect_privilege(false), false);
+}
 
-    assert_eq! (result, true);
+#[cfg(target_os = "windows")]
+#[test]
+fn expect_privilege_does_not_work_outside_windows_integration() {
+    let subject = PrivilegeDropperReal::new();
+
+    assert_eq! (subject.expect_privilege(true), true);
+    assert_eq! (subject.expect_privilege(false), true);
 }
 
 
