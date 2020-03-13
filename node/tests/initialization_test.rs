@@ -10,6 +10,7 @@ use masq_lib::test_utils::ui_connection::UiConnection;
 use masq_lib::utils::find_free_port;
 use node_lib::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 use node_lib::database::db_initializer::DATABASE_FILE;
+#[cfg(not(target_os = "windows"))]
 use node_lib::privilege_drop::{PrivilegeDropperReal, PrivilegeDropper};
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
@@ -25,16 +26,6 @@ fn expect_privilege_works_outside_windows_integration() {
     assert_eq! (subject.expect_privilege(true), true);
     assert_eq! (subject.expect_privilege(false), false);
 }
-
-#[cfg(target_os = "windows")]
-#[test]
-fn expect_privilege_does_not_work_outside_windows_integration() {
-    let subject = PrivilegeDropperReal::new();
-
-    assert_eq! (subject.expect_privilege(true), true);
-    assert_eq! (subject.expect_privilege(false), true);
-}
-
 
 #[test]
 fn clap_help_does_not_initialize_database_integration() {

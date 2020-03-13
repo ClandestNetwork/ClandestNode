@@ -2,6 +2,7 @@
 // Because we have conditional compilation going on in this file:
 #![allow(unreachable_code)]
 #![allow(dead_code)]
+#![allow(unused_imports)]
 
 #[cfg(not(target_os = "windows"))]
 extern "C" {
@@ -13,6 +14,7 @@ extern "C" {
 
 use crate::bootstrapper::RealUser;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub trait IdWrapper: Send {
     fn getuid(&self) -> i32;
@@ -131,7 +133,10 @@ impl PrivilegeDropper for PrivilegeDropperReal {
 
     #[cfg(target_os = "windows")]
     fn expect_privilege(&self, privilege_expected: bool) -> bool {
-        true
+        let mut command = Command::new("net");
+        let command = command.args(vec!["session"]);
+        let output = command.output().expect ("net session command didn't produce output");
+        privilege_expected == output.status.success()
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -145,19 +150,6 @@ impl PrivilegeDropperReal {
         PrivilegeDropperReal {
             id_wrapper: Box::new(IdWrapperReal {}),
         }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn is_root (&self) -> bool {
-        self.id_wrapper.getuid() == 0
-    }
-
-    #[cfg(target_os = "windows")]
-    fn is_administrator () -> bool {
-        let mut command = Command::new("net");
-        let command = command.args(vec!["session"]);
-        let status = command.status().expect ("net session command didn't return status");
-        status.success()
     }
 }
 
@@ -296,15 +288,6 @@ mod tests {
         let subject = PrivilegeDropperReal::new();
 
         assert_eq! (subject.expect_privilege(true), false);
-        assert_eq! (subject.expect_privilege(false), true);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn expect_privilege_does_not_work_outside_windows() {
-        let subject = PrivilegeDropperReal::new();
-
-        assert_eq! (subject.expect_privilege(true), true);
         assert_eq! (subject.expect_privilege(false), true);
     }
 }
