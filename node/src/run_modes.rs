@@ -70,7 +70,7 @@ impl RunModes {
         } else {
             "does not require Administrator privilege."
         };
-        format! ("MASQNode in {:?} mode {}\n", mode, suffix)
+        format! ("MASQNode.exe in {:?} mode {}\n", mode, suffix)
     }
 
     fn determine_mode_and_priv_req(&self, args: &Vec<String>) -> (Mode, bool) {
