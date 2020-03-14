@@ -44,6 +44,7 @@ impl RunModes {
     pub fn go(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let (mode, privilege_required) = self.determine_mode_and_priv_req(args);
         let privilege_as_expected = self.privilege_dropper.expect_privilege(privilege_required);
+        let help_or_version = Self::args_contain_help_or_version(args);
         if !privilege_as_expected {
             write!(
                 streams.stderr,
@@ -51,7 +52,7 @@ impl RunModes {
                 Self::privilege_mismatch_message(&mode, privilege_required)
             )
             .expect("write! failed");
-            if privilege_required {
+            if privilege_required && !help_or_version {
                 return 1;
             }
         }
@@ -62,6 +63,10 @@ impl RunModes {
             Mode::Initialization => self.runner.initialization(args, streams),
             Mode::Service => self.runner.run_service(args, streams),
         }
+    }
+
+    fn args_contain_help_or_version(args: &Vec<String>) -> bool {
+        args.contains(&"--help".to_string()) || args.contains(&"--version".to_string())
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -390,6 +395,35 @@ mod tests {
         check_mode(&[], Mode::Service, true)
     }
 
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn privilege_mismatch_messages() {
+        let service_yes = RunModes::privilege_mismatch_message(&Mode::Service, true);
+        let dump_config_no = RunModes::privilege_mismatch_message(&Mode::DumpConfig, false);
+
+        assert_eq!(
+            service_yes,
+            "MASQNode in Service mode must run with root privilege; try sudo\n"
+        );
+        assert_eq! (dump_config_no, "MASQNode in DumpConfig mode does not require root privilege; try without sudo next time\n");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn privilege_mismatch_messages() {
+        let service_yes = RunModes::privilege_mismatch_message(&Mode::Service, true);
+        let dump_config_no = RunModes::privilege_mismatch_message(&Mode::DumpConfig, false);
+
+        assert_eq!(
+            service_yes,
+            "MASQNode.exe in Service mode must run as Administrator.\n"
+        );
+        assert_eq!(
+            dump_config_no,
+            "MASQNode in DumpConfig mode does not require Adminstrator privilege.\n"
+        );
+    }
+
     #[test]
     fn initialization_and_service_modes_complain_without_privilege() {
         let mut subject = RunModes::new();
@@ -423,6 +457,86 @@ mod tests {
         );
         let params = params_arc.lock().unwrap();
         assert_eq!(*params, vec![true, true])
+    }
+
+    #[test]
+    fn initialization_and_service_modes_do_not_complain_without_privilege_for_help_and_version() {
+        let mut subject = RunModes::new();
+        let run_params_arc = Arc::new(Mutex::new(vec![]));
+        let runner = RunnerMock::new()
+            .run_service_params(&run_params_arc)
+            .run_service_result(0)
+            .run_service_result(0)
+            .initialization_params(&run_params_arc)
+            .initialization_result(0)
+            .initialization_result(0);
+        subject.runner = Box::new(runner);
+        let priv_params_arc = Arc::new(Mutex::new(vec![]));
+        let privilege_dropper = PrivilegeDropperMock::new()
+            .expect_privilege_params(&priv_params_arc)
+            .expect_privilege_result(false)
+            .expect_privilege_result(false)
+            .expect_privilege_result(false)
+            .expect_privilege_result(false);
+        subject.privilege_dropper = Box::new(privilege_dropper);
+        let mut initialization_h_holder = FakeStreamHolder::new();
+        let mut initialization_v_holder = FakeStreamHolder::new();
+        let mut service_mode_h_holder = FakeStreamHolder::new();
+        let mut service_mode_v_holder = FakeStreamHolder::new();
+
+        let initialization_h_exit_code = subject.go(
+            &vec!["--initialization".to_string(), "--help".to_string()],
+            &mut initialization_h_holder.streams(),
+        );
+        let initialization_v_exit_code = subject.go(
+            &vec!["--initialization".to_string(), "--version".to_string()],
+            &mut initialization_v_holder.streams(),
+        );
+        let service_mode_h_exit_code = subject.go(
+            &vec!["--help".to_string()],
+            &mut service_mode_h_holder.streams(),
+        );
+        let service_mode_v_exit_code = subject.go(
+            &vec!["--version".to_string()],
+            &mut service_mode_v_holder.streams(),
+        );
+
+        assert_eq!(initialization_h_exit_code, 0);
+        assert_eq!(initialization_v_exit_code, 0);
+        assert_eq!(initialization_h_holder.stdout.get_string(), "");
+        assert_eq!(
+            initialization_h_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Initialization, true)
+        );
+        assert_eq!(initialization_v_holder.stdout.get_string(), "");
+        assert_eq!(
+            initialization_v_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Initialization, true)
+        );
+        assert_eq!(service_mode_h_exit_code, 0);
+        assert_eq!(service_mode_v_exit_code, 0);
+        assert_eq!(service_mode_h_holder.stdout.get_string(), "");
+        assert_eq!(
+            service_mode_h_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Service, true)
+        );
+        assert_eq!(service_mode_v_holder.stdout.get_string(), "");
+        assert_eq!(
+            service_mode_v_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Service, true)
+        );
+        let params = priv_params_arc.lock().unwrap();
+        assert_eq!(*params, vec![true, true, true, true]);
+        let params = run_params_arc.lock().unwrap();
+        assert_eq!(
+            *params,
+            vec![
+                vec!["--initialization".to_string(), "--help".to_string()],
+                vec!["--initialization".to_string(), "--version".to_string()],
+                vec!["--help".to_string()],
+                vec!["--version".to_string()],
+            ]
+        );
     }
 
     #[test]
