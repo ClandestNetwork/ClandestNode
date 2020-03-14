@@ -135,7 +135,9 @@ impl PrivilegeDropper for PrivilegeDropperReal {
     fn expect_privilege(&self, privilege_expected: bool) -> bool {
         let mut command = Command::new("net");
         let command = command.args(vec!["session"]);
-        let output = command.output().expect ("net session command didn't produce output");
+        let output = command
+            .output()
+            .expect("net session command didn't produce output");
         privilege_expected == output.status.success()
     }
 
@@ -287,7 +289,7 @@ mod tests {
     fn expect_privilege_works_outside_windows() {
         let subject = PrivilegeDropperReal::new();
 
-        assert_eq! (subject.expect_privilege(true), false);
-        assert_eq! (subject.expect_privilege(false), true);
+        assert_eq!(subject.expect_privilege(true), false);
+        assert_eq!(subject.expect_privilege(false), true);
     }
 }

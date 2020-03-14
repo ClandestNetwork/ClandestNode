@@ -24,14 +24,14 @@ enum Mode {
 
 pub struct RunModes {
     privilege_dropper: Box<dyn PrivilegeDropper>,
-    runner: Box<dyn Runner>
+    runner: Box<dyn Runner>,
 }
 
 impl RunModes {
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         Self {
             privilege_dropper: Box::new(PrivilegeDropperReal::new()),
-            runner: Box::new (RunnerReal::new())
+            runner: Box::new(RunnerReal::new()),
         }
     }
 
@@ -39,9 +39,14 @@ impl RunModes {
         let (mode, privilege_required) = self.determine_mode_and_priv_req(args);
         let privilege_as_expected = self.privilege_dropper.expect_privilege(privilege_required);
         if !privilege_as_expected {
-            write! (streams.stderr, "{}", Self::privilege_mismatch_message(&mode, privilege_required)).expect("write! failed");
+            write!(
+                streams.stderr,
+                "{}",
+                Self::privilege_mismatch_message(&mode, privilege_required)
+            )
+            .expect("write! failed");
             if privilege_required {
-                return 1
+                return 1;
             }
         }
         match mode {
@@ -54,23 +59,26 @@ impl RunModes {
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn privilege_mismatch_message (mode: &Mode, need_but_dont_have: bool) -> String {
+    fn privilege_mismatch_message(mode: &Mode, need_but_dont_have: bool) -> String {
         let (requirement, recommendation) = if need_but_dont_have {
             ("must run with", "sudo")
         } else {
             ("does not require", "without sudo next time")
         };
-        format! ("MASQNode in {:?} mode {} root privilege; try {}\n", mode, requirement, recommendation)
+        format!(
+            "MASQNode in {:?} mode {} root privilege; try {}\n",
+            mode, requirement, recommendation
+        )
     }
 
     #[cfg(target_os = "windows")]
-    fn privilege_mismatch_message (mode: &Mode, need_but_dont_have: bool) -> String {
+    fn privilege_mismatch_message(mode: &Mode, need_but_dont_have: bool) -> String {
         let suffix = if need_but_dont_have {
             "must run as Administrator."
         } else {
             "does not require Administrator privilege."
         };
-        format! ("MASQNode.exe in {:?} mode {}\n", mode, suffix)
+        format!("MASQNode.exe in {:?} mode {}\n", mode, suffix)
     }
 
     fn determine_mode_and_priv_req(&self, args: &Vec<String>) -> (Mode, bool) {
@@ -89,12 +97,14 @@ impl RunModes {
 
     fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let configurator = NodeConfiguratorGenerateWallet::new();
-        self.runner.configuration_run(args, streams, &configurator, &self.privilege_dropper)
+        self.runner
+            .configuration_run(args, streams, &configurator, &self.privilege_dropper)
     }
 
     fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let configurator = NodeConfiguratorRecoverWallet::new();
-        self.runner.configuration_run(args, streams, &configurator, &self.privilege_dropper)
+        self.runner
+            .configuration_run(args, streams, &configurator, &self.privilege_dropper)
     }
 }
 
@@ -114,7 +124,6 @@ trait Runner {
 struct RunnerReal {}
 
 impl Runner for RunnerReal {
-
     fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let system = System::new("main");
 
@@ -159,7 +168,7 @@ impl Runner for RunnerReal {
 }
 
 impl RunnerReal {
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }
@@ -167,10 +176,10 @@ impl RunnerReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
-    use std::sync::{Arc, Mutex};
     use crate::server_initializer::test_utils::PrivilegeDropperMock;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+    use std::cell::RefCell;
+    use std::sync::{Arc, Mutex};
 
     pub struct RunnerMock {
         run_service_params: Arc<Mutex<Vec<Vec<String>>>>,
@@ -184,31 +193,42 @@ mod tests {
     }
 
     impl Runner for RunnerMock {
-
         fn run_service(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
-            self.run_service_params.lock().unwrap().push (args.clone());
+            self.run_service_params.lock().unwrap().push(args.clone());
             self.run_service_results.borrow_mut().remove(0)
         }
 
         fn dump_config(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
-            self.dump_config_params.lock().unwrap().push (args.clone());
+            self.dump_config_params.lock().unwrap().push(args.clone());
             self.dump_config_results.borrow_mut().remove(0)
         }
 
         fn initialization(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> i32 {
-            self.initialization_params.lock().unwrap().push (args.clone());
+            self.initialization_params
+                .lock()
+                .unwrap()
+                .push(args.clone());
             self.initialization_results.borrow_mut().remove(0)
         }
 
-        fn configuration_run(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>, _configurator: &dyn NodeConfigurator<WalletCreationConfig>, _privilege_dropper: &Box<dyn PrivilegeDropper>) -> i32 {
-            self.configuration_run_params.lock().unwrap().push (args.clone());
+        fn configuration_run(
+            &self,
+            args: &Vec<String>,
+            _streams: &mut StdStreams<'_>,
+            _configurator: &dyn NodeConfigurator<WalletCreationConfig>,
+            _privilege_dropper: &Box<dyn PrivilegeDropper>,
+        ) -> i32 {
+            self.configuration_run_params
+                .lock()
+                .unwrap()
+                .push(args.clone());
             self.configuration_run_results.borrow_mut().remove(0)
         }
     }
 
     #[allow(dead_code)]
     impl RunnerMock {
-        pub fn new () -> Self {
+        pub fn new() -> Self {
             Self {
                 run_service_params: Arc::new(Mutex::new(vec![])),
                 run_service_results: RefCell::new(vec![]),
@@ -217,47 +237,47 @@ mod tests {
                 initialization_params: Arc::new(Mutex::new(vec![])),
                 initialization_results: RefCell::new(vec![]),
                 configuration_run_params: Arc::new(Mutex::new(vec![])),
-                configuration_run_results: RefCell::new(vec![])
+                configuration_run_results: RefCell::new(vec![]),
             }
         }
 
-        pub fn run_service_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+        pub fn run_service_params(mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
             self.run_service_params = params.clone();
             self
         }
 
-        pub fn run_service_result (self, result: i32) -> Self {
-            self.run_service_results.borrow_mut().push (result);
+        pub fn run_service_result(self, result: i32) -> Self {
+            self.run_service_results.borrow_mut().push(result);
             self
         }
 
-        pub fn dump_config_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+        pub fn dump_config_params(mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
             self.dump_config_params = params.clone();
             self
         }
 
-        pub fn dump_config_result (self, result: i32) -> Self {
-            self.dump_config_results.borrow_mut().push (result);
+        pub fn dump_config_result(self, result: i32) -> Self {
+            self.dump_config_results.borrow_mut().push(result);
             self
         }
 
-        pub fn initialization_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+        pub fn initialization_params(mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
             self.initialization_params = params.clone();
             self
         }
 
-        pub fn initialization_result (self, result: i32) -> Self {
-            self.initialization_results.borrow_mut().push (result);
+        pub fn initialization_result(self, result: i32) -> Self {
+            self.initialization_results.borrow_mut().push(result);
             self
         }
 
-        pub fn configuration_run_params (mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+        pub fn configuration_run_params(mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
             self.configuration_run_params = params.clone();
             self
         }
 
-        pub fn configuration_run_result (self, result: i32) -> Self {
-            self.configuration_run_results.borrow_mut().push (result);
+        pub fn configuration_run_result(self, result: i32) -> Self {
+            self.configuration_run_results.borrow_mut().push(result);
             self
         }
     }
@@ -304,22 +324,34 @@ mod tests {
     fn everything_beats_initialization() {
         check_mode(
             &["--initialization", "--generate-wallet"],
-            Mode::GenerateWallet, false,
+            Mode::GenerateWallet,
+            false,
         );
         check_mode(
             &["--initialization", "--recover-wallet"],
-            Mode::RecoverWallet, false,
+            Mode::RecoverWallet,
+            false,
         );
-        check_mode(&["--initialization", "--dump-config"], Mode::DumpConfig, false);
+        check_mode(
+            &["--initialization", "--dump-config"],
+            Mode::DumpConfig,
+            false,
+        );
         check_mode(
             &["--generate-wallet", "--initialization"],
-            Mode::GenerateWallet, false,
+            Mode::GenerateWallet,
+            false,
         );
         check_mode(
             &["--recover-wallet", "--initialization"],
-            Mode::RecoverWallet, false,
+            Mode::RecoverWallet,
+            false,
         );
-        check_mode(&["--dump-config", "--initialization"], Mode::DumpConfig, false);
+        check_mode(
+            &["--dump-config", "--initialization"],
+            Mode::DumpConfig,
+            false,
+        );
     }
 
     #[test]
@@ -346,73 +378,103 @@ mod tests {
 
     #[test]
     fn initialization_and_service_modes_complain_without_privilege() {
-        let mut subject = RunModes::new ();
-        subject.runner = Box::new (RunnerMock::new()); // No prepared results: any calls to this will cause panics
-        let params_arc = Arc::new (Mutex::new (vec![]));
+        let mut subject = RunModes::new();
+        subject.runner = Box::new(RunnerMock::new()); // No prepared results: any calls to this will cause panics
+        let params_arc = Arc::new(Mutex::new(vec![]));
         let privilege_dropper = PrivilegeDropperMock::new()
-            .expect_privilege_params (&params_arc)
+            .expect_privilege_params(&params_arc)
             .expect_privilege_result(false)
             .expect_privilege_result(false);
-        subject.privilege_dropper = Box::new (privilege_dropper);
+        subject.privilege_dropper = Box::new(privilege_dropper);
         let mut initialization_holder = FakeStreamHolder::new();
         let mut service_mode_holder = FakeStreamHolder::new();
 
-        let initialization_exit_code = subject.go (&vec!["--initialization".to_string()], &mut initialization_holder.streams());
-        let service_mode_exit_code = subject.go (&vec![], &mut service_mode_holder.streams());
+        let initialization_exit_code = subject.go(
+            &vec!["--initialization".to_string()],
+            &mut initialization_holder.streams(),
+        );
+        let service_mode_exit_code = subject.go(&vec![], &mut service_mode_holder.streams());
 
-        assert_eq! (initialization_exit_code, 1);
-        assert_eq! (initialization_holder.stdout.get_string (), "");
-        assert_eq! (initialization_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::Initialization, true));
-        assert_eq! (service_mode_exit_code, 1);
-        assert_eq! (service_mode_holder.stdout.get_string (), "");
-        assert_eq! (service_mode_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::Service, true));
+        assert_eq!(initialization_exit_code, 1);
+        assert_eq!(initialization_holder.stdout.get_string(), "");
+        assert_eq!(
+            initialization_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Initialization, true)
+        );
+        assert_eq!(service_mode_exit_code, 1);
+        assert_eq!(service_mode_holder.stdout.get_string(), "");
+        assert_eq!(
+            service_mode_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::Service, true)
+        );
         let params = params_arc.lock().unwrap();
-        assert_eq! (*params, vec![true, true])
+        assert_eq!(*params, vec![true, true])
     }
 
     #[test]
     fn modes_other_than_initialization_and_service_mention_privilege_but_do_not_abort() {
-        let mut subject = RunModes::new ();
+        let mut subject = RunModes::new();
         let runner_params_arc = Arc::new(Mutex::new(vec![]));
-        let runner = RunnerMock::new ()
-            .dump_config_params (&runner_params_arc)
-            .dump_config_result (0)
-            .configuration_run_params (&runner_params_arc)
-            .configuration_run_result (0)
-            .configuration_run_result (0);
-        subject.runner = Box::new (runner);
-        let dropper_params_arc = Arc::new (Mutex::new (vec![]));
+        let runner = RunnerMock::new()
+            .dump_config_params(&runner_params_arc)
+            .dump_config_result(0)
+            .configuration_run_params(&runner_params_arc)
+            .configuration_run_result(0)
+            .configuration_run_result(0);
+        subject.runner = Box::new(runner);
+        let dropper_params_arc = Arc::new(Mutex::new(vec![]));
         let privilege_dropper = PrivilegeDropperMock::new()
-            .expect_privilege_params (&dropper_params_arc)
+            .expect_privilege_params(&dropper_params_arc)
             .expect_privilege_result(false)
             .expect_privilege_result(false)
             .expect_privilege_result(false);
-        subject.privilege_dropper = Box::new (privilege_dropper);
+        subject.privilege_dropper = Box::new(privilege_dropper);
         let mut generate_wallet_holder = FakeStreamHolder::new();
         let mut recover_wallet_holder = FakeStreamHolder::new();
         let mut dump_config_holder = FakeStreamHolder::new();
 
-        let generate_wallet_exit_code = subject.go (&vec!["--generate-wallet".to_string()], &mut generate_wallet_holder.streams());
-        let recover_wallet_exit_code = subject.go (&vec!["--recover-wallet".to_string()], &mut recover_wallet_holder.streams());
-        let dump_config_exit_code = subject.go (&vec!["--dump-config".to_string()], &mut dump_config_holder.streams());
+        let generate_wallet_exit_code = subject.go(
+            &vec!["--generate-wallet".to_string()],
+            &mut generate_wallet_holder.streams(),
+        );
+        let recover_wallet_exit_code = subject.go(
+            &vec!["--recover-wallet".to_string()],
+            &mut recover_wallet_holder.streams(),
+        );
+        let dump_config_exit_code = subject.go(
+            &vec!["--dump-config".to_string()],
+            &mut dump_config_holder.streams(),
+        );
 
-        assert_eq! (generate_wallet_exit_code, 0);
-        assert_eq! (generate_wallet_holder.stdout.get_string (), "");
-        assert_eq! (generate_wallet_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::GenerateWallet, false));
-        assert_eq! (recover_wallet_exit_code, 0);
-        assert_eq! (recover_wallet_holder.stdout.get_string (), "");
-        assert_eq! (recover_wallet_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::RecoverWallet, false));
-        assert_eq! (dump_config_exit_code, 0);
-        assert_eq! (dump_config_holder.stdout.get_string (), "");
-        assert_eq! (dump_config_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::DumpConfig, false));
+        assert_eq!(generate_wallet_exit_code, 0);
+        assert_eq!(generate_wallet_holder.stdout.get_string(), "");
+        assert_eq!(
+            generate_wallet_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::GenerateWallet, false)
+        );
+        assert_eq!(recover_wallet_exit_code, 0);
+        assert_eq!(recover_wallet_holder.stdout.get_string(), "");
+        assert_eq!(
+            recover_wallet_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::RecoverWallet, false)
+        );
+        assert_eq!(dump_config_exit_code, 0);
+        assert_eq!(dump_config_holder.stdout.get_string(), "");
+        assert_eq!(
+            dump_config_holder.stderr.get_string(),
+            RunModes::privilege_mismatch_message(&Mode::DumpConfig, false)
+        );
         let params = dropper_params_arc.lock().unwrap();
-        assert_eq! (*params, vec![false, false, false]);
+        assert_eq!(*params, vec![false, false, false]);
         let params = runner_params_arc.lock().unwrap();
-        assert_eq! (*params, vec![
-            vec!["--generate-wallet"],
-            vec!["--recover-wallet"],
-            vec!["--dump-config"]
-        ])
+        assert_eq!(
+            *params,
+            vec![
+                vec!["--generate-wallet"],
+                vec!["--recover-wallet"],
+                vec!["--dump-config"]
+            ]
+        )
     }
 
     fn check_mode(args: &[&str], expected_mode: Mode, privilege_required: bool) {
@@ -425,7 +487,11 @@ mod tests {
         let (actual_mode, actual_privilege_required) = subject.determine_mode_and_priv_req(&args);
 
         assert_eq!(actual_mode, expected_mode, "args: {:?}", args);
-        assert_eq!(actual_privilege_required, privilege_required, "args: {:?}", args);
+        assert_eq!(
+            actual_privilege_required, privilege_required,
+            "args: {:?}",
+            args
+        );
     }
 
     fn strs_to_strings(strs: Vec<&str>) -> Vec<String> {
