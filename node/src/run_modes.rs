@@ -181,7 +181,6 @@ mod tests {
         initialization_results: RefCell<Vec<i32>>,
         configuration_run_params: Arc<Mutex<Vec<Vec<String>>>>,
         configuration_run_results: RefCell<Vec<i32>>,
-
     }
 
     impl Runner for RunnerMock {
