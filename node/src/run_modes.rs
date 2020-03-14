@@ -39,18 +39,7 @@ impl RunModes {
         let (mode, privilege_required) = self.determine_mode_and_priv_req(args);
         let privilege_as_expected = self.privilege_dropper.expect_privilege(privilege_required);
         if !privilege_as_expected {
-            let (requirement, recommendation) = if privilege_required {
-                ("must run with", "sudo")
-            } else {
-                ("does not require", "without sudo next time")
-            };
-            writeln! (
-                streams.stderr,
-                "MASQNode in {:?} mode {} root privilege; try {}",
-                mode,
-                requirement,
-                recommendation
-            ).expect("writeln! failed");
+            write! (streams.stderr, "{}", Self::privilege_mismatch_message(&mode, privilege_required)).expect("write! failed");
             if privilege_required {
                 return 1
             }
@@ -62,6 +51,26 @@ impl RunModes {
             Mode::Initialization => self.runner.initialization(args, streams),
             Mode::Service => self.runner.run_service(args, streams),
         }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn privilege_mismatch_message (mode: &Mode, need_but_dont_have: bool) -> String {
+        let (requirement, recommendation) = if need_but_dont_have {
+            ("must run with", "sudo")
+        } else {
+            ("does not require", "without sudo next time")
+        };
+        format! ("MASQNode in {:?} mode {} root privilege; try {}\n", mode, requirement, recommendation)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn privilege_mismatch_message (mode: &Mode, need_but_dont_have: bool) -> String {
+        let suffix = if need_but_dont_have {
+            "must run as Administrator."
+        } else {
+            "does not require Administrator privilege."
+        };
+        format! ("MASQNode in {:?} mode {}\n", mode, suffix)
     }
 
     fn determine_mode_and_priv_req(&self, args: &Vec<String>) -> (Mode, bool) {
@@ -354,10 +363,10 @@ mod tests {
 
         assert_eq! (initialization_exit_code, 1);
         assert_eq! (initialization_holder.stdout.get_string (), "");
-        assert_eq! (initialization_holder.stderr.get_string (), "MASQNode in Initialization mode must run with root privilege; try sudo\n");
+        assert_eq! (initialization_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::Initialization, true));
         assert_eq! (service_mode_exit_code, 1);
         assert_eq! (service_mode_holder.stdout.get_string (), "");
-        assert_eq! (service_mode_holder.stderr.get_string (), "MASQNode in Service mode must run with root privilege; try sudo\n");
+        assert_eq! (service_mode_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::Service, true));
         let params = params_arc.lock().unwrap();
         assert_eq! (*params, vec![true, true])
     }
@@ -390,13 +399,13 @@ mod tests {
 
         assert_eq! (generate_wallet_exit_code, 0);
         assert_eq! (generate_wallet_holder.stdout.get_string (), "");
-        assert_eq! (generate_wallet_holder.stderr.get_string (), "MASQNode in GenerateWallet mode does not require root privilege; try without sudo next time\n");
+        assert_eq! (generate_wallet_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::GenerateWallet, false));
         assert_eq! (recover_wallet_exit_code, 0);
         assert_eq! (recover_wallet_holder.stdout.get_string (), "");
-        assert_eq! (recover_wallet_holder.stderr.get_string (), "MASQNode in RecoverWallet mode does not require root privilege; try without sudo next time\n");
+        assert_eq! (recover_wallet_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::RecoverWallet, false));
         assert_eq! (dump_config_exit_code, 0);
         assert_eq! (dump_config_holder.stdout.get_string (), "");
-        assert_eq! (dump_config_holder.stderr.get_string (), "MASQNode in DumpConfig mode does not require root privilege; try without sudo next time\n");
+        assert_eq! (dump_config_holder.stderr.get_string (), RunModes::privilege_mismatch_message (&Mode::DumpConfig, false));
         let params = dropper_params_arc.lock().unwrap();
         assert_eq! (*params, vec![false, false, false]);
         let params = runner_params_arc.lock().unwrap();
