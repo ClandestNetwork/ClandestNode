@@ -236,9 +236,9 @@ pub mod test_utils {
     use crate::server_initializer::LoggerInitializerWrapper;
     use crate::test_utils::logging::init_test_logging;
     use log::LevelFilter;
+    use std::cell::RefCell;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
-    use std::cell::RefCell;
 
     pub struct PrivilegeDropperMock {
         drop_privileges_params: Arc<Mutex<Vec<RealUser>>>,
@@ -263,8 +263,11 @@ pub mod test_utils {
         }
 
         fn expect_privilege(&self, privilege_expected: bool) -> bool {
-            self.expect_privilege_params.lock().unwrap().push(privilege_expected);
-            self.expect_privilege_results.borrow_mut().remove (0)
+            self.expect_privilege_params
+                .lock()
+                .unwrap()
+                .push(privilege_expected);
+            self.expect_privilege_results.borrow_mut().remove(0)
         }
     }
 
@@ -274,7 +277,7 @@ pub mod test_utils {
                 drop_privileges_params: Arc::new(Mutex::new(vec![])),
                 chown_params: Arc::new(Mutex::new(vec![])),
                 expect_privilege_params: Arc::new(Mutex::new(vec![])),
-                expect_privilege_results: RefCell::new (vec![]),
+                expect_privilege_results: RefCell::new(vec![]),
             }
         }
 
@@ -293,8 +296,8 @@ pub mod test_utils {
             self
         }
 
-        pub fn expect_privilege_result (self, result: bool) -> Self {
-            self.expect_privilege_results.borrow_mut().push (result);
+        pub fn expect_privilege_result(self, result: bool) -> Self {
+            self.expect_privilege_results.borrow_mut().push(result);
             self
         }
     }
