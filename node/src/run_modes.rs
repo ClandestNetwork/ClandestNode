@@ -27,6 +27,12 @@ pub struct RunModes {
     runner: Box<dyn Runner>,
 }
 
+impl Default for RunModes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RunModes {
     pub fn new() -> Self {
         Self {
@@ -97,14 +103,22 @@ impl RunModes {
 
     fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let configurator = NodeConfiguratorGenerateWallet::new();
-        self.runner
-            .configuration_run(args, streams, &configurator, &self.privilege_dropper)
+        self.runner.configuration_run(
+            args,
+            streams,
+            &configurator,
+            self.privilege_dropper.as_ref(),
+        )
     }
 
     fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let configurator = NodeConfiguratorRecoverWallet::new();
-        self.runner
-            .configuration_run(args, streams, &configurator, &self.privilege_dropper)
+        self.runner.configuration_run(
+            args,
+            streams,
+            &configurator,
+            self.privilege_dropper.as_ref(),
+        )
     }
 }
 
@@ -117,7 +131,7 @@ trait Runner {
         args: &Vec<String>,
         streams: &mut StdStreams<'_>,
         configurator: &dyn NodeConfigurator<WalletCreationConfig>,
-        privilege_dropper: &Box<dyn PrivilegeDropper>,
+        privilege_dropper: &dyn PrivilegeDropper,
     ) -> i32;
 }
 
@@ -159,7 +173,7 @@ impl Runner for RunnerReal {
         args: &Vec<String>,
         streams: &mut StdStreams<'_>,
         configurator: &dyn NodeConfigurator<WalletCreationConfig>,
-        privilege_dropper: &Box<dyn PrivilegeDropper>,
+        privilege_dropper: &dyn PrivilegeDropper,
     ) -> i32 {
         let config = configurator.configure(args, streams);
         privilege_dropper.drop_privileges(&config.real_user);
@@ -216,7 +230,7 @@ mod tests {
             args: &Vec<String>,
             _streams: &mut StdStreams<'_>,
             _configurator: &dyn NodeConfigurator<WalletCreationConfig>,
-            _privilege_dropper: &Box<dyn PrivilegeDropper>,
+            _privilege_dropper: &dyn PrivilegeDropper,
         ) -> i32 {
             self.configuration_run_params
                 .lock()
