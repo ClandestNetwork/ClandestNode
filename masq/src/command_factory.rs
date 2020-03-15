@@ -1,7 +1,10 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_factory::CommandFactoryError::UnrecognizedSubcommand;
-use crate::commands::{Command, SetupCommand, ShutdownCommand, StartCommand};
+use crate::commands::shutdown_command::ShutdownCommand;
+use crate::commands::commands::Command;
+use crate::commands::setup_command::SetupCommand;
+use crate::commands::start_command::StartCommand;
 
 #[derive(Debug, PartialEq)]
 pub enum CommandFactoryError {

@@ -3,8 +3,6 @@
 use crate::command_context::{CommandContext, ContextError};
 use crate::command_factory::{CommandFactory, CommandFactoryError};
 use crate::command_processor::{CommandProcessor, CommandProcessorFactory};
-use crate::commands::CommandError::Transmission;
-use crate::commands::{Command, CommandError};
 use crate::websockets_client::nfum;
 use masq_lib::messages::ToMessageBody;
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, ByteArrayWriterInner};
@@ -12,6 +10,8 @@ use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
+use crate::commands::commands::{Command, CommandError};
+use crate::commands::commands::CommandError::Transmission;
 
 #[derive(Default)]
 pub struct CommandFactoryMock {
