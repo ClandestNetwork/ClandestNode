@@ -6,8 +6,9 @@ use crate::commands::CommandError::{
 };
 use clap::{value_t, App, SubCommand};
 use masq_lib::messages::{
-    FromMessageBody, ToMessageBody, UiMessageError, UiSetupRequest, UiSetupResponse, UiSetupValue,
-    UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
+    FromMessageBody, ToMessageBody, UiMessageError, UiSetupRequest, UiSetupRequestValue,
+    UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
+    NODE_NOT_RUNNING_ERROR,
 };
 use masq_lib::shared_schema::shared_app;
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
@@ -37,7 +38,7 @@ pub fn setup_subcommand() -> App<'static, 'static> {
 
 #[derive(Debug, PartialEq)]
 pub struct SetupCommand {
-    pub values: Vec<UiSetupValue>,
+    pub values: Vec<UiSetupRequestValue>,
 }
 
 impl Command for SetupCommand {
@@ -79,9 +80,9 @@ impl SetupCommand {
             .map(|piece| piece[2..].to_string())
             .map(|key| {
                 let value = value_t!(matches, &key, String).expect("Value disappeared!");
-                UiSetupValue::new(&key, &value)
+                UiSetupRequestValue::new(&key, &value)
             })
-            .collect::<Vec<UiSetupValue>>();
+            .collect::<Vec<UiSetupRequestValue>>();
         values.sort_by(|a, b| {
             a.name
                 .partial_cmp(&b.name)
@@ -243,10 +244,10 @@ mod tests {
     use crate::commands::CommandError::{Other, Payload, Transmission, UnexpectedResponse};
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::{
-        UiSetupRequest, UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder,
-        UiStartResponse, NODE_NOT_RUNNING_ERROR,
+        UiSetupRequest, UiSetupResponse, UiSetupResponseValue, UiShutdownRequest,
+        UiShutdownResponse, UiStartOrder, UiStartResponse, NODE_NOT_RUNNING_ERROR,
     };
-    use masq_lib::ui_gateway::MessagePath::TwoWay;
+    use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeFromUiMessage, NodeToUiMessage};
     use std::sync::{Arc, Mutex};
@@ -298,7 +299,7 @@ mod tests {
             target: ClientId(0),
             body: MessageBody {
                 opcode: "booga".to_string(),
-                path: TwoWay(1234),
+                path: Conversation(1234),
                 payload: Ok("unparseable".to_string()),
             },
         }));
@@ -312,7 +313,7 @@ mod tests {
             result,
             Err(UnexpectedResponse(UiMessageError::UnexpectedMessage(
                 "booga".to_string(),
-                TwoWay(1234)
+                Conversation(1234)
             )))
         );
         assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
@@ -329,8 +330,8 @@ mod tests {
                 body: UiSetupResponse {
                     running: false,
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupResponseValue::new("chain", "ropsten"),
+                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop"),
                     ],
                 }
                 .tmb(0),
@@ -358,8 +359,8 @@ mod tests {
                 client_id: 0,
                 body: UiSetupRequest {
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]
                 }
                 .tmb(0)
@@ -380,8 +381,8 @@ mod tests {
                 body: UiSetupResponse {
                     running: true,
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupResponseValue::new("chain", "ropsten"),
+                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop"),
                     ],
                 }
                 .tmb(0),
@@ -409,8 +410,8 @@ mod tests {
                 client_id: 0,
                 body: UiSetupRequest {
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]
                 }
                 .tmb(0)

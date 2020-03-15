@@ -15,14 +15,13 @@ use actix::{Actor, Context, Handler, Message};
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
-    UiSetupValue, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
-    NODE_NOT_RUNNING_ERROR,
+    UiSetupResponseValue, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR,
+    NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
 };
-use masq_lib::ui_gateway::MessagePath::{OneWay, TwoWay};
+use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessagePath, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Recipients {
@@ -190,9 +189,12 @@ impl Daemon {
         let running = if self.port_if_node_is_running().is_some() {
             true
         } else {
-            let incoming_params: HashMap<String, String> =
-                HashMap::from_iter(payload.values.into_iter().map(|usv| (usv.name, usv.value)));
-            self.params.extend(incoming_params.into_iter());
+            payload.values.into_iter().for_each(|usv| {
+                match usv.value {
+                    None => unimplemented!("Test-drive me!"),
+                    Some(value) => self.params.insert(usv.name, value),
+                };
+            });
             false
         };
         let mut report = Self::get_default_params();
@@ -203,7 +205,7 @@ impl Daemon {
                 running,
                 values: report
                     .into_iter()
-                    .map(|(name, value)| UiSetupValue { name, value })
+                    .map(|(name, value)| UiSetupResponseValue { name, value })
                     .collect(),
             }
             .tmb(context_id),
@@ -221,7 +223,7 @@ impl Daemon {
                 client_id,
                 MessageBody {
                     opcode: "start".to_string(),
-                    path: TwoWay(context_id),
+                    path: Conversation(context_id),
                     payload: Err((
                         NODE_ALREADY_RUNNING_ERROR,
                         "Could not launch Node: already running".to_string(),
@@ -246,7 +248,7 @@ impl Daemon {
                     client_id,
                     MessageBody {
                         opcode: "start".to_string(),
-                        path: TwoWay(context_id),
+                        path: Conversation(context_id),
                         payload: Err((NODE_LAUNCH_ERROR, format!("Could not launch Node: {}", s))),
                     },
                 ),
@@ -273,8 +275,8 @@ impl Daemon {
                             port,
                             opcode: body.opcode,
                             context_id: match body.path {
-                                OneWay => None,
-                                TwoWay(context_id) => Some(context_id),
+                                FireAndForget => None,
+                                Conversation(context_id) => Some(context_id),
                             },
                             payload: match body.payload {
                                 Ok(json) => json,
@@ -313,7 +315,7 @@ impl Daemon {
             opcode,
             client_id
         );
-        self.send_node_is_not_running_error(client_id, "redirect", &opcode, OneWay);
+        self.send_node_is_not_running_error(client_id, "redirect", &opcode, FireAndForget);
     }
 
     fn send_node_is_not_running_error(
@@ -360,12 +362,13 @@ mod tests {
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use masq_lib::messages::{
-        UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupResponse, UiSetupValue,
+        UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupRequestValue, UiSetupResponse,
         UiShutdownRequest, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR,
         NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
     };
     use std::cell::RefCell;
     use std::collections::HashSet;
+    use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
 
     struct LauncherMock {
@@ -514,10 +517,10 @@ mod tests {
                 client_id: 1234,
                 body: UiSetupRequest {
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("config-file", "biggles.txt"),
-                        UiSetupValue::new("db-password", "goober"),
-                        UiSetupValue::new("real-user", "1234:4321:hormel"),
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("config-file", "biggles.txt"),
+                        UiSetupRequestValue::new("db-password", "goober"),
+                        UiSetupRequestValue::new("real-user", "1234:4321:hormel"),
                     ],
                 }
                 .tmb(4321),
@@ -591,10 +594,10 @@ mod tests {
                 client_id: 1234,
                 body: UiSetupRequest {
                     values: vec![
-                        UiSetupValue::new("chain", "ropsten"),
-                        UiSetupValue::new("config-file", "biggles.txt"),
-                        UiSetupValue::new("db-password", "goober"),
-                        UiSetupValue::new("real-user", "1234:4321:hormel"),
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("config-file", "biggles.txt"),
+                        UiSetupRequestValue::new("db-password", "goober"),
+                        UiSetupRequestValue::new("real-user", "1234:4321:hormel"),
                     ],
                 }
                 .tmb(4321),
@@ -642,7 +645,7 @@ mod tests {
             .try_send(NodeFromUiMessage {
                 client_id: 1234,
                 body: UiSetupRequest {
-                    values: vec![UiSetupValue::new("chain", "ropsten")],
+                    values: vec![UiSetupRequestValue::new("chain", "ropsten")],
                 }
                 .tmb(4321),
             })
@@ -686,7 +689,7 @@ mod tests {
         let msg = NodeFromUiMessage {
             client_id: 1234,
             body: UiSetupRequest {
-                values: vec![UiSetupValue::new("chain", "ropsten")],
+                values: vec![UiSetupRequestValue::new("chain", "ropsten")],
             }
             .tmb(4321),
         };
@@ -736,7 +739,7 @@ mod tests {
             .try_send(NodeFromUiMessage {
                 client_id: 1234,
                 body: UiSetupRequest {
-                    values: vec![UiSetupValue::new("dns-servers", "192.168.0.1")],
+                    values: vec![UiSetupRequestValue::new("dns-servers", "192.168.0.1")],
                 }
                 .tmb(4321),
             })
@@ -1041,7 +1044,7 @@ mod tests {
             .get_record::<NodeToUiMessage>(0)
             .clone();
         assert_eq!(record.target, ClientId(1234));
-        assert_eq!(record.body.path, OneWay);
+        assert_eq!(record.body.path, FireAndForget);
         let (payload, context_id): (UiRedirect, u64) = UiRedirect::fmb(record.body).unwrap();
         assert_eq!(context_id, 0);
         assert_eq!(

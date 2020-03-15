@@ -1614,30 +1614,34 @@ mod tests {
     }
 
     #[test]
-    fn not_really_a_test () {
-        let schema = App::new ("blah")
-            .arg (Arg::with_name ("example")
-                .long("example")
-                .value_name("example")
-                .required(false)
-                .min_values (0)
-                .max_values (1)
+    fn not_really_a_test() {
+        let schema = App::new("blah")
+            .arg(
+                Arg::with_name("example")
+                    .long("example")
+                    .value_name("example")
+                    .required(false)
+                    .min_values(0)
+                    .max_values(1),
             )
-            .arg (Arg::with_name ("another")
-                .long("another")
-                .value_name("another")
-                .required(false)
-                .takes_value(true)
-                .min_values (0)
-                .max_values (1)
-                .default_value("default")
+            .arg(
+                Arg::with_name("another")
+                    .long("another")
+                    .value_name("another")
+                    .required(false)
+                    .takes_value(true)
+                    .min_values(0)
+                    .max_values(1)
+                    .default_value("default"),
             );
-        let matches = schema.get_matches_from_safe (vec!["blah", "--example", "beetle", "--another", "aval"]).unwrap();
+        let matches = schema
+            .get_matches_from_safe(vec!["blah", "--example", "beetle", "--another", "aval"])
+            .unwrap();
 
-        let example_value = value_t! (matches, "example", String).unwrap();
-        let another_value = value_t! (matches, "another", String).unwrap();
+        let example_value = value_t!(matches, "example", String).unwrap();
+        let another_value = value_t!(matches, "another", String).unwrap();
 
-        assert_eq! (example_value, "default".to_string());
-        assert_eq! (another_value, "default".to_string());
+        assert_eq!(example_value, "default".to_string());
+        assert_eq!(another_value, "default".to_string());
     }
 }
