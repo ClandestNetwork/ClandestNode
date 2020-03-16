@@ -191,7 +191,7 @@ impl Daemon {
         } else {
             payload.values.into_iter().for_each(|usv| {
                 match usv.value {
-                    None => self.params.remove (&usv.name),
+                    None => self.params.remove(&usv.name),
                     Some(value) => self.params.insert(usv.name, value),
                 };
             });
@@ -513,7 +513,10 @@ mod tests {
             ("config-file", "biggles.txt"),
             ("db-password", "goober"),
             ("real-user", "1234:4321:hormel"),
-        ].into_iter().map (|(k, v)| (k.to_string(), v.to_string())).collect();
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
