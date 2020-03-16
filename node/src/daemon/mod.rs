@@ -191,7 +191,7 @@ impl Daemon {
         } else {
             payload.values.into_iter().for_each(|usv| {
                 match usv.value {
-                    None => unimplemented!("Test-drive me!"),
+                    None => self.params.remove (&usv.name),
                     Some(value) => self.params.insert(usv.name, value),
                 };
             });
@@ -502,6 +502,62 @@ mod tests {
 
     #[test]
     fn accepts_full_setup_when_node_is_not_running_and_returns_settings_then_remembers_them() {
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let system = System::new("test");
+        let verifier_tools = VerifierToolsMock::new().process_is_running_result(false);
+        let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
+        subject.verifier_tools = Box::new(verifier_tools);
+        subject.params = vec![
+            ("dns-servers", "1.1.1.1"),
+            ("chain", "ropsten"),
+            ("config-file", "biggles.txt"),
+            ("db-password", "goober"),
+            ("real-user", "1234:4321:hormel"),
+        ].into_iter().map (|(k, v)| (k.to_string(), v.to_string())).collect();
+        let subject_addr = subject.start();
+        subject_addr
+            .try_send(make_bind_message(ui_gateway))
+            .unwrap();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiSetupRequest {
+                    values: vec![
+                        UiSetupRequestValue::clear("chain"),
+                        UiSetupRequestValue::clear("config-file"),
+                        UiSetupRequestValue::clear("db-password"),
+                        UiSetupRequestValue::clear("real-user"),
+                    ],
+                }
+                .tmb(4321),
+            })
+            .unwrap();
+
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let record = ui_gateway_recording
+            .get_record::<NodeToUiMessage>(0)
+            .clone();
+        assert_eq!(record.target, ClientId(1234));
+        let (payload, context_id): (UiSetupResponse, u64) =
+            UiSetupResponse::fmb(record.body).unwrap();
+        assert_eq!(context_id, 4321);
+        assert_eq!(payload.running, false);
+        let actual_pairs: HashMap<String, String> = payload
+            .values
+            .into_iter()
+            .map(|value| (value.name, value.value))
+            .collect();
+        let mut expected_pairs = Daemon::get_default_params();
+        expected_pairs.insert("dns-servers".to_string(), "1.1.1.1".to_string());
+
+        assert_eq!(actual_pairs, expected_pairs);
+    }
+
+    #[test]
+    fn accepts_empty_setup_when_node_is_not_running_and_clears_existing_state() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new().process_is_running_result(false);
