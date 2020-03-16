@@ -1,11 +1,11 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::command_context::{CommandContext};
+use crate::command_context::CommandContext;
+use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, SubCommand};
 use masq_lib::messages::{UiStartOrder, UiStartResponse};
-use std::fmt::Debug;
 use std::default::Default;
-use crate::commands::commands::{Command, CommandError, transaction};
+use std::fmt::Debug;
 
 pub fn start_subcommand() -> App<'static, 'static> {
     SubCommand::with_name("start")
@@ -46,12 +46,12 @@ mod tests {
     // use super::*;
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::test_utils::mocks::CommandContextMock;
+    use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::{UiStartOrder, UiStartResponse};
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
-    use std::sync::{Arc, Mutex};
     use std::string::ToString;
-    use masq_lib::messages::ToMessageBody;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn start_command_happy_path() {

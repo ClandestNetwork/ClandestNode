@@ -1,14 +1,12 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::command_context::{CommandContext};
+use crate::command_context::CommandContext;
+use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{value_t, App, SubCommand};
-use masq_lib::messages::{
-    UiSetupRequest, UiSetupRequestValue,
-    UiSetupResponse
-};
+use masq_lib::messages::{UiSetupRequest, UiSetupRequestValue, UiSetupResponse};
 use masq_lib::shared_schema::shared_app;
+use masq_lib::utils::index_of_from;
 use std::fmt::Debug;
-use crate::commands::commands::{Command, transaction, CommandError};
 
 pub fn setup_subcommand() -> App<'static, 'static> {
     shared_app(SubCommand::with_name("setup")
@@ -58,8 +56,12 @@ impl SetupCommand {
             .filter(|piece| (*piece).starts_with("--"))
             .map(|piece| piece[2..].to_string())
             .map(|key| {
-                let value = value_t!(matches, &key, String).expect("Value disappeared!");
-                UiSetupRequestValue::new(&key, &value)
+                if Self::has_value(&pieces, &key) {
+                    let value = value_t!(matches, &key, String).expect("Value disappeared!");
+                    UiSetupRequestValue::new(&key, &value)
+                } else {
+                    UiSetupRequestValue::clear(&key)
+                }
             })
             .collect::<Vec<UiSetupRequestValue>>();
         values.sort_by(|a, b| {
@@ -69,6 +71,15 @@ impl SetupCommand {
         });
         Self { values }
     }
+
+    fn has_value(pieces: &[String], piece: &str) -> bool {
+        let dash_dash_piece = format!("--{}", piece);
+        match index_of_from(pieces, &dash_dash_piece, 0) {
+            None => false,
+            Some(idx) if idx == pieces.len() - 1 => false,
+            Some(idx) => !pieces[idx + 1].starts_with("--"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -76,12 +87,11 @@ mod tests {
     use super::*;
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{
-        UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
+    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
     use std::sync::{Arc, Mutex};
-    use masq_lib::messages::ToMessageBody;
 
     #[test]
     fn setup_command_happy_path_with_node_not_running() {
@@ -107,6 +117,7 @@ mod tests {
                 "setup".to_string(),
                 "--neighborhood-mode".to_string(),
                 "zero-hop".to_string(),
+                "--log-level".to_string(),
                 "--chain".to_string(),
                 "ropsten".to_string(),
             ])
@@ -123,6 +134,7 @@ mod tests {
                 body: UiSetupRequest {
                     values: vec![
                         UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::clear("log-level"),
                         UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]
                 }
@@ -160,6 +172,7 @@ mod tests {
                 "zero-hop".to_string(),
                 "--chain".to_string(),
                 "ropsten".to_string(),
+                "--log-level".to_string(),
             ])
             .unwrap();
 
@@ -174,6 +187,7 @@ mod tests {
                 body: UiSetupRequest {
                     values: vec![
                         UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::clear("log-level"),
                         UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]
                 }

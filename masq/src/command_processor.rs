@@ -2,9 +2,9 @@
 
 use crate::command_context::CommandContextReal;
 use crate::command_context::{CommandContext, ContextError};
+use crate::commands::commands_common::{Command, CommandError};
 use crate::schema::app;
 use clap::value_t;
-use crate::commands::commands::{CommandError, Command};
 
 pub trait CommandProcessorFactory {
     fn make(&self, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError>;

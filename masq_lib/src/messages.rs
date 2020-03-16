@@ -163,8 +163,11 @@ impl UiSetupRequestValue {
         }
     }
 
-    pub fn clear(_name: &str) -> Self {
-        unimplemented!()
+    pub fn clear(name: &str) -> Self {
+        UiSetupRequestValue {
+            name: name.to_string(),
+            value: None,
+        }
     }
 }
 

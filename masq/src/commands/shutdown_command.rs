@@ -1,16 +1,15 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use crate::command_context::{CommandContext};
-use clap::{App, SubCommand};
-use masq_lib::messages::{
-    UiShutdownRequest, UiShutdownResponse,
-    NODE_NOT_RUNNING_ERROR,
+use crate::command_context::CommandContext;
+use crate::commands::commands_common::CommandError::{
+    ConnectionDropped, Other, Payload, Transmission,
 };
+use crate::commands::commands_common::{transaction, Command, CommandError};
+use clap::{App, SubCommand};
+use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
 use std::fmt::Debug;
 use std::thread;
 use std::time::Duration;
-use crate::commands::commands::CommandError::{Other, Transmission, Payload, ConnectionDropped};
-use crate::commands::commands::{transaction, CommandError, Command};
 
 const DEFAULT_SHUTDOWN_ATTEMPT_INTERVAL: u64 = 250; // milliseconds
 const DEFAULT_SHUTDOWN_ATTEMPT_LIMIT: u64 = 4;
@@ -88,17 +87,14 @@ mod tests {
     use super::*;
     use crate::command_context::ContextError;
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
-    use crate::commands::commands::CommandError::{Other};
+    use crate::commands::commands_common::CommandError::Other;
     use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{
-        UiShutdownRequest,
-        UiShutdownResponse, NODE_NOT_RUNNING_ERROR,
-    };
+    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
-    use masq_lib::messages::ToMessageBody;
 
     #[test]
     fn shutdown_command_defaults_parameters() {

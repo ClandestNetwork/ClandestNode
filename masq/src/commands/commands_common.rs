@@ -1,11 +1,12 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::{CommandContext, ContextError};
-use masq_lib::messages::{
-    FromMessageBody, ToMessageBody, UiMessageError};
+use crate::commands::commands_common::CommandError::{
+    ConnectionDropped, Payload, Transmission, UnexpectedResponse,
+};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use std::fmt::Debug;
-use crate::commands::commands::CommandError::{ConnectionDropped, Payload, Transmission, UnexpectedResponse};
 
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
@@ -65,12 +66,14 @@ where
 mod tests {
     use super::*;
     use crate::command_context::ContextError;
+    use crate::commands::commands_common::CommandError::{
+        Payload, Transmission, UnexpectedResponse,
+    };
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::{UiStartOrder, UiStartResponse};
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{MessageBody, NodeToUiMessage};
-    use crate::commands::commands::CommandError::{Payload, Transmission, UnexpectedResponse};
 
     #[test]
     fn two_way_transaction_passes_dropped_connection_error() {
