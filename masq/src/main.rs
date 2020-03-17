@@ -43,12 +43,12 @@ impl command::Command for Main {
                 return 1;
             }
         };
-        if let Err(msg) = self.handle_command(&mut *processor, command_parts) {
-            writeln!(streams.stderr, "{}", msg).expect("writeln! failed");
-            return 1;
-        }
+        let result = match self.handle_command (&mut *processor, command_parts, streams) {
+            Ok (_) => 0,
+            Err (_) => 1,
+        };
         processor.close();
-        0
+        result
     }
 }
 
@@ -79,15 +79,22 @@ impl Main {
         &self,
         processor: &mut dyn CommandProcessor,
         command_parts: Vec<String>,
-    ) -> Result<(), String> {
+        streams: &mut StdStreams<'_>
+    ) -> Result<(), ()> {
         let command = match self.command_factory.make(command_parts) {
             Ok(c) => c,
-            Err(UnrecognizedSubcommand(msg)) => return Err(msg),
+            Err(UnrecognizedSubcommand(msg)) => {
+                writeln!(streams.stderr, "{}", msg).expect("writeln! failed");
+                return Err(())
+            },
         };
         if let Err(e) = processor.process(command) {
-            return Err(format!("{:?}", e));
+            writeln!(streams.stderr, "{:?}", e).expect("writeln! failed");
+            Err (())
         }
-        Ok(())
+        else {
+            Ok(())
+        }
     }
 }
 
@@ -97,18 +104,17 @@ mod tests {
     use masq_cli_lib::command_context::ContextError::Other;
     use masq_cli_lib::commands::commands_common::CommandError;
     use masq_cli_lib::commands::commands_common::CommandError::Transmission;
-    use masq_cli_lib::test_utils::mocks::{
-        CommandContextMock, CommandFactoryMock, CommandProcessorFactoryMock, CommandProcessorMock,
-        MockCommand,
-    };
+    use masq_cli_lib::test_utils::mocks::{CommandContextMock, CommandFactoryMock, CommandProcessorFactoryMock, CommandProcessorMock, MockCommand};
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::UiShutdownRequest;
-    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+    use masq_lib::test_utils::fake_stream_holder::{FakeStreamHolder, ByteArrayReader};
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use std::sync::{Arc, Mutex};
+    use masq_cli_lib::commands::commands_common;
+    use masq_cli_lib::command_context::CommandContext;
 
     #[test]
-    fn go_works_when_everything_is_copacetic() {
+    fn noninteractive_mode_works_when_everything_is_copacetic() {
         let command = MockCommand::new(UiShutdownRequest {});
         let c_make_params_arc = Arc::new(Mutex::new(vec![]));
         let command_factory = CommandFactoryMock::new()
@@ -204,10 +210,37 @@ mod tests {
         );
     }
 
+    #[derive(Debug)]
+    struct FakeCommand {
+        output: String
+    }
+
+    impl commands_common::Command for FakeCommand {
+        fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
+            unimplemented!()
+        }
+    }
+
+    impl FakeCommand {
+        pub fn new (output: &str) -> Self {
+            Self {
+                output: output.to_string(),
+            }
+        }
+    }
+
     #[test]
-    fn go_works_when_given_no_subcommand() {
-        let command_factory = CommandFactoryMock::new();
-        let processor = CommandProcessorMock::new();
+    fn interactive_mode_works() {
+        let c_make_params_arc = Arc::new(Mutex::new(vec![]));
+        let command_factory = CommandFactoryMock::new()
+            .make_params(&c_make_params_arc)
+            .make_result (Ok (Box::new (FakeCommand::new ("setup command"))))
+            .make_result (Ok (Box::new (FakeCommand::new ("start command"))));
+        let process_params_arc = Arc::new(Mutex::new(vec![]));
+        let processor = CommandProcessorMock::new()
+            .process_params(&process_params_arc)
+            .process_result (Ok (()))
+            .process_result (Ok (()));
         let processor_factory =
             CommandProcessorFactoryMock::new().make_result(Ok(Box::new(processor)));
         let mut subject = Main {
@@ -215,6 +248,7 @@ mod tests {
             processor_factory: Box::new(processor_factory),
         };
         let mut stream_holder = FakeStreamHolder::new();
+        stream_holder.stdin = ByteArrayReader::new (b"setup\nstart\nexit\n");
 
         let result = subject.go(
             &mut stream_holder.streams(),
@@ -225,11 +259,10 @@ mod tests {
             ],
         );
 
-        assert_eq!(result, 1);
-        assert_eq!(stream_holder.stdout.get_string(), "".to_string());
+        assert_eq!(result, 0);
+        assert_eq!(stream_holder.stdout.get_string(), "setup command\nstart command\n".to_string());
         assert_eq!(
-            stream_holder.stderr.get_string(),
-            "No masq subcommand found in 'command --param1 value1'\n".to_string()
+            stream_holder.stderr.get_string(), "".to_string()
         );
     }
 
