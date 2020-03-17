@@ -8,6 +8,7 @@ use masq_cli_lib::command_processor::{
 use masq_lib::command;
 use masq_lib::command::{Command, StdStreams};
 use std::io;
+use std::io::{BufReader, BufRead};
 
 fn main() {
     let mut streams: StdStreams<'_> = StdStreams {
@@ -36,19 +37,21 @@ impl command::Command for Main {
                 return 1;
             }
         };
-        let command_parts = match Self::extract_subcommand(args) {
-            Ok(v) => v,
-            Err(msg) => {
-                writeln!(streams.stderr, "{}", msg).expect("writeln! failed");
-                return 1;
+        match Self::extract_subcommand(args) {
+            Some (command_parts) => {
+                let result = match self.handle_command (&mut *processor, command_parts, streams) {
+                    Ok (_) => 0,
+                    Err (_) => 1,
+                };
+                processor.close();
+                result
+            },
+            None => {
+                let result = self.go_interactive (&mut *processor, streams);
+                processor.close();
+                result
             }
-        };
-        let result = match self.handle_command (&mut *processor, command_parts, streams) {
-            Ok (_) => 0,
-            Err (_) => 1,
-        };
-        processor.close();
-        result
+        }
     }
 }
 
@@ -60,19 +63,39 @@ impl Main {
         }
     }
 
-    fn extract_subcommand(args: &[String]) -> Result<Vec<String>, String> {
+    fn extract_subcommand(args: &[String]) -> Option<Vec<String>> {
         let args_vec: Vec<String> = args.to_vec();
         for idx in 1..args_vec.len() {
             let one = &args_vec[idx - 1];
             let two = &args_vec[idx];
             if !one.starts_with("--") && !two.starts_with("--") {
-                return Ok(args_vec.into_iter().skip(idx).collect());
+                return Some(args_vec.into_iter().skip(idx).collect());
             }
         }
-        Err(format!(
-            "No masq subcommand found in '{}'",
-            args_vec.join(" ")
-        ))
+        None
+    }
+
+    fn accept_subcommand(stdin: &mut dyn BufRead) -> Vec<String> {
+        let mut line = String::new();
+        match stdin.read_line (&mut line) {
+            Ok(0) => unimplemented!(),
+            Ok(_) => line.split (" ").into_iter().map(|s| s.to_string()).collect(),
+            Err (e) => unimplemented! ("{:?}", e),
+        }
+    }
+
+    fn go_interactive (&self, processor: &mut dyn CommandProcessor, streams: &mut StdStreams<'_>) -> u8 {
+        let mut reader = BufReader::new (streams.stdin);
+        loop {
+            let args = Self::accept_subcommand(&mut reader);
+            if args.is_empty () {unimplemented!()}
+            if args[0] == "exit".to_string() {break;}
+            match self.handle_command(processor, args, streams) {
+                Ok (_) => (),
+                Err (_) => unimplemented!()
+            }
+        }
+        0
     }
 
     fn handle_command(
