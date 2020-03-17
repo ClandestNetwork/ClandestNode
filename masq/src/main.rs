@@ -39,7 +39,7 @@ impl command::Command for Main {
         };
         match Self::extract_subcommand(args) {
             Some (command_parts) => {
-                let result = match self.handle_command (&mut *processor, command_parts, streams) {
+                let result = match self.handle_command (&mut *processor, command_parts, streams.stderr) {
                     Ok (_) => 0,
                     Err (_) => 1,
                 };
@@ -79,18 +79,22 @@ impl Main {
         let mut line = String::new();
         match stdin.read_line (&mut line) {
             Ok(0) => unimplemented!(),
-            Ok(_) => line.split (" ").into_iter().map(|s| s.to_string()).collect(),
+            Ok(_) => line
+                .split(char::is_whitespace)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect(),
             Err (e) => unimplemented! ("{:?}", e),
         }
     }
 
     fn go_interactive (&self, processor: &mut dyn CommandProcessor, streams: &mut StdStreams<'_>) -> u8 {
-        let mut reader = BufReader::new (streams.stdin);
+        let mut reader = BufReader::new (&mut streams.stdin);
         loop {
             let args = Self::accept_subcommand(&mut reader);
             if args.is_empty () {unimplemented!()}
             if args[0] == "exit".to_string() {break;}
-            match self.handle_command(processor, args, streams) {
+            match self.handle_command(processor, args, streams.stderr) {
                 Ok (_) => (),
                 Err (_) => unimplemented!()
             }
@@ -102,17 +106,17 @@ impl Main {
         &self,
         processor: &mut dyn CommandProcessor,
         command_parts: Vec<String>,
-        streams: &mut StdStreams<'_>
+        stderr: &mut dyn io::Write,
     ) -> Result<(), ()> {
         let command = match self.command_factory.make(command_parts) {
             Ok(c) => c,
             Err(UnrecognizedSubcommand(msg)) => {
-                writeln!(streams.stderr, "{}", msg).expect("writeln! failed");
+                writeln!(stderr, "{}", msg).expect("writeln! failed");
                 return Err(())
             },
         };
         if let Err(e) = processor.process(command) {
-            writeln!(streams.stderr, "{:?}", e).expect("writeln! failed");
+            writeln!(stderr, "{:?}", e).expect("writeln! failed");
             Err (())
         }
         else {
@@ -239,7 +243,7 @@ mod tests {
     }
 
     impl commands_common::Command for FakeCommand {
-        fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
+        fn execute(&self, _context: &mut dyn CommandContext) -> Result<(), CommandError> {
             unimplemented!()
         }
     }
@@ -254,14 +258,12 @@ mod tests {
 
     #[test]
     fn interactive_mode_works() {
-        let c_make_params_arc = Arc::new(Mutex::new(vec![]));
+        let make_params_arc = Arc::new(Mutex::new(vec![]));
         let command_factory = CommandFactoryMock::new()
-            .make_params(&c_make_params_arc)
+            .make_params(&make_params_arc)
             .make_result (Ok (Box::new (FakeCommand::new ("setup command"))))
             .make_result (Ok (Box::new (FakeCommand::new ("start command"))));
-        let process_params_arc = Arc::new(Mutex::new(vec![]));
         let processor = CommandProcessorMock::new()
-            .process_params(&process_params_arc)
             .process_result (Ok (()))
             .process_result (Ok (()));
         let processor_factory =
@@ -283,10 +285,8 @@ mod tests {
         );
 
         assert_eq!(result, 0);
-        assert_eq!(stream_holder.stdout.get_string(), "setup command\nstart command\n".to_string());
-        assert_eq!(
-            stream_holder.stderr.get_string(), "".to_string()
-        );
+        let make_params = make_params_arc.lock().unwrap();
+        assert_eq! (*make_params, vec![vec!["setup".to_string()], vec!["start".to_string()]]);
     }
 
     #[test]
