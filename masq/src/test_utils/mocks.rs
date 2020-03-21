@@ -151,7 +151,7 @@ impl CommandProcessorMock {
         self
     }
 
-    pub fn shutdown_params(mut self, params: &Arc<Mutex<Vec<()>>>) -> Self {
+    pub fn close_params(mut self, params: &Arc<Mutex<Vec<()>>>) -> Self {
         self.close_params = params.clone();
         self
     }
