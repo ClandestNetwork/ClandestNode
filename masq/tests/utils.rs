@@ -1,8 +1,8 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio, ChildStdin, ChildStdout, ChildStderr};
-use std::io::{Write, Read};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 
 #[allow(dead_code)]
 pub struct DaemonProcess {}
@@ -52,7 +52,7 @@ impl MasqProcess {
         ControlHandle {
             stdin: child.stdin.unwrap(),
             stdout: child.stdout.unwrap(),
-            stderr: child.stderr.unwrap()
+            stderr: child.stderr.unwrap(),
         }
     }
 }
@@ -104,23 +104,23 @@ pub struct ControlHandle {
 
 #[allow(dead_code)]
 impl ControlHandle {
-    pub fn type_command (&mut self, command: &str) {
-        writeln! (self.stdin, "{}", command).unwrap();
+    pub fn type_command(&mut self, command: &str) {
+        writeln!(self.stdin, "{}", command).unwrap();
     }
 
-    pub fn get_response (&mut self) -> (String, String) {
-        let stdout = Self::read_chunk (&mut self.stdout);
-        let stderr = Self::read_chunk (&mut self.stderr);
+    pub fn get_response(&mut self) -> (String, String) {
+        let stdout = Self::read_chunk(&mut self.stdout);
+        let stderr = Self::read_chunk(&mut self.stderr);
         (stdout, stderr)
     }
 
-    fn read_chunk (source: &mut dyn Read) -> String {
+    fn read_chunk(source: &mut dyn Read) -> String {
         let mut all_bytes: Vec<u8> = vec![];
         let mut buf = [0u8; 1024];
         loop {
-            match source.read (&mut buf) {
-                Err (e) => panic! ("Read failed: {:?}", e),
-                Ok (len) => {
+            match source.read(&mut buf) {
+                Err(e) => panic!("Read failed: {:?}", e),
+                Ok(len) => {
                     all_bytes.extend(&buf[0..len]);
                     if len < buf.len() {
                         break;
@@ -128,7 +128,7 @@ impl ControlHandle {
                 }
             };
         }
-        return String::from_utf8(all_bytes).unwrap()
+        return String::from_utf8(all_bytes).unwrap();
     }
 }
 
