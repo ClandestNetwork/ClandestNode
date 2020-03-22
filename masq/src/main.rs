@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use masq_cli_lib::command_factory::CommandFactoryError::{UnrecognizedSubcommand, CommandSyntax};
+use masq_cli_lib::command_factory::CommandFactoryError::{CommandSyntax, UnrecognizedSubcommand};
 use masq_cli_lib::command_factory::{CommandFactory, CommandFactoryReal};
 use masq_cli_lib::command_processor::{
     CommandProcessor, CommandProcessorFactory, CommandProcessorFactoryReal,
@@ -132,7 +132,7 @@ impl Main {
             Err(UnrecognizedSubcommand(msg)) => {
                 writeln!(stderr, "Unrecognized command: '{}'", msg).expect("writeln! failed");
                 return Err(());
-            },
+            }
             Err(CommandSyntax(msg)) => {
                 writeln!(stderr, "{}", msg).expect("writeln! failed");
                 return Err(());
@@ -448,10 +448,7 @@ mod tests {
             *make_params,
             vec![vec!["error".to_string(), "command".to_string()]]
         );
-        assert_eq!(
-            stream_holder.stderr.get_string(),
-            "Booga!\n".to_string()
-        );
+        assert_eq!(stream_holder.stderr.get_string(), "Booga!\n".to_string());
     }
 
     #[test]
@@ -508,10 +505,7 @@ mod tests {
         let c_make_params = c_make_params_arc.lock().unwrap();
         assert_eq!(*c_make_params, vec![vec!["subcommand".to_string()],]);
         assert_eq!(stream_holder.stdout.get_string(), "".to_string());
-        assert_eq!(
-            stream_holder.stderr.get_string(),
-            "booga\n".to_string()
-        );
+        assert_eq!(stream_holder.stderr.get_string(), "booga\n".to_string());
     }
 
     #[test]

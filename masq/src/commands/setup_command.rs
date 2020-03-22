@@ -51,8 +51,8 @@ impl Command for SetupCommand {
 impl SetupCommand {
     pub fn new(pieces: Vec<String>) -> Result<Self, String> {
         let matches = match setup_subcommand().get_matches_from_safe(&pieces) {
-            Ok (matches) => matches,
-            Err (e) => return Err(format!("{}", e)),
+            Ok(matches) => matches,
+            Err(e) => return Err(format!("{}", e)),
         };
         let mut values = pieces
             .iter()
@@ -72,7 +72,7 @@ impl SetupCommand {
                 .partial_cmp(&b.name)
                 .expect("String comparison failed")
         });
-        Ok (Self { values })
+        Ok(Self { values })
     }
 
     fn has_value(pieces: &[String], piece: &str) -> bool {
@@ -98,9 +98,18 @@ mod tests {
 
     #[test]
     fn setup_command_with_syntax_error() {
-        let msg = SetupCommand::new (vec!["setup".to_string(), "--booga".to_string()]).err().unwrap();
+        let msg = SetupCommand::new(vec!["setup".to_string(), "--booga".to_string()])
+            .err()
+            .unwrap();
 
-        assert_eq! (msg.contains ("Found argument '--booga' which wasn't expected, or isn't valid in this context"), true, "{}", msg);
+        assert_eq!(msg.contains("Found argument '"), true, "{}", msg);
+        assert_eq!(msg.contains("--booga"), true, "{}", msg);
+        assert_eq!(
+            msg.contains("which wasn't expected, or isn't valid in this context"),
+            true,
+            "{}",
+            msg
+        );
     }
 
     #[test]

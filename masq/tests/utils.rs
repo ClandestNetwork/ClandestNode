@@ -14,7 +14,9 @@ impl DaemonProcess {
     }
 
     pub fn start(self, port: u16) -> StopHandle {
-        let mut command = Command::new(executable_path(executable_name("MASQNode")));
+        let executable = executable_path(executable_name("MASQNode"));
+        eprintln!("About to start Daemon at '{:?}'", executable);
+        let mut command = Command::new(executable);
         let command = command.args(vec![
             "--ui-port".to_string(),
             format!("{}", port),
