@@ -36,7 +36,7 @@ impl CommandContext for CommandContextReal {
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
         let ntum = match conversation.transact(message) {
-            Err(ClientError::ConnectionDropped(e)) => {
+            Err(ClientError::CConnectionDropped(e)) => {
                 return Err(ContextError::ConnectionDropped(e))
             }
             Err(e) => return Err(ContextError::Other(format!("{:?}", e))),
@@ -78,8 +78,8 @@ impl CommandContext for CommandContextReal {
 }
 
 impl CommandContextReal {
-    pub fn new(port: u16) -> Result<Self, ContextError> {
-        match NodeConnection::new(port) {
+    pub fn new(daemon_ui_port: u16) -> Result<Self, ContextError> {
+        match NodeConnection::new(daemon_ui_port, daemon_ui_port) {
             Ok(connection) => Ok(Self {
                 connection,
                 stdin: Box::new(io::stdin()),
@@ -91,7 +91,7 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
-        let node_connection = match NodeConnection::new(redirect.port) {
+        let node_connection = match NodeConnection::new(self.connection.daemon_ui_port(), redirect.port) {
             Ok(nc) => nc,
             Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
         };

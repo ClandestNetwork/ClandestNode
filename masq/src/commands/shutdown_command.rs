@@ -1,9 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::CommandContext;
-use crate::commands::commands_common::CommandError::{
-    ConnectionDropped, Other, Payload, Transmission,
-};
+use crate::commands::commands_common::CommandError::{Other, Payload, Transmission, ConnectionDropped};
 use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, SubCommand};
 use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
@@ -34,7 +32,7 @@ impl Command for ShutdownCommand {
                 transaction(input.clone(), context);
             match output {
                 Ok(_) => (),
-                Err(ConnectionDropped) => {
+                Err(ConnectionDropped(_)) => {
                     writeln!(
                         context.stdout(),
                         "MASQNode was instructed to shut down and has broken its connection"
