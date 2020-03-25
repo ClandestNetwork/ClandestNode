@@ -183,15 +183,12 @@ impl NodeConversation {
 
     fn fall_back(&self) -> Result<(), ClientError> {
         let mut inner = self.inner_arc.lock().expect("Connection poisoned");
-eprintln! ("Falling back to Daemon on port {}", inner.daemon_ui_port);
         match make_client(inner.daemon_ui_port) {
             Ok(client) => inner.client = client,
             Err(e) => {
-eprintln! ("Fallback failed: {:?}", e);
                 return Err (ClientError::CConnectionDropped(format!("Both Node and Daemon have terminated: {:?}", e)))
             },
         }
-eprintln! ("Success!");
         Ok(())
     }
 
@@ -200,7 +197,6 @@ eprintln! ("Success!");
         mut outgoing_msg: NodeFromUiMessage,
         recursions_remaining: usize,
     ) -> Result<NodeToUiMessage, ClientError> {
-eprintln! ("Sending {} to {}");
         if outgoing_msg.body.path == FireAndForget {
             return Err(MessageType(
                 outgoing_msg.body.opcode,
