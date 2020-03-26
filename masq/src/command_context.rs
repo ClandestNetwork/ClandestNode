@@ -18,6 +18,7 @@ pub enum ContextError {
 }
 
 pub trait CommandContext {
+    fn active_port(&self) -> u16;
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError>;
     fn stdin(&mut self) -> &mut dyn Read;
     fn stdout(&mut self) -> &mut dyn Write;
@@ -33,6 +34,10 @@ pub struct CommandContextReal {
 }
 
 impl CommandContext for CommandContextReal {
+    fn active_port(&self) -> u16 {
+        unimplemented!()
+    }
+
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
         let ntum = match conversation.transact(message) {
@@ -91,10 +96,11 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<NodeToUiMessage, ContextError> {
-        let node_connection = match NodeConnection::new(self.connection.daemon_ui_port(), redirect.port) {
-            Ok(nc) => nc,
-            Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
-        };
+        let node_connection =
+            match NodeConnection::new(self.connection.daemon_ui_port(), redirect.port) {
+                Ok(nc) => nc,
+                Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
+            };
         self.connection = node_connection;
         let message_body = MessageBody {
             opcode: redirect.opcode,

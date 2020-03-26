@@ -539,8 +539,8 @@ mod tests {
 
     #[test]
     fn go_works_when_daemon_is_not_running() {
-        let processor_factory =
-            CommandProcessorFactoryMock::new().make_result(Err(CommandError::ConnectionRefused("booga".to_string())));
+        let processor_factory = CommandProcessorFactoryMock::new()
+            .make_result(Err(CommandError::ConnectionRefused("booga".to_string())));
         let mut subject = Main {
             command_factory: Box::new(CommandFactoryMock::new()),
             processor_factory: Box::new(processor_factory),
@@ -556,7 +556,7 @@ mod tests {
         assert_eq!(stream_holder.stdout.get_string(), "".to_string());
         assert_eq!(
             stream_holder.stderr.get_string(),
-            "Can't connect to Daemon or Node (ConnectionRefused). Probably this means the Daemon isn't running.\n".to_string()
+            "Can't connect to Daemon or Node (ConnectionRefused(\"booga\")). Probably this means the Daemon isn't running.\n".to_string()
         );
     }
 }

@@ -4,7 +4,7 @@ use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use masq_lib::utils::localhost;
 use std::net::SocketAddr;
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -123,11 +123,11 @@ impl MockWebSocketsServerStopHandle {
 
     pub fn kill(self) -> Vec<Result<NodeFromUiMessage, String>> {
         let result = self.send_terminate_order(true);
-        thread::sleep (Duration::from_millis(150));
+        thread::sleep(Duration::from_millis(150));
         result
     }
 
-    fn send_terminate_order (self, kill: bool) -> Vec<Result<NodeFromUiMessage, String>> {
+    fn send_terminate_order(self, kill: bool) -> Vec<Result<NodeFromUiMessage, String>> {
         let _ = self.stop_tx.send(kill);
         let _ = self.join_handle.join();
         let guard = match self.requests_arc.lock() {
