@@ -43,7 +43,14 @@ impl Command for ShutdownCommand {
                 .expect("write! failed");
                 return Ok(());
             }
-            Err(Transmission(msg)) => return Err(Transmission(msg)),
+            Err(Transmission(_)) => {
+                writeln!(
+                    context.stdout(),
+                    "MASQNode was instructed to shut down and has broken its connection"
+                )
+                .expect("write! failed");
+                return Ok(());
+            }
             Err(Payload(code, message)) if code == NODE_NOT_RUNNING_ERROR => {
                 writeln!(
                     context.stderr(),
@@ -52,7 +59,7 @@ impl Command for ShutdownCommand {
                 .expect("write! failed");
                 return Err(Payload(code, message));
             }
-            Err(impossible) => panic!("Never happen: {:?}", impossible),
+            Err(impossible) => panic!("Should never happen: {:?}", impossible),
         }
         let active_port = context.active_port();
         if self
@@ -213,11 +220,45 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_command_happy_path_immediate() {
+    fn shutdown_command_happy_path_immediate_receive() {
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
             .transact_result(Err(ContextError::ConnectionDropped("booga".to_string())));
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let wait_params_arc = Arc::new(Mutex::new(vec![]));
+        let shutdown_awaiter = ShutdownAwaiterMock::new().wait_params(&wait_params_arc);
+        let mut subject = ShutdownCommand::new();
+        subject.shutdown_awaiter = Box::new(shutdown_awaiter);
+        subject.attempt_interval = 10;
+        subject.attempt_limit = 3;
+
+        let result = subject.execute(&mut context);
+
+        assert_eq!(result, Ok(()));
+        let transact_params = transact_params_arc.lock().unwrap();
+        assert_eq!(
+            *transact_params,
+            vec![NodeFromUiMessage {
+                client_id: 0,
+                body: UiShutdownRequest {}.tmb(0)
+            }]
+        );
+        assert_eq!(
+            stdout_arc.lock().unwrap().get_string(),
+            "MASQNode was instructed to shut down and has broken its connection\n"
+        );
+        assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
+        assert_eq!(wait_params_arc.lock().unwrap().is_empty(), true);
+    }
+
+    #[test]
+    fn shutdown_command_happy_path_immediate_transmit() {
+        let transact_params_arc = Arc::new(Mutex::new(vec![]));
+        let mut context = CommandContextMock::new()
+            .transact_params(&transact_params_arc)
+            .transact_result(Err(ContextError::Other("booga".to_string())));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let wait_params_arc = Arc::new(Mutex::new(vec![]));

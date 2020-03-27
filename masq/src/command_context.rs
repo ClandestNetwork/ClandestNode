@@ -41,9 +41,7 @@ impl CommandContext for CommandContextReal {
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
         let mut conversation = self.connection.start_conversation();
         let ntum = match conversation.transact(message) {
-            Err(ClientError::CConnectionDropped(e)) => {
-                return Err(ContextError::ConnectionDropped(e))
-            }
+            Err(ClientError::FallbackFailed(e)) => return Err(ContextError::ConnectionDropped(e)),
             Err(e) => return Err(ContextError::Other(format!("{:?}", e))),
             Ok(ntum) => match ntum.body.payload {
                 Err((code, msg)) => return Err(ContextError::PayloadError(code, msg)),
