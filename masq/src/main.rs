@@ -37,22 +37,17 @@ impl command::Command for Main {
                 return 1;
             }
         };
-        match Self::extract_subcommand(args) {
+        let result = match Self::extract_subcommand(args) {
             Some(command_parts) => {
-                let result =
-                    match self.handle_command(&mut *processor, command_parts, streams.stderr) {
-                        Ok(_) => 0,
-                        Err(_) => 1,
-                    };
-                processor.close();
-                result
+                match self.handle_command(&mut *processor, command_parts, streams.stderr) {
+                    Ok(_) => 0,
+                    Err(_) => 1,
+                }
             }
-            None => {
-                let result = self.go_interactive(&mut *processor, streams);
-                processor.close();
-                result
-            }
-        }
+            None => self.go_interactive(&mut *processor, streams),
+        };
+        processor.close();
+        result
     }
 }
 

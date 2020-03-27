@@ -29,6 +29,7 @@ pub enum ClientError {
 
 pub struct NodeConnectionInner {
     daemon_ui_port: u16,
+    active_ui_port: u16,
     next_context_id: u64,
     client: Client<TcpStream>,
 }
@@ -53,6 +54,7 @@ impl NodeConnection {
         };
         let inner_arc = Arc::new(Mutex::new(NodeConnectionInner {
             daemon_ui_port,
+            active_ui_port,
             client,
             next_context_id: BROADCAST_CONTEXT_ID + 1,
         }));
@@ -64,6 +66,13 @@ impl NodeConnection {
             .lock()
             .expect("NodeConnection is poisoned")
             .daemon_ui_port
+    }
+
+    pub fn active_ui_port(&self) -> u16 {
+        self.inner_arc
+            .lock()
+            .expect("NodeConnection is poisoned")
+            .active_ui_port
     }
 
     pub fn start_conversation(&self) -> NodeConversation {

@@ -35,7 +35,7 @@ pub struct CommandContextReal {
 
 impl CommandContext for CommandContextReal {
     fn active_port(&self) -> u16 {
-        unimplemented!()
+        self.connection.active_ui_port()
     }
 
     fn transact(&mut self, message: NodeFromUiMessage) -> Result<NodeToUiMessage, ContextError> {
@@ -134,6 +134,18 @@ mod tests {
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::utils::find_free_port;
+
+    #[test]
+    fn sets_active_port_correctly_initially() {
+        let port = find_free_port();
+        let server = MockWebSocketsServer::new(port);
+        let handle = server.start();
+
+        let subject = CommandContextReal::new(port).unwrap();
+
+        assert_eq!(subject.active_port(), port);
+        handle.kill();
+    }
 
     #[test]
     fn works_when_everythings_fine() {
@@ -276,6 +288,7 @@ mod tests {
             }
         );
         assert_eq!(result.body.path, Conversation(1234));
+        assert_eq!(subject.active_port(), node_port);
         let (response, _) = UiFinancialsResponse::fmb(result.body).unwrap();
         assert_eq!(
             response,
