@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
-use masq_cli_lib::command_factory::CommandFactoryError::UnrecognizedSubcommand;
+use masq_cli_lib::command_factory::CommandFactoryError::{CommandSyntax, UnrecognizedSubcommand};
 use masq_cli_lib::command_factory::{CommandFactory, CommandFactoryReal};
 use masq_cli_lib::command_processor::{
     CommandProcessor, CommandProcessorFactory, CommandProcessorFactoryReal,
@@ -37,22 +37,17 @@ impl command::Command for Main {
                 return 1;
             }
         };
-        match Self::extract_subcommand(args) {
+        let result = match Self::extract_subcommand(args) {
             Some(command_parts) => {
-                let result =
-                    match self.handle_command(&mut *processor, command_parts, streams.stderr) {
-                        Ok(_) => 0,
-                        Err(_) => 1,
-                    };
-                processor.close();
-                result
+                match self.handle_command(&mut *processor, command_parts, streams.stderr) {
+                    Ok(_) => 0,
+                    Err(_) => 1,
+                }
             }
-            None => {
-                let result = self.go_interactive(&mut *processor, streams);
-                processor.close();
-                result
-            }
-        }
+            None => self.go_interactive(&mut *processor, streams),
+        };
+        processor.close();
+        result
     }
 }
 
@@ -131,6 +126,10 @@ impl Main {
             Ok(c) => c,
             Err(UnrecognizedSubcommand(msg)) => {
                 writeln!(stderr, "Unrecognized command: '{}'", msg).expect("writeln! failed");
+                return Err(());
+            }
+            Err(CommandSyntax(msg)) => {
+                writeln!(stderr, "{}", msg).expect("writeln! failed");
                 return Err(());
             }
         };
@@ -387,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn interactive_mode_works_for_error_command() {
+    fn interactive_mode_works_for_unrecognized_command() {
         let make_params_arc = Arc::new(Mutex::new(vec![]));
         let command_factory = CommandFactoryMock::new()
             .make_params(&make_params_arc)
@@ -419,11 +418,72 @@ mod tests {
     }
 
     #[test]
-    fn go_works_when_command_cant_be_created() {
+    fn interactive_mode_works_for_command_with_bad_syntax() {
+        let make_params_arc = Arc::new(Mutex::new(vec![]));
+        let command_factory = CommandFactoryMock::new()
+            .make_params(&make_params_arc)
+            .make_result(Err(CommandFactoryError::CommandSyntax(
+                "Booga!".to_string(),
+            )));
+        let processor = CommandProcessorMock::new();
+        let processor_factory =
+            CommandProcessorFactoryMock::new().make_result(Ok(Box::new(processor)));
+        let mut subject = Main {
+            command_factory: Box::new(command_factory),
+            processor_factory: Box::new(processor_factory),
+        };
+        let mut stream_holder = FakeStreamHolder::new();
+        stream_holder.stdin = ByteArrayReader::new(b"error command\nexit\n");
+
+        let result = subject.go(&mut stream_holder.streams(), &["command".to_string()]);
+
+        assert_eq!(result, 0);
+        let make_params = make_params_arc.lock().unwrap();
+        assert_eq!(
+            *make_params,
+            vec![vec!["error".to_string(), "command".to_string()]]
+        );
+        assert_eq!(stream_holder.stderr.get_string(), "Booga!\n".to_string());
+    }
+
+    #[test]
+    fn go_works_when_command_is_unrecognized() {
         let c_make_params_arc = Arc::new(Mutex::new(vec![]));
         let command_factory = CommandFactoryMock::new()
             .make_params(&c_make_params_arc)
             .make_result(Err(UnrecognizedSubcommand("booga".to_string())));
+        let close_params_arc = Arc::new(Mutex::new(vec![]));
+        let processor = CommandProcessorMock::new().close_params(&close_params_arc);
+        let processor_factory =
+            CommandProcessorFactoryMock::new().make_result(Ok(Box::new(processor)));
+        let mut subject = Main {
+            command_factory: Box::new(command_factory),
+            processor_factory: Box::new(processor_factory),
+        };
+        let mut stream_holder = FakeStreamHolder::new();
+
+        let result = subject.go(
+            &mut stream_holder.streams(),
+            &["command".to_string(), "subcommand".to_string()],
+        );
+
+        assert_eq!(result, 1);
+        let c_make_params = c_make_params_arc.lock().unwrap();
+        assert_eq!(*c_make_params, vec![vec!["subcommand".to_string()],]);
+        assert_eq!(
+            stream_holder.stderr.get_string(),
+            "Unrecognized command: 'booga'\n".to_string()
+        );
+        let close_params = close_params_arc.lock().unwrap();
+        assert_eq!(close_params.len(), 1);
+    }
+
+    #[test]
+    fn go_works_when_command_has_bad_syntax() {
+        let c_make_params_arc = Arc::new(Mutex::new(vec![]));
+        let command_factory = CommandFactoryMock::new()
+            .make_params(&c_make_params_arc)
+            .make_result(Err(CommandSyntax("booga".to_string())));
         let processor = CommandProcessorMock::new();
         let processor_factory =
             CommandProcessorFactoryMock::new().make_result(Ok(Box::new(processor)));
@@ -442,14 +502,11 @@ mod tests {
         let c_make_params = c_make_params_arc.lock().unwrap();
         assert_eq!(*c_make_params, vec![vec!["subcommand".to_string()],]);
         assert_eq!(stream_holder.stdout.get_string(), "".to_string());
-        assert_eq!(
-            stream_holder.stderr.get_string(),
-            "Unrecognized command: 'booga'\n".to_string()
-        );
+        assert_eq!(stream_holder.stderr.get_string(), "booga\n".to_string());
     }
 
     #[test]
-    fn go_works_when_command_is_unhappy() {
+    fn go_works_when_command_execution_fails() {
         let command = MockCommand::new(UiShutdownRequest {}).execute_result(Ok(())); // irrelevant
         let command_factory = CommandFactoryMock::new().make_result(Ok(Box::new(command)));
         let process_params_arc = Arc::new(Mutex::new(vec![]));
@@ -479,8 +536,8 @@ mod tests {
 
     #[test]
     fn go_works_when_daemon_is_not_running() {
-        let processor_factory =
-            CommandProcessorFactoryMock::new().make_result(Err(CommandError::ConnectionRefused));
+        let processor_factory = CommandProcessorFactoryMock::new()
+            .make_result(Err(CommandError::ConnectionRefused("booga".to_string())));
         let mut subject = Main {
             command_factory: Box::new(CommandFactoryMock::new()),
             processor_factory: Box::new(processor_factory),
@@ -496,7 +553,7 @@ mod tests {
         assert_eq!(stream_holder.stdout.get_string(), "".to_string());
         assert_eq!(
             stream_holder.stderr.get_string(),
-            "Can't connect to Daemon or Node (ConnectionRefused). Probably this means the Daemon isn't running.\n".to_string()
+            "Can't connect to Daemon or Node (ConnectionRefused(\"booga\")). Probably this means the Daemon isn't running.\n".to_string()
         );
     }
 }
