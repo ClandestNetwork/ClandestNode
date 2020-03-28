@@ -574,7 +574,6 @@ mod tests {
 
     fn make_default_cli_params() -> ArgsBuilder {
         ArgsBuilder::new()
-            .param("--dns-servers", "222.222.222.222")
             .param("--ip", "1.2.3.4")
     }
 
@@ -913,16 +912,16 @@ mod tests {
     }
 
     #[test]
-    fn can_read_required_parameters_from_config_file() {
+    fn can_read_parameters_from_config_file() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator",
-            "can_read_required_parameters_from_config_file",
+            "can_read_parameters_from_config_file",
         );
         {
             let mut config_file = File::create(home_dir.join("config.toml")).unwrap();
             config_file
-                .write_all(b"dns-servers = \"1.2.3.4\"\nip = \"1.2.3.4\"\n")
+                .write_all(b"dns-servers = \"111.111.111.111,222.222.222.222\"\n")
                 .unwrap();
         }
         let subject = NodeConfiguratorStandardPrivileged {};
@@ -937,8 +936,11 @@ mod tests {
         );
 
         assert_eq!(
-            vec![SocketAddr::new(IpAddr::from_str("1.2.3.4").unwrap(), 53)],
-            configuration.dns_servers
+            configuration.dns_servers,
+            vec![
+                SocketAddr::from_str("111.111.111.111:53").unwrap(),
+                SocketAddr::from_str("222.222.222.222:53").unwrap(),
+            ]
         );
     }
 
@@ -960,7 +962,7 @@ mod tests {
             let mut config_file = File::create(&config_file_path).unwrap();
             writeln!(
                 config_file,
-                "dns-servers = \"1.2.3.4\"\nconsuming-private-key = \"{}\"",
+                "consuming-private-key = \"{}\"",
                 consuming_private_key
             )
             .unwrap();
@@ -987,11 +989,6 @@ mod tests {
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
             &persistent_config,
-        );
-
-        assert_eq!(
-            bootstrapper_config.dns_servers,
-            vec![SocketAddr::new(IpAddr::from_str("1.2.3.4").unwrap(), 53)],
         );
 
         let consuming_private_key_bytes: Vec<u8> = consuming_private_key.from_hex().unwrap();
@@ -1176,8 +1173,7 @@ mod tests {
     #[test]
     fn unprivileged_parse_args_creates_configuration_with_defaults() {
         let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4")
-            .param("--dns-servers", "12.34.56.78,23.45.67.89");
+            .param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
@@ -1216,7 +1212,7 @@ mod tests {
     #[test]
     fn unprivileged_parse_args_with_neighbor_in_database_but_not_command_line() {
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "12.34.56.78,23.45.67.89")
+            .param("--dns-servers", "1.1.1.1")
             .param("--ip", "1.2.3.4")
             .param("--fake-public-key", "BORSCHT")
             .param("--db-password", "password");
@@ -1258,7 +1254,6 @@ mod tests {
     #[test]
     fn privileged_parse_args_creates_configuration_with_defaults() {
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "12.34.56.78,23.45.67.89")
             .param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
@@ -1278,8 +1273,7 @@ mod tests {
         assert_eq!(
             config.dns_servers,
             vec!(
-                SocketAddr::from_str("12.34.56.78:53").unwrap(),
-                SocketAddr::from_str("23.45.67.89:53").unwrap()
+                SocketAddr::from_str("1.1.1.1:53").unwrap()
             )
         );
         assert_eq!(config.crash_point, CrashPoint::None);
@@ -1292,7 +1286,6 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     fn privileged_parse_args_with_real_user_defaults_data_directory_properly() {
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "12.34.56.78,23.45.67.89")
             .param("--ip", "1.2.3.4")
             .param("--real-user", "::/home/booga");
         let mut config = BootstrapperConfig::new();
@@ -1320,7 +1313,6 @@ mod tests {
     }
 
     fn make_multi_config<'a>(args: ArgsBuilder) -> MultiConfig<'a> {
-        let args = args.param("--dns-servers", "12.34.56.78,23.45.67.89");
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
         MultiConfig::new(&app(), vcls)
@@ -1721,7 +1713,6 @@ mod tests {
         );
 
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "12.34.56.78,23.45.67.89")
             .param("--data-directory", home_directory.to_str().unwrap());
         let vcl_args: Vec<Box<dyn VclArg>> = vec![Box::new(NameValueVclArg::new(
             &"--consuming-private-key", // this is equal to SUB_CONSUMING_PRIVATE_KEY
@@ -1754,7 +1745,6 @@ mod tests {
 
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--dns-servers", "12.34.56.78,23.45.67.89")
             .param("--data-directory", home_directory.to_str().unwrap())
             .opt("--db-password");
         let vcl_args: Vec<Box<dyn VclArg>> = vec![Box::new(NameValueVclArg::new(
@@ -1868,7 +1858,6 @@ mod tests {
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
@@ -1885,7 +1874,6 @@ mod tests {
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
@@ -1895,7 +1883,6 @@ mod tests {
     fn privileged_configuration_accepts_network_chain_selection_for_multinode() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--ip", "1.2.3.4")
             .param("--chain", "dev");
 
@@ -1911,7 +1898,6 @@ mod tests {
     fn privileged_configuration_accepts_network_chain_selection_for_ropsten() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--ip", "1.2.3.4")
             .param("--chain", "ropsten");
 
@@ -1927,7 +1913,6 @@ mod tests {
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--ip", "1.2.3.4");
 
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
@@ -1942,7 +1927,6 @@ mod tests {
     fn privileged_configuration_accepts_ropsten_network_chain_selection() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--ip", "1.2.3.4")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
 
@@ -1966,7 +1950,6 @@ mod tests {
         let expected_gas_price = "57";
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--dns-servers", "1.2.3.4")
             .param("--gas-price", expected_gas_price);
 
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
@@ -1987,8 +1970,7 @@ mod tests {
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4")
-            .param("--dns-servers", "1.2.3.4");
+            .param("--ip", "1.2.3.4");
 
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
 
@@ -2000,7 +1982,6 @@ mod tests {
     fn privileged_configuration_rejects_invalid_gas_price() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.2.3.4")
             .param("--gas-price", "unleaded");
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
