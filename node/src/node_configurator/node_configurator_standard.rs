@@ -573,8 +573,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     fn make_default_cli_params() -> ArgsBuilder {
-        ArgsBuilder::new()
-            .param("--ip", "1.2.3.4")
+        ArgsBuilder::new().param("--ip", "1.2.3.4")
     }
 
     #[test]
@@ -1172,8 +1171,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_creates_configuration_with_defaults() {
-        let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
@@ -1252,8 +1250,7 @@ mod tests {
 
     #[test]
     fn privileged_parse_args_creates_configuration_with_defaults() {
-        let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
@@ -1271,9 +1268,7 @@ mod tests {
         );
         assert_eq!(
             config.dns_servers,
-            vec!(
-                SocketAddr::from_str("1.1.1.1:53").unwrap()
-            )
+            vec!(SocketAddr::from_str("1.1.1.1:53").unwrap())
         );
         assert_eq!(config.crash_point, CrashPoint::None);
         assert_eq!(config.ui_gateway_config.ui_port, DEFAULT_UI_PORT);
@@ -1711,8 +1706,7 @@ mod tests {
             "parse_args_with_invalid_consuming_wallet_private_key_panics_correctly",
         );
 
-        let args = ArgsBuilder::new()
-            .param("--data-directory", home_directory.to_str().unwrap());
+        let args = ArgsBuilder::new().param("--data-directory", home_directory.to_str().unwrap());
         let vcl_args: Vec<Box<dyn VclArg>> = vec![Box::new(NameValueVclArg::new(
             &"--consuming-private-key", // this is equal to SUB_CONSUMING_PRIVATE_KEY
             &"not valid hex",
@@ -1856,8 +1850,7 @@ mod tests {
     #[should_panic(expected = "could not be read: ")]
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
         let subject = NodeConfiguratorStandardPrivileged {};
-        let args = ArgsBuilder::new()
-            .param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
+        let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
     }
@@ -1872,8 +1865,7 @@ mod tests {
         let mut subject = NodeConfiguratorStandardUnprivileged::new(&BootstrapperConfig::new());
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
-        let args = ArgsBuilder::new()
-            .param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
+        let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
     }
@@ -1911,8 +1903,7 @@ mod tests {
     #[test]
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
         let subject = NodeConfiguratorStandardPrivileged {};
-        let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
 
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
 
@@ -1968,8 +1959,7 @@ mod tests {
         let mut subject = NodeConfiguratorStandardUnprivileged::new(&BootstrapperConfig::new());
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
-        let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
 
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
 
@@ -1980,8 +1970,7 @@ mod tests {
     #[should_panic(expected = "error: Invalid value for \\'--gas-price <GAS-PRICE>\\': unleaded")]
     fn privileged_configuration_rejects_invalid_gas_price() {
         let subject = NodeConfiguratorStandardPrivileged {};
-        let args = ArgsBuilder::new()
-            .param("--gas-price", "unleaded");
+        let args = ArgsBuilder::new().param("--gas-price", "unleaded");
 
         subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
     }

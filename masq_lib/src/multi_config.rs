@@ -76,8 +76,7 @@ impl<'a> MultiConfig<'a> {
         // This doesn't appear to work. I don't know why not.
         if cfg!(test) {
             panic!("{:?}. --panic to catch for testing--", e)
-        }
-        else {
+        } else {
             // panic! ("{:?}", e); // uncomment during testing
             e.exit();
         }
