@@ -1370,8 +1370,6 @@ mod tests {
                 "consume-only",
                 "--ip",
                 "1.3.5.7",
-                "--dns-servers",
-                "8.8.8.8",
                 "--neighbors",
                 format!("{},{}", one_neighbor, another_neighbor).as_str(),
                 "--log-level",

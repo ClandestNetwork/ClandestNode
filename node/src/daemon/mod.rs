@@ -506,7 +506,7 @@ mod tests {
         let mut subject = Daemon::new(&HashMap::new(), Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);
         subject.params = vec![
-            ("dns-servers", "1.1.1.1"),
+            ("dns-servers", "8.8.8.8"),
             ("chain", "ropsten"),
             ("config-file", "biggles.txt"),
             ("db-password", "goober"),
@@ -552,7 +552,7 @@ mod tests {
             .map(|value| (value.name, value.value))
             .collect();
         let mut expected_pairs = Daemon::get_default_params();
-        expected_pairs.insert("dns-servers".to_string(), "1.1.1.1".to_string());
+        expected_pairs.insert("dns-servers".to_string(), "8.8.8.8".to_string());
 
         assert_eq!(actual_pairs, expected_pairs);
     }

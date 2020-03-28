@@ -1212,7 +1212,6 @@ mod tests {
     #[test]
     fn unprivileged_parse_args_with_neighbor_in_database_but_not_command_line() {
         let args = ArgsBuilder::new()
-            .param("--dns-servers", "1.1.1.1")
             .param("--ip", "1.2.3.4")
             .param("--fake-public-key", "BORSCHT")
             .param("--db-password", "password");
