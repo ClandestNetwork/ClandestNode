@@ -191,17 +191,30 @@ impl UiSetupRequest {
     }
 }
 
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
+pub enum UiSetupResponseValueStatus {
+    Default,
+    Configured,
+    Set,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupResponseValue {
     pub name: String,
+    pub status: UiSetupResponseValueStatus,
     pub value: String,
 }
 
 impl UiSetupResponseValue {
-    pub fn new(name: &str, value: &str) -> UiSetupResponseValue {
+    pub fn new(
+        name: &str,
+        value: &str,
+        status: UiSetupResponseValueStatus,
+    ) -> UiSetupResponseValue {
         UiSetupResponseValue {
             name: name.to_string(),
             value: value.to_string(),
+            status,
         }
     }
 }
@@ -213,14 +226,18 @@ pub struct UiSetupResponse {
 }
 conversation_message!(UiSetupResponse, "setup");
 impl UiSetupResponse {
-    pub fn new(running: bool, pairs: Vec<(&str, &str)>) -> UiSetupResponse {
+    pub fn new(
+        running: bool,
+        triples: Vec<(UiSetupResponseValueStatus, &str, &str)>,
+    ) -> UiSetupResponse {
         UiSetupResponse {
             running,
-            values: pairs
+            values: triples
                 .into_iter()
-                .map(|(name, value)| UiSetupResponseValue {
+                .map(|(status, name, value)| UiSetupResponseValue {
                     name: name.to_string(),
                     value: value.to_string(),
+                    status,
                 })
                 .collect(),
         }

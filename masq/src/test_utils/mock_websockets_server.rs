@@ -141,6 +141,7 @@ impl MockWebSocketsServerStopHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use masq_lib::messages::UiSetupResponseValueStatus::Set;
     use masq_lib::messages::{FromMessageBody, ToMessageBody, UiSetupResponse, UiUnmarshalError};
     use masq_lib::messages::{UiSetupResponseValue, NODE_UI_PROTOCOL};
     use masq_lib::test_utils::ui_connection::UiConnection;
@@ -157,6 +158,7 @@ mod tests {
                 values: vec![UiSetupResponseValue {
                     name: "direction".to_string(),
                     value: "to UI".to_string(),
+                    status: Set,
                 }],
             }
             .tmb(1234),
@@ -182,6 +184,7 @@ mod tests {
                     values: vec![UiSetupResponseValue {
                         name: "direction".to_string(),
                         value: "to UI".to_string(),
+                        status: Set,
                     }],
                 },
                 1234,
@@ -200,6 +203,7 @@ mod tests {
                     values: vec![UiSetupResponseValue {
                         name: "direction".to_string(),
                         value: "to UI".to_string(),
+                        status: Set,
                     }],
                 }
                 .tmb(1234),

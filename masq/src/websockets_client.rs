@@ -228,6 +228,7 @@ mod tests {
     use super::*;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::ClientError::NoServer;
+    use masq_lib::messages::UiSetupResponseValueStatus::Set;
     use masq_lib::messages::{FromMessageBody, UiShutdownRequest};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiUnmarshalError};
     use masq_lib::messages::{UiSetupRequestValue, UiSetupResponseValue};
@@ -480,7 +481,7 @@ mod tests {
             1,
             UiSetupResponse {
                 running: true,
-                values: vec![UiSetupResponseValue::new("type", "response")],
+                values: vec![UiSetupResponseValue::new("type", "response", Set)],
             },
         ));
         let stop_handle = server.start();
@@ -511,7 +512,7 @@ mod tests {
             (
                 UiSetupResponse {
                     running: true,
-                    values: vec![UiSetupResponseValue::new("type", "response")]
+                    values: vec![UiSetupResponseValue::new("type", "response", Set)]
                 },
                 1
             )
@@ -527,7 +528,11 @@ mod tests {
                 target: ClientId(0),
                 body: UiSetupResponse {
                     running: false,
-                    values: vec![UiSetupResponseValue::new("type", "conversation 2 response")],
+                    values: vec![UiSetupResponseValue::new(
+                        "type",
+                        "conversation 2 response",
+                        Set,
+                    )],
                 }
                 .tmb(2),
             })
@@ -535,7 +540,11 @@ mod tests {
                 target: ClientId(0),
                 body: UiSetupResponse {
                     running: true,
-                    values: vec![UiSetupResponseValue::new("type", "conversation 1 response")],
+                    values: vec![UiSetupResponseValue::new(
+                        "type",
+                        "conversation 1 response",
+                        Set,
+                    )],
                 }
                 .tmb(1),
             });
@@ -584,7 +593,11 @@ mod tests {
             UiSetupResponse::fmb(response1_body).unwrap().0,
             UiSetupResponse {
                 running: false,
-                values: vec![UiSetupResponseValue::new("type", "conversation 1 response")]
+                values: vec![UiSetupResponseValue::new(
+                    "type",
+                    "conversation 1 response",
+                    Set
+                )]
             }
         );
         assert_eq!(response2_body.path, Conversation(2));
@@ -592,7 +605,11 @@ mod tests {
             UiSetupResponse::fmb(response2_body).unwrap().0,
             UiSetupResponse {
                 running: true,
-                values: vec![UiSetupResponseValue::new("type", "conversation 2 response")]
+                values: vec![UiSetupResponseValue::new(
+                    "type",
+                    "conversation 2 response",
+                    Set
+                )]
             }
         );
     }

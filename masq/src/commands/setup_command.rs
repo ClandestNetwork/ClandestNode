@@ -35,11 +35,20 @@ impl Command for SetupCommand {
                     writeln!(context.stdout(), "Note: no changes were made to the setup because the Node is currently running.")
                         .expect ("writeln! failed");
                 }
-                writeln!(context.stdout(), "NAME                      VALUE")
-                    .expect("writeln! failed");
+                writeln!(
+                    context.stdout(),
+                    "NAME                      VALUE                      STATUS"
+                )
+                .expect("writeln! failed");
                 response.values.into_iter().for_each(|value| {
-                    writeln!(context.stdout(), "{:26}{}", value.name, value.value)
-                        .expect("writeln! failed")
+                    writeln!(
+                        context.stdout(),
+                        "{:26}{:27}{:?}",
+                        value.name,
+                        value.value,
+                        value.status
+                    )
+                    .expect("writeln! failed")
                 });
                 Ok(())
             }
@@ -91,6 +100,7 @@ mod tests {
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Default, Set};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
     use masq_lib::ui_gateway::MessageTarget::ClientId;
     use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
@@ -122,8 +132,8 @@ mod tests {
                 body: UiSetupResponse {
                     running: false,
                     values: vec![
-                        UiSetupResponseValue::new("chain", "ropsten"),
-                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupResponseValue::new("chain", "ropsten", Configured),
+                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
                     ],
                 }
                 .tmb(0),
@@ -161,7 +171,7 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "NAME                      VALUE\nchain                     ropsten\nneighborhood-mode         zero-hop\n");
+            "NAME                      VALUE                      STATUS\nchain                     ropsten                    Configured\nneighborhood-mode         zero-hop                   Set\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 
@@ -175,8 +185,9 @@ mod tests {
                 body: UiSetupResponse {
                     running: true,
                     values: vec![
-                        UiSetupResponseValue::new("chain", "ropsten"),
-                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop"),
+                        UiSetupResponseValue::new("chain", "ropsten", Set),
+                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Configured),
+                        UiSetupResponseValue::new("clandestine-port", "8534", Default),
                     ],
                 }
                 .tmb(0),
@@ -191,6 +202,8 @@ mod tests {
                 "zero-hop".to_string(),
                 "--chain".to_string(),
                 "ropsten".to_string(),
+                "--clandestine-port".to_string(),
+                "8534".to_string(),
                 "--log-level".to_string(),
             ])
             .unwrap();
@@ -206,6 +219,7 @@ mod tests {
                 body: UiSetupRequest {
                     values: vec![
                         UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("clandestine-port", "8534"),
                         UiSetupRequestValue::clear("log-level"),
                         UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]
@@ -214,7 +228,7 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE\nchain                     ropsten\nneighborhood-mode         zero-hop\n");
+            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE                      STATUS\nchain                     ropsten                    Set\nclandestine-port          8534                       Default\nneighborhood-mode         zero-hop                   Configured\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 }

@@ -13,6 +13,7 @@ use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
+use masq_lib::messages::UiSetupResponseValueStatus::Set;
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
     UiSetupResponseValue, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR,
@@ -204,7 +205,11 @@ impl Daemon {
                 running,
                 values: report
                     .into_iter()
-                    .map(|(name, value)| UiSetupResponseValue { name, value })
+                    .map(|(name, value)| UiSetupResponseValue {
+                        status: Set,
+                        name,
+                        value,
+                    })
                     .collect(),
             }
             .tmb(context_id),
