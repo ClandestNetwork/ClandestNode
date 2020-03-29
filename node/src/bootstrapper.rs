@@ -495,6 +495,7 @@ impl Bootstrapper {
                 .initialize(
                     &self.config.data_directory,
                     self.config.blockchain_bridge_config.chain_id,
+                    true,
                 )
                 .expect("Cannot initialize database");
             let config_dao = ConfigDaoReal::new(conn);
@@ -1428,7 +1429,7 @@ mod tests {
         subject.establish_clandestine_port();
 
         let conn = DbInitializerReal::new()
-            .initialize(&data_dir, chain_id)
+            .initialize(&data_dir, chain_id, true)
             .unwrap();
         let config_dao = ConfigDaoReal::new(conn);
         let persistent_config = PersistentConfigurationReal::new(Box::new(config_dao));
@@ -1497,7 +1498,7 @@ mod tests {
         subject.establish_clandestine_port();
 
         let conn = DbInitializerReal::new()
-            .initialize(&data_dir, chain_id)
+            .initialize(&data_dir, chain_id, true)
             .unwrap();
         let config_dao = ConfigDaoReal::new(conn);
         let persistent_config = PersistentConfigurationReal::new(Box::new(config_dao));

@@ -951,7 +951,7 @@ mod tests {
         );
         let persistent_config = PersistentConfigurationReal::new(Box::new(ConfigDaoReal::new(
             DbInitializerReal::new()
-                .initialize(&home_dir.clone(), DEFAULT_CHAIN_ID)
+                .initialize(&home_dir.clone(), DEFAULT_CHAIN_ID, true)
                 .unwrap(),
         )));
         let consuming_private_key =
@@ -1092,7 +1092,7 @@ mod tests {
         );
         let config_dao: Box<dyn ConfigDao> = Box::new(ConfigDaoReal::new(
             DbInitializerReal::new()
-                .initialize(&home_dir.clone(), DEFAULT_CHAIN_ID)
+                .initialize(&home_dir.clone(), DEFAULT_CHAIN_ID, true)
                 .unwrap(),
         ));
         let consuming_private_key_text =

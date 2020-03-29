@@ -269,7 +269,7 @@ impl ActorFactory for ActorFactoryReal {
     ) -> AccountantSubs {
         let payable_dao = Box::new(PayableDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -279,7 +279,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         let receivable_dao = Box::new(ReceivableDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -289,7 +289,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         let banned_dao = Box::new(BannedDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -299,7 +299,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         banned_cache_loader.load(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -309,7 +309,7 @@ impl ActorFactory for ActorFactoryReal {
         );
         let config_dao = Box::new(ConfigDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -380,6 +380,7 @@ impl ActorFactory for ActorFactoryReal {
                 .initialize(
                     &config.data_directory,
                     config.blockchain_bridge_config.chain_id,
+                    true,
                 )
                 .unwrap_or_else(|_| {
                     panic!(
@@ -808,23 +809,23 @@ mod tests {
         let initialize_parameters = db_initializer_mock.initialize_parameters.lock().unwrap();
         assert_eq!(5, initialize_parameters.len());
         assert_eq!(
-            (data_directory.clone(), DEFAULT_CHAIN_ID),
+            (data_directory.clone(), DEFAULT_CHAIN_ID, true),
             initialize_parameters[0]
         );
         assert_eq!(
-            (data_directory.clone(), DEFAULT_CHAIN_ID),
+            (data_directory.clone(), DEFAULT_CHAIN_ID, true),
             initialize_parameters[1]
         );
         assert_eq!(
-            (data_directory.clone(), DEFAULT_CHAIN_ID),
+            (data_directory.clone(), DEFAULT_CHAIN_ID, true),
             initialize_parameters[2]
         );
         assert_eq!(
-            (data_directory.clone(), DEFAULT_CHAIN_ID),
+            (data_directory.clone(), DEFAULT_CHAIN_ID, true),
             initialize_parameters[3]
         );
         assert_eq!(
-            (data_directory.clone(), DEFAULT_CHAIN_ID),
+            (data_directory.clone(), DEFAULT_CHAIN_ID, true),
             initialize_parameters[4]
         );
 

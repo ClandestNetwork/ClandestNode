@@ -617,7 +617,7 @@ mod tests {
         );
 
         let conn = db_initializer::DbInitializerReal::new()
-            .initialize(&data_directory, DEFAULT_CHAIN_ID)
+            .initialize(&data_directory, DEFAULT_CHAIN_ID, true)
             .unwrap();
         let persistent_config =
             PersistentConfigurationReal::new(Box::new(ConfigDaoReal::new(conn)));

@@ -174,7 +174,7 @@ pub fn initialize_database(
     chain_id: u8,
 ) -> Box<dyn PersistentConfiguration> {
     let conn = DbInitializerReal::new()
-        .initialize(data_directory, chain_id)
+        .initialize(data_directory, chain_id, true)
         .unwrap_or_else(|e| {
             panic!(
                 "Can't initialize database at {:?}: {:?}",
@@ -895,7 +895,7 @@ mod tests {
         .join(TEST_DEFAULT_CHAIN_NAME);
         {
             let conn = DbInitializerReal::new()
-                .initialize(&data_dir, DEFAULT_CHAIN_ID)
+                .initialize(&data_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap();
             let persistent_config = PersistentConfigurationReal::from(conn);
             persistent_config

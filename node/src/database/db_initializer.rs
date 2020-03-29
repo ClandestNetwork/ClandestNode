@@ -46,6 +46,7 @@ impl ConnectionWrapperReal {
 
 #[derive(Debug, PartialEq)]
 pub enum InitializationError {
+    Nonexistent,
     IncompatibleVersion(String),
     SqliteError(rusqlite::Error),
 }
@@ -55,6 +56,7 @@ pub trait DbInitializer {
         &self,
         path: &PathBuf,
         chain_id: u8,
+        create_if_necessary: bool,
     ) -> Result<Box<dyn ConnectionWrapper>, InitializationError>;
 }
 
@@ -66,6 +68,7 @@ impl DbInitializer for DbInitializerReal {
         &self,
         path: &PathBuf,
         chain_id: u8,
+        _create_if_necessary: bool,
     ) -> Result<Box<dyn ConnectionWrapper>, InitializationError> {
         Self::create_data_directory_if_necessary(path);
         let mut flags = OpenFlags::empty();
@@ -380,7 +383,7 @@ pub mod test_utils {
 
     #[derive(Default)]
     pub struct DbInitializerMock {
-        pub initialize_parameters: Arc<Mutex<Vec<(PathBuf, u8)>>>,
+        pub initialize_parameters: Arc<Mutex<Vec<(PathBuf, u8, bool)>>>,
         pub initialize_results:
             RefCell<Vec<Result<Box<dyn ConnectionWrapper>, InitializationError>>>,
     }
@@ -390,11 +393,12 @@ pub mod test_utils {
             &self,
             path: &PathBuf,
             chain_id: u8,
+            create_if_necessary: bool,
         ) -> Result<Box<dyn ConnectionWrapper>, InitializationError> {
             self.initialize_parameters
                 .lock()
                 .unwrap()
-                .push((path.clone(), chain_id));
+                .push((path.clone(), chain_id, create_if_necessary));
             self.initialize_results.borrow_mut().remove(0)
         }
     }
@@ -406,7 +410,7 @@ pub mod test_utils {
 
         pub fn initialize_parameters(
             mut self,
-            parameters: Arc<Mutex<Vec<(PathBuf, u8)>>>,
+            parameters: Arc<Mutex<Vec<(PathBuf, u8, bool)>>>,
         ) -> DbInitializerMock {
             self.initialize_parameters = parameters;
             self
@@ -448,7 +452,7 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID).unwrap();
+        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -467,7 +471,7 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID).unwrap();
+        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -488,7 +492,7 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID).unwrap();
+        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -508,7 +512,7 @@ mod tests {
         let subject = DbInitializerReal::new();
         {
             DbInitializerReal::new()
-                .initialize(&home_dir, DEFAULT_CHAIN_ID)
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap();
         }
         {
@@ -522,7 +526,7 @@ mod tests {
             .unwrap();
         }
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID).unwrap();
+        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -576,7 +580,7 @@ mod tests {
         );
         {
             DbInitializerReal::new()
-                .initialize(&home_dir, DEFAULT_CHAIN_ID)
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap();
             let mut flags = OpenFlags::empty();
             flags.insert(OpenFlags::SQLITE_OPEN_READ_WRITE);
@@ -589,7 +593,7 @@ mod tests {
         }
         let subject = DbInitializerReal::new();
 
-        let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID);
+        let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true);
 
         assert_eq!(
             result.err().unwrap(),
@@ -608,7 +612,7 @@ mod tests {
         );
         {
             DbInitializerReal::new()
-                .initialize(&home_dir, DEFAULT_CHAIN_ID)
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap();
             let mut flags = OpenFlags::empty();
             flags.insert(OpenFlags::SQLITE_OPEN_READ_WRITE);
@@ -621,7 +625,7 @@ mod tests {
         }
         let subject = DbInitializerReal::new();
 
-        let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID);
+        let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true);
 
         assert_eq!(
             result.err().unwrap(),
@@ -664,7 +668,7 @@ mod tests {
             ensure_node_home_directory_exists("accountant", "initialize_config_with_seed");
 
         DbInitializerReal::new()
-            .initialize(&home_dir, DEFAULT_CHAIN_ID)
+            .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
             .unwrap();
 
         let mut flags = OpenFlags::empty();

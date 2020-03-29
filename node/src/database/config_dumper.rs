@@ -55,7 +55,7 @@ fn configuration_to_json(configuration: Vec<(String, Option<String>)>) -> String
 
 fn make_config_dao(data_directory: &PathBuf, chain_id: u8) -> ConfigDaoReal {
     let conn = DbInitializerReal::new()
-        .initialize(&data_directory, chain_id)
+        .initialize(&data_directory, chain_id, true) // TODO: Probably should be false
         .unwrap_or_else(|e| {
             panic!(
                 "Can't initialize database at {:?}: {:?}",
@@ -152,7 +152,7 @@ mod tests {
         let mut holder = FakeStreamHolder::new();
         {
             let conn = DbInitializerReal::new()
-                .initialize(&data_dir, DEFAULT_CHAIN_ID)
+                .initialize(&data_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap();
             let persistent_config = PersistentConfigurationReal::from(conn);
             persistent_config.set_consuming_wallet_public_key(&PlainData::new(&[1, 2, 3, 4]));
