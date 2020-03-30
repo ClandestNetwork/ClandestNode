@@ -39,7 +39,7 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
             &multi_config,
             &mut unprivileged_config,
             streams,
-            persistent_config.as_ref(),
+            Some(persistent_config.as_ref()),
         );
         standard::configure_database(&unprivileged_config, persistent_config.as_ref());
         unprivileged_config
@@ -219,21 +219,24 @@ pub mod standard {
         multi_config: &MultiConfig,
         unprivileged_config: &mut BootstrapperConfig,
         streams: &mut StdStreams<'_>,
-        persistent_config: &dyn PersistentConfiguration,
+        persistent_config_opt: Option<&dyn PersistentConfiguration>
     ) {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
-        get_wallets(
-            streams,
-            multi_config,
-            persistent_config,
-            unprivileged_config,
-        );
+        match persistent_config_opt {
+            Some(persistent_config) => get_wallets(
+                streams,
+                multi_config,
+                persistent_config,
+                unprivileged_config,
+            ),
+            None => unimplemented!(),
+        }
         unprivileged_config.neighborhood_config = make_neighborhood_config(
             multi_config,
             streams,
-            persistent_config,
+            persistent_config_opt,
             unprivileged_config,
         );
     }
@@ -317,18 +320,21 @@ pub mod standard {
     pub fn make_neighborhood_config(
         multi_config: &MultiConfig,
         streams: &mut StdStreams,
-        persistent_config: &dyn PersistentConfiguration,
+        persistent_config_opt: Option<&dyn PersistentConfiguration>,
         unprivileged_config: &mut BootstrapperConfig,
     ) -> NeighborhoodConfig {
         let neighbor_configs: Vec<NodeDescriptor> = {
             match convert_ci_configs(multi_config) {
                 Some(configs) => configs,
-                None => get_past_neighbors(
-                    multi_config,
-                    streams,
-                    persistent_config,
-                    unprivileged_config,
-                ),
+                None => match persistent_config_opt {
+                    Some(persistent_config) => get_past_neighbors(
+                        multi_config,
+                        streams,
+                        persistent_config,
+                        unprivileged_config,
+                    ),
+                    None => unimplemented!()
+                }
             }
         };
         NeighborhoodConfig {
@@ -595,7 +601,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -645,7 +651,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -669,7 +675,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -705,7 +711,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration().check_password_result(Some(false)),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -729,7 +735,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -761,7 +767,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration().check_password_result(Some(false)),
+            Some (&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -780,7 +786,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration().check_password_result(Some(false)),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
 
@@ -810,7 +816,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration().check_password_result(Some(false)),
+            Some (&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -837,7 +843,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -987,7 +993,7 @@ mod tests {
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
-            &persistent_config,
+            Some (&persistent_config),
         );
 
         let consuming_private_key_bytes: Vec<u8> = consuming_private_key.from_hex().unwrap();
@@ -1131,7 +1137,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-            &persistent_config,
+            Some(&persistent_config),
         );
 
         assert_eq!(
@@ -1181,7 +1187,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-            &make_default_persistent_configuration().check_password_result(Some(false)),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
         );
 
         assert_eq!(
@@ -1234,7 +1240,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-            &persistent_configuration,
+            Some(&persistent_configuration),
         );
 
         assert_eq!(
@@ -1725,7 +1731,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-            &PersistentConfigurationMock::new(),
+            Some(&PersistentConfigurationMock::new()),
         );
     }
 
@@ -1765,7 +1771,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut streams,
-            &make_default_persistent_configuration(),
+            Some (&make_default_persistent_configuration()),
         );
 
         let captured_output = stdout_writer.get_string();

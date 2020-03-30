@@ -279,7 +279,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         let receivable_dao = Box::new(ReceivableDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true) // TODO: Should be false
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -289,7 +289,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         let banned_dao = Box::new(BannedDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true) // TODO: Should be false
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -299,7 +299,7 @@ impl ActorFactory for ActorFactoryReal {
         ));
         banned_cache_loader.load(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true) // TODO: Should be false
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
@@ -309,7 +309,7 @@ impl ActorFactory for ActorFactoryReal {
         );
         let config_dao = Box::new(ConfigDaoReal::new(
             db_initializer
-                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true)
+                .initialize(data_directory, config.blockchain_bridge_config.chain_id, true) // TODO: Should be false
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to connect to database at {:?}",
