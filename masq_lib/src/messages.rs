@@ -196,13 +196,15 @@ pub enum UiSetupResponseValueStatus {
     Default,
     Configured,
     Set,
+    Blank,
+    Required,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupResponseValue {
     pub name: String,
-    pub status: UiSetupResponseValueStatus,
     pub value: String,
+    pub status: UiSetupResponseValueStatus,
 }
 
 impl UiSetupResponseValue {

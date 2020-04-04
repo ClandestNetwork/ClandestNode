@@ -117,7 +117,7 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
-    use masq_lib::constants::{HTTP_PORT, TLS_PORT};
+    use masq_lib::constants::{HTTP_PORT, TLS_PORT, DEFAULT_UI_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
@@ -184,7 +184,7 @@ pub mod standard {
             value_m!(multi_config, "log-level", LevelFilter).expect("Internal Error");
 
         privileged_config.ui_gateway_config.ui_port =
-            value_m!(multi_config, "ui-port", u16).expect("Internal Error");
+            value_m!(multi_config, "ui-port", u16).unwrap_or(DEFAULT_UI_PORT);
 
         privileged_config.crash_point =
             value_m!(multi_config, "crash-point", CrashPoint).expect("Internal Error");
