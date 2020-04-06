@@ -312,7 +312,7 @@ pub fn shared_app(head: App<'static, 'static>) -> App<'static, 'static> {
             .long("neighbors")
             .value_name("NODE-DESCRIPTORS")
             .min_values(0)
-            .use_delimiter(true)
+            // .use_delimiter(true)
             .help(NEIGHBORS_HELP),
     )
     .arg(real_user_arg())

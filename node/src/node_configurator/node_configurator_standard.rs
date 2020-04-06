@@ -224,14 +224,13 @@ pub mod standard {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
-        match persistent_config_opt {
-            Some(persistent_config) => get_wallets(
+        if let Some (persistent_config) = persistent_config_opt {
+            get_wallets(
                 streams,
                 multi_config,
                 persistent_config,
                 unprivileged_config,
-            ),
-            None => unimplemented!(),
+            )
         }
         unprivileged_config.neighborhood_config = make_neighborhood_config(
             multi_config,
@@ -343,28 +342,34 @@ pub mod standard {
     }
 
     pub fn convert_ci_configs(multi_config: &MultiConfig) -> Option<Vec<NodeDescriptor>> {
-        let cli_configs = values_m!(multi_config, "neighbors", String);
-        if !cli_configs.is_empty() {
-            let dummy_cryptde: Box<dyn CryptDE> = {
-                if value_m!(multi_config, "fake-public-key", String) == None {
-                    Box::new(CryptDEReal::new(DEFAULT_CHAIN_ID))
-                } else {
-                    Box::new(CryptDENull::new(DEFAULT_CHAIN_ID))
+        match value_m!(multi_config, "neighbors", String) {
+            None => None,
+            Some (joined_configs) => {
+                let cli_configs: Vec<String> = joined_configs.split(",").map(|s| s.to_string()).collect_vec();
+                if cli_configs.is_empty() {
+                    None
                 }
-            };
-            Some(
-                cli_configs
-                    .into_iter()
-                    .map(
-                        |s| match NodeDescriptor::from_str(dummy_cryptde.as_ref(), &s) {
-                            Ok(nd) => nd,
-                            Err(e) => panic!("Neighbor syntax error. {}", e),
-                        },
+                else {
+                    let dummy_cryptde: Box<dyn CryptDE> = {
+                        if value_m!(multi_config, "fake-public-key", String) == None {
+                            Box::new(CryptDEReal::new(DEFAULT_CHAIN_ID))
+                        } else {
+                            Box::new(CryptDENull::new(DEFAULT_CHAIN_ID))
+                        }
+                    };
+                    Some(
+                        cli_configs
+                            .into_iter()
+                            .map(
+                                |s| match NodeDescriptor::from_str(dummy_cryptde.as_ref(), &s) {
+                                    Ok(nd) => nd,
+                                    Err(e) => panic!("Neighbor syntax error. {}", e),
+                                },
+                            )
+                            .collect_vec(),
                     )
-                    .collect_vec(),
-            )
-        } else {
-            None
+                }
+            }
         }
     }
 
