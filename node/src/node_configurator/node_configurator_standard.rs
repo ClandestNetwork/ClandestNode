@@ -90,7 +90,7 @@ pub fn app() -> App<'static, 'static> {
 
 pub mod standard {
     use super::*;
-    use std::net::IpAddr;
+    use std::net::{IpAddr, Ipv4Addr};
     use std::net::SocketAddr;
 
     use clap::{value_t, values_t};
@@ -117,7 +117,7 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
-    use masq_lib::constants::{HTTP_PORT, TLS_PORT, DEFAULT_UI_PORT};
+    use masq_lib::constants::{HTTP_PORT, TLS_PORT, DEFAULT_UI_PORT, DEFAULT_CHAIN_NAME};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
@@ -160,11 +160,6 @@ pub mod standard {
         privileged_config: &mut BootstrapperConfig,
         _streams: &mut StdStreams<'_>,
     ) {
-        if let Some(chain_name) = value_m!(multi_config, "chain", String) {
-            privileged_config.blockchain_bridge_config.chain_id =
-                chain_id_from_name(chain_name.as_str());
-        }
-
         privileged_config
             .blockchain_bridge_config
             .blockchain_service_url = value_m!(multi_config, "blockchain-service-url", String);
@@ -175,13 +170,17 @@ pub mod standard {
         privileged_config.data_directory = data_directory;
         privileged_config.blockchain_bridge_config.chain_id = chain_id;
 
-        privileged_config.dns_servers = values_m!(multi_config, "dns-servers", IpAddr)
-            .into_iter()
-            .map(|ip| SocketAddr::from((ip, 53)))
-            .collect();
+        privileged_config.dns_servers = match value_m!(multi_config, "dns-servers", String) {
+            Some (joined_dns_servers) => {
+                joined_dns_servers.split(",")
+                    .map(|ip_str| SocketAddr::new (IpAddr::from_str (ip_str).expect("Bad clap validation for dns-servers"), 53))
+                    .collect()
+            },
+            None => vec![SocketAddr::new (IpAddr::V4 (Ipv4Addr::new (1, 1, 1, 1)), 53)],
+        };
 
         privileged_config.log_level =
-            value_m!(multi_config, "log-level", LevelFilter).expect("Internal Error");
+            value_m!(multi_config, "log-level", LevelFilter).unwrap_or (LevelFilter::Warn);
 
         privileged_config.ui_gateway_config.ui_port =
             value_m!(multi_config, "ui-port", u16).unwrap_or(DEFAULT_UI_PORT);
@@ -399,16 +398,7 @@ pub mod standard {
         neighbor_configs: Vec<NodeDescriptor>,
     ) -> NeighborhoodMode {
         match value_m!(multi_config, "neighborhood-mode", String) {
-            Some(ref s) if s == "standard" => NeighborhoodMode::Standard(
-                NodeAddr::new(
-                    &value_m!(multi_config, "ip", IpAddr).expect(
-                        "Node cannot run as --neighborhood_mode standard without --ip specified",
-                    ),
-                    &vec![],
-                ),
-                neighbor_configs,
-                DEFAULT_RATE_PACK,
-            ),
+            Some(ref s) if s == "standard" => neighborhood_mode_standard(multi_config, neighbor_configs),
             Some(ref s) if s == "originate-only" => {
                 if neighbor_configs.is_empty() {
                     panic! ("Node cannot run as --neighborhood_mode originate-only without --neighbors specified")
@@ -435,8 +425,21 @@ pub mod standard {
                 "--neighborhood_mode {} has not been properly provided for in the code",
                 s
             ),
-            None => panic!("--neighborhood_mode is not properly defaulted in clap"),
+            None => neighborhood_mode_standard(multi_config, neighbor_configs),
         }
+    }
+
+    fn neighborhood_mode_standard(multi_config: &MultiConfig, neighbor_configs: Vec<NodeDescriptor>) -> NeighborhoodMode {
+        NeighborhoodMode::Standard (
+            NodeAddr::new(
+                &value_m!(multi_config, "ip", IpAddr).expect(
+                    "Node cannot run as --neighborhood_mode standard without --ip specified",
+                ),
+                &vec![],
+            ),
+            neighbor_configs,
+            DEFAULT_RATE_PACK,
+        )
     }
 
     fn get_earning_wallet_from_address(
@@ -549,7 +552,7 @@ pub mod standard {
 mod tests {
     use super::*;
     use crate::blockchain::bip32::Bip32ECKeyPair;
-    use crate::blockchain::blockchain_interface::{chain_id_from_name, contract_address};
+    use crate::blockchain::blockchain_interface::{chain_id_from_name, contract_address, chain_name_from_id};
     use crate::bootstrapper::RealUser;
     use crate::config_dao::{ConfigDao, ConfigDaoReal};
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
@@ -1919,8 +1922,8 @@ mod tests {
         let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams());
 
         assert_eq!(
-            config.blockchain_bridge_config.chain_id,
-            chain_id_from_name(DEFAULT_CHAIN_NAME)
+            chain_name_from_id(config.blockchain_bridge_config.chain_id),
+            DEFAULT_CHAIN_NAME
         );
     }
 

@@ -7,7 +7,7 @@ pub mod node_configurator_standard;
 
 use crate::blockchain::bip32::Bip32ECKeyPair;
 use crate::blockchain::bip39::Bip39;
-use crate::blockchain::blockchain_interface::chain_id_from_name;
+use crate::blockchain::blockchain_interface::{chain_id_from_name, chain_name_from_id};
 use crate::bootstrapper::RealUser;
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal, DATABASE_FILE};
 use crate::persistent_configuration::{
@@ -31,6 +31,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
+use crate::test_utils::DEFAULT_CHAIN_ID;
+use masq_lib::constants::DEFAULT_CHAIN_NAME;
 
 pub trait NodeConfigurator<T> {
     fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> T;
@@ -204,7 +206,7 @@ pub fn real_user_data_directory_and_chain_id(
     };
 
     let chain_name =
-        value_m!(multi_config, "chain", String).expect("--chain improperly defined in clap schema");
+        value_m!(multi_config, "chain", String).unwrap_or (DEFAULT_CHAIN_NAME.to_string());
     let dirs_wrapper = RealDirsWrapper {};
 
     let data_directory = match value_m!(multi_config, "data-directory", PathBuf) {

@@ -146,31 +146,6 @@ impl Daemon {
         }
     }
 
-    // pub fn get_default_params() -> HashMap<String, String> { // TODO: Remove
-    //     let schema = crate::node_configurator::node_configurator_initialization::app();
-    //     schema
-    //         .p
-    //         .opts
-    //         .iter()
-    //         .flat_map(|opt| {
-    //             let name = opt.b.name.to_string();
-    //             if &name == "ui-port" {
-    //                 return None;
-    //             }
-    //             #[cfg(target_os = "windows")]
-    //             {
-    //                 if &name == "real-user" {
-    //                     return None;
-    //                 }
-    //             }
-    //             match opt.v.default_val {
-    //                 Some(os_str) => Some((name, os_str.to_str().unwrap().to_string())),
-    //                 None => None,
-    //             }
-    //         })
-    //         .collect()
-    // }
-
     fn handle_setup(&mut self, client_id: u64, context_id: u64, payload: UiSetupRequest) {
         let running = if self.port_if_node_is_running().is_some() {
             true
