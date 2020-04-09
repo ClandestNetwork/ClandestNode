@@ -22,7 +22,7 @@ use std::collections::hash_map::RandomState;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;
 
 pub trait SetupReporter {
-    fn get_modified_setup (&self, existing_setup: &HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue>;
+    fn get_modified_setup (&self, existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue>;
 }
 
 pub struct SetupReporterReal {
@@ -30,13 +30,14 @@ pub struct SetupReporterReal {
 }
 
 impl SetupReporter for SetupReporterReal {
-    fn get_modified_setup(&self, existing_setup: &HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
-        // get all parameter names
-        // get default values
-        // get configured values
-        // get get incoming setup
-        // combine well in large bowl
-        unimplemented!()
+    fn get_modified_setup(&self, mut existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
+        let incoming_map = vec_to_map (incoming_setup);
+        let configured_setup = self.combiner.get_values (&incoming_map);
+        configured_setup.into_iter()
+            .for_each(|(k, v)| {
+                existing_setup.insert (k, v);
+            });
+        existing_setup
     }
 }
 
@@ -243,8 +244,8 @@ trait ValueRetriever {
     }
 }
 
-struct BlockchainBridgeUrl {}
-impl ValueRetriever for BlockchainBridgeUrl {
+struct BlockchainServiceUrl {}
+impl ValueRetriever for BlockchainServiceUrl {
     fn value_name(&self) -> &'static str {
         "blockchain-service-url"
     }
@@ -256,7 +257,7 @@ impl ValueRetriever for Chain {
         "chain"
     }
 
-    fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
+    fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, _persistent_config_opt: Option<&dyn PersistentConfiguration>, _db_password_opt: &Option<String>) -> Option<String> {
         Some (DEFAULT_CHAIN_NAME.to_string())
     }
 }
@@ -344,12 +345,11 @@ impl ValueRetriever for Ip {
     }
 
     fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
-        // TODO SPIKE
         match params.get ("neighborhood-mode") {
-            Some (nhm) => !"|zero-hop|consume-only|".contains (&format!("|{}|", nhm.value)),
+            Some (nhm) if &nhm.value == "standard" => true,
+            Some (_) => false,
             None => true
         }
-        // TODO SPIKE
     }
 }
 
@@ -419,7 +419,7 @@ impl ValueRetriever for RealUser {
 
 fn retrievers () -> Vec<Box<dyn ValueRetriever>> {
     vec![
-        Box::new (BlockchainBridgeUrl{}),
+        Box::new (BlockchainServiceUrl {}),
         Box::new (Chain{}),
         Box::new (ClandestinePort{}),
         Box::new (ConfigFile{}),
@@ -437,13 +437,19 @@ fn retrievers () -> Vec<Box<dyn ValueRetriever>> {
     ]
 }
 
+fn vec_to_map (vector: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
+    vector.into_iter ()
+        .map (|uisrv| (uisrv.name.clone(), uisrv))
+        .collect::<HashMap<String, UiSetupResponseValue>>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::messages::UiSetupResponseValueStatus::{Set, Blank, Configured, Required};
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
-    use crate::persistent_configuration::{PersistentConfigurationReal, PersistentConfiguration};
+    use crate::persistent_configuration::{PersistentConfigurationReal, PersistentConfiguration, PersistentConfigError};
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::sub_lib::cryptde::{PublicKey};
     use crate::bootstrapper::RealUser;
@@ -453,6 +459,124 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
+    use crate::stream_messages::RemovedStreamType::Clandestine;
+    use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
+    use crate::sub_lib::wallet::Wallet;
+    use std::sync::{Mutex, Arc};
+    use std::cell::RefCell;
+
+    struct ValueCombinerMock {
+        get_values_params: Arc<Mutex<Vec<HashMap<String, UiSetupResponseValue>>>>,
+        get_values_results: RefCell<Vec<HashMap<String, UiSetupResponseValue>>>,
+    }
+
+    impl ValueCombiner for ValueCombinerMock {
+        fn get_values(&self, setup_params: &HashMap<String, UiSetupResponseValue, RandomState>) -> HashMap<String, UiSetupResponseValue, RandomState> {
+            self.get_values_params.lock().unwrap().push (setup_params.clone());
+            self.get_values_results.borrow_mut().remove (0)
+        }
+    }
+
+    impl ValueCombinerMock {
+        fn new () -> Self {
+            Self {
+                get_values_params: Arc::new (Mutex::new (vec![])),
+                get_values_results: RefCell::new (vec![]),
+            }
+        }
+
+        fn get_values_params (mut self, params: &Arc<Mutex<Vec<HashMap<String, UiSetupResponseValue>>>>) -> Self {
+            self.get_values_params = params.clone();
+            self
+        }
+
+        fn get_values_result (self, result: HashMap<String, UiSetupResponseValue>) -> Self {
+            self.get_values_results.borrow_mut().push(result);
+            self
+        }
+    }
+
+    #[test]
+    fn get_modified_setup_handles_empty_existing_setup() {
+        let incoming_setup= vec![
+            UiSetupResponseValue::new ("incoming-name", "incoming-value", Set)
+        ];
+        let incoming_map = vec_to_map(incoming_setup.clone());
+        let existing_setup= HashMap::new();
+        let configured_setup = vec_to_map (vec![
+            UiSetupResponseValue::new ("configured-name", "configured-value", Configured)
+        ]);
+        let get_values_params_arc = Arc::new (Mutex::new (vec![]));
+        let combiner = ValueCombinerMock::new()
+            .get_values_params (&get_values_params_arc)
+            .get_values_result (configured_setup.clone());
+        let mut subject = SetupReporterReal::new();
+        subject.combiner = Box::new (combiner);
+
+        let result = subject.get_modified_setup(existing_setup, incoming_setup);
+
+        assert_eq! (result, configured_setup);
+        let get_values_params = get_values_params_arc.lock().unwrap ();
+        assert_eq! (*get_values_params, vec![incoming_map])
+    }
+
+    #[test]
+    fn get_modified_setup_handles_empty_incoming_setup() {
+        let incoming_setup= vec![
+        ];
+        let incoming_map = vec_to_map(incoming_setup.clone());
+        let existing_setup = vec_to_map(vec![
+            UiSetupResponseValue::new ("existing-name", "existing-value", Configured)
+        ]);
+        let configured_setup = HashMap::new();
+        let get_values_params_arc = Arc::new (Mutex::new (vec![]));
+        let combiner = ValueCombinerMock::new()
+            .get_values_params (&get_values_params_arc)
+            .get_values_result (configured_setup.clone());
+        let mut subject = SetupReporterReal::new();
+        subject.combiner = Box::new (combiner);
+
+        let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup);
+
+        assert_eq! (result, existing_setup);
+        let get_values_params = get_values_params_arc.lock().unwrap ();
+        assert_eq! (*get_values_params, vec![incoming_map])
+    }
+
+    #[test]
+    fn get_modified_setup_handles_merge_of_old_and_new() {
+        let incoming_setup= vec![
+            UiSetupResponseValue::new("incoming-new", "new-value", Set),
+            UiSetupResponseValue::new("override", "override-value", Set)
+        ];
+        let incoming_map = vec_to_map(incoming_setup.clone());
+        let existing_setup = vec_to_map(vec![
+            UiSetupResponseValue::new ("override", "original-value", Default),
+            UiSetupResponseValue::new ("existing-name", "existing-value", Configured)
+        ]);
+        let configured_setup = vec_to_map(vec![
+            UiSetupResponseValue::new("incoming-new", "new-value", Set),
+            UiSetupResponseValue::new("override", "override-value", Set),
+            UiSetupResponseValue::new("persistent", "persistent-value", Configured),
+        ]);
+        let get_values_params_arc = Arc::new (Mutex::new (vec![]));
+        let combiner = ValueCombinerMock::new()
+            .get_values_params (&get_values_params_arc)
+            .get_values_result (configured_setup.clone());
+        let mut subject = SetupReporterReal::new();
+        subject.combiner = Box::new (combiner);
+
+        let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup);
+
+        assert_eq! (result, vec_to_map(vec![
+            UiSetupResponseValue::new("incoming-new", "new-value", Set),
+            UiSetupResponseValue::new("override", "override-value", Set),
+            UiSetupResponseValue::new("persistent", "persistent-value", Configured),
+            UiSetupResponseValue::new("existing-name", "existing-value", Configured),
+        ]));
+        let get_values_params = get_values_params_arc.lock().unwrap ();
+        assert_eq! (*get_values_params, vec![incoming_map])
+    }
 
     #[test]
     fn parameter_names_include_some_classic_ones() {
@@ -661,5 +785,179 @@ mod tests {
             .sorted_by_key (|(k, _)| k.clone())
             .collect_vec();
         assert_eq! (presentable_result, expected_result);
+    }
+
+    #[test]
+    fn chain_computed_default () {
+        let subject = Chain {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, Some (DEFAULT_CHAIN_NAME.to_string()));
+    }
+
+    #[test]
+    fn clandestine_port_computed_default_present () {
+        let persistent_config = PersistentConfigurationMock::new()
+            .clandestine_port_result(1234);
+        let subject = ClandestinePort{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), Some (&persistent_config), &None);
+
+        assert_eq! (result, Some ("1234".to_string()))
+    }
+
+    #[test]
+    fn clandestine_port_computed_default_absent () {
+        let subject = ClandestinePort{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, None)
+    }
+
+    #[test]
+    fn dns_servers_computed_default () {
+        let subject = DnsServers{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, Some ("1.1.1.1".to_string()))
+    }
+
+    #[test]
+    fn earning_wallet_computed_default () {
+        let mut config = BootstrapperConfig::new();
+        config.earning_wallet = Wallet::new ("0x1234567890123456789012345678901234567890");
+        let subject = EarningWallet{};
+
+        let result = subject.computed_default(&config, None, &None);
+
+        assert_eq! (result, Some ("0x1234567890123456789012345678901234567890".to_string()))
+    }
+
+    #[test]
+    fn gas_price_computed_default_present () {
+        let persistent_config = PersistentConfigurationMock::new()
+            .gas_price_result(57);
+        let subject = GasPrice{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), Some (&persistent_config), &None);
+
+        assert_eq! (result, Some ("57".to_string()))
+    }
+
+    #[test]
+    fn gas_price_computed_default_absent () {
+        let subject = GasPrice{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, None)
+    }
+
+    #[test]
+    fn ip_requirements () {
+        let subject = Ip {};
+        let make_params = |value: &str| vec![("neighborhood-mode".to_string(), UiSetupResponseValue::new("neighborhood-mode", value, Set))].into_iter().collect::<HashMap<String, UiSetupResponseValue>>();
+        let verify_requirement = |mode: &str, prediction: bool| assert_eq! (subject.is_required (&make_params(mode)), prediction);
+
+        verify_requirement ("standard", true);
+        verify_requirement ("zero-hop", false);
+        verify_requirement ("originate-only", false);
+        verify_requirement ("consume-only", false);
+    }
+
+    #[test]
+    fn log_level_computed_default () {
+        let subject = LogLevel{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, Some ("warn".to_string()))
+    }
+
+    #[test]
+    fn neighborhood_mode_computed_default () {
+        let subject = NeighborhoodMode{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, Some ("standard".to_string()))
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_present_present_ok () {
+        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .past_neighbors_params(&past_neighbors_params_arc)
+            .past_neighbors_result(Ok(Some(vec![
+                NodeDescriptor::from_str (main_cryptde(), "MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234").unwrap(),
+                NodeDescriptor::from_str (main_cryptde(), "ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321").unwrap(),
+            ])));
+        let subject = Neighbors{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), Some (&persistent_config), &Some("password".to_string()));
+
+        assert_eq! (result, Some ("MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234,ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321".to_string()));
+        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
+        assert_eq! (*past_neighbors_params, vec!["password".to_string()])
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_present_err () {
+        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .past_neighbors_params(&past_neighbors_params_arc)
+            .past_neighbors_result(Err(PersistentConfigError::PasswordError));
+        let subject = Neighbors{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), Some (&persistent_config), &Some("password".to_string()));
+
+        assert_eq! (result, None);
+        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
+        assert_eq! (*past_neighbors_params, vec!["password".to_string()])
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_absent () {
+        // absence of configured result will cause panic if past_neighbors is called
+        let persistent_config = PersistentConfigurationMock::new();
+        let subject = Neighbors{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), Some (&persistent_config), &None);
+
+        assert_eq! (result, None);
+    }
+
+    #[test]
+    fn neighbors_computed_default_absent () {
+        // absence of configured result will cause panic if past_neighbors is called
+        let persistent_config = PersistentConfigurationMock::new();
+        let subject = Neighbors{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, None);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn real_user_computed_default () {
+        let subject = crate::daemon::setup_reporter::RealUser{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, Some(RealUser::default().populate().to_string()));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn real_user_computed_default () {
+        let subject = crate::daemon::setup_reporter::RealUser{};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq! (result, None);
     }
 }
