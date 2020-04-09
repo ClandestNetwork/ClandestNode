@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use std::collections::{HashMap, HashSet};
-use masq_lib::messages::{UiSetupResponseValue, UiSetupResponseValueStatus};
+use masq_lib::messages::{UiSetupResponseValue, UiSetupResponseValueStatus, UiSetupRequestValue};
 use masq_lib::messages::UiSetupResponseValueStatus::{Default, Set, Blank, Configured, Required};
 use masq_lib::shared_schema::shared_app;
 use crate::node_configurator::{app_head, RealDirsWrapper, DirsWrapper, determine_config_file_path};
@@ -22,7 +22,7 @@ use std::collections::hash_map::RandomState;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;
 
 pub trait SetupReporter {
-    fn get_modified_setup (&self, existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue>;
+    fn get_modified_setup (&self, existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue>;
 }
 
 pub struct SetupReporterReal {
@@ -30,9 +30,8 @@ pub struct SetupReporterReal {
 }
 
 impl SetupReporter for SetupReporterReal {
-    fn get_modified_setup(&self, mut existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
-        let incoming_map = vec_to_map (incoming_setup);
-        let configured_setup = self.combiner.get_values (&incoming_map);
+    fn get_modified_setup(&self, mut existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue> {
+        let configured_setup = self.combiner.get_values (incoming_setup);
         configured_setup.into_iter()
             .for_each(|(k, v)| {
                 existing_setup.insert (k, v);
@@ -72,16 +71,20 @@ impl SetupReporterReal {
 }
 
 trait ValueCombiner {
-    fn get_values (&self, setup_params: &HashMap<String, UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue>;
+    fn get_values (&self, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue>;
 }
 
 struct ValueCombinerReal {}
 
 impl ValueCombiner for ValueCombinerReal {
-    fn get_values(&self, setup_params: &HashMap<String, UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
-        let mut args = setup_params.iter()
-            .filter(|(_, value)| value.status == Set)
-            .flat_map(|(_, value)| vec![format!("--{}", value.name), value.value.clone()])
+    fn get_values(&self, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue> {
+        let to_clear_out = setup_params.iter()
+            .filter (|p| p.value.is_none())
+            .map (|p| p.name.clone())
+            .collect::<HashSet<String>>();
+        let mut args = setup_params.into_iter()
+            .filter (|p| p.value.is_some())
+            .flat_map(|p| vec![format!("--{}", p.name), p.value.expect("Value disappeared!")])
             .collect::<Vec<String>>();
         args.insert(0, "program".to_string());
         let app = shared_app(app_head());
@@ -129,11 +132,11 @@ impl ValueCombiner for ValueCombinerReal {
             Ok(conn) => {
                 let persistent_config = PersistentConfigurationReal::from(conn);
                 unprivileged_parse_args(&combined_multi_config, &mut bootstrap_config, &mut streams, Some(&persistent_config));
-                Self::combine_values(value_retrievers, &setup_multi_config, &configured_multi_config, &bootstrap_config, Some(&persistent_config))
+                Self::combine_values(value_retrievers, &setup_multi_config, &configured_multi_config, &bootstrap_config, Some(&persistent_config), to_clear_out)
             },
             Err(_) => {
                 unprivileged_parse_args(&combined_multi_config, &mut bootstrap_config, &mut streams, None);
-                Self::combine_values(value_retrievers, &setup_multi_config, &configured_multi_config, &bootstrap_config, None)
+                Self::combine_values(value_retrievers, &setup_multi_config, &configured_multi_config, &bootstrap_config, None, to_clear_out)
             }
         }
     }
@@ -147,6 +150,7 @@ impl ValueCombinerReal {
         configured_multi_config: &MultiConfig,
         bootstrap_config: &BootstrapperConfig,
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
+        to_clear_out: HashSet<String>,
     ) -> HashMap<String, UiSetupResponseValue> {
         let mut result = SetupReporterReal::get_default_params();
         let db_password_opt = value_m!(setup_multi_config, "db-password", String);
@@ -179,9 +183,9 @@ impl ValueCombinerReal {
                 }
             }
         });
-        let mut unencountered: HashMap<String, UiSetupResponseValue> = HashMap::new();
+        let mut unvalued: HashMap<String, UiSetupResponseValue> = HashMap::new();
         value_retrievers.into_iter()
-            .filter (|retriever| !result.contains_key (retriever.value_name()))
+            .filter (|retriever| !result.contains_key (retriever.value_name()) || to_clear_out.contains (&retriever.value_name().to_string()))
             .map (|retriever| {
                 let is_required = retriever.is_required(&result);
                 (retriever, is_required)
@@ -193,9 +197,9 @@ impl ValueCombinerReal {
                 else {
                     Blank
                 };
-                unencountered.insert (retriever.value_name().to_string(), UiSetupResponseValue::new (retriever.value_name(), "", status));
+                unvalued.insert (retriever.value_name().to_string(), UiSetupResponseValue::new (retriever.value_name(), "", status));
             });
-        result.extend (unencountered);
+        result.extend (unvalued);
         let permitted_keys = Self::get_parameter_names();
         result.into_iter().filter (|(key, _)| permitted_keys.contains (key)).collect()
     }
@@ -437,10 +441,10 @@ fn retrievers () -> Vec<Box<dyn ValueRetriever>> {
     ]
 }
 
-fn vec_to_map (vector: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
+fn vec_to_map (vector: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupRequestValue> {
     vector.into_iter ()
         .map (|uisrv| (uisrv.name.clone(), uisrv))
-        .collect::<HashMap<String, UiSetupResponseValue>>()
+        .collect::<HashMap<String, UiSetupRequestValue>>()
 }
 
 #[cfg(test)]
@@ -466,12 +470,12 @@ mod tests {
     use std::cell::RefCell;
 
     struct ValueCombinerMock {
-        get_values_params: Arc<Mutex<Vec<HashMap<String, UiSetupResponseValue>>>>,
+        get_values_params: Arc<Mutex<Vec<Vec<UiSetupRequestValue>>>>,
         get_values_results: RefCell<Vec<HashMap<String, UiSetupResponseValue>>>,
     }
 
     impl ValueCombiner for ValueCombinerMock {
-        fn get_values(&self, setup_params: &HashMap<String, UiSetupResponseValue, RandomState>) -> HashMap<String, UiSetupResponseValue, RandomState> {
+        fn get_values(&self, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue, RandomState> {
             self.get_values_params.lock().unwrap().push (setup_params.clone());
             self.get_values_results.borrow_mut().remove (0)
         }
@@ -485,7 +489,7 @@ mod tests {
             }
         }
 
-        fn get_values_params (mut self, params: &Arc<Mutex<Vec<HashMap<String, UiSetupResponseValue>>>>) -> Self {
+        fn get_values_params (mut self, params: &Arc<Mutex<Vec<Vec<UiSetupRequestValue>>>>) -> Self {
             self.get_values_params = params.clone();
             self
         }
@@ -499,11 +503,10 @@ mod tests {
     #[test]
     fn get_modified_setup_handles_empty_existing_setup() {
         let incoming_setup= vec![
-            UiSetupResponseValue::new ("incoming-name", "incoming-value", Set)
+            UiSetupRequestValue::new ("incoming-name", "incoming-value")
         ];
-        let incoming_map = vec_to_map(incoming_setup.clone());
         let existing_setup= HashMap::new();
-        let configured_setup = vec_to_map (vec![
+        let configured_setup = vec_to_map_out (vec![
             UiSetupResponseValue::new ("configured-name", "configured-value", Configured)
         ]);
         let get_values_params_arc = Arc::new (Mutex::new (vec![]));
@@ -513,19 +516,17 @@ mod tests {
         let mut subject = SetupReporterReal::new();
         subject.combiner = Box::new (combiner);
 
-        let result = subject.get_modified_setup(existing_setup, incoming_setup);
+        let result = subject.get_modified_setup(existing_setup, incoming_setup.clone());
 
         assert_eq! (result, configured_setup);
         let get_values_params = get_values_params_arc.lock().unwrap ();
-        assert_eq! (*get_values_params, vec![incoming_map])
+        assert_eq! (*get_values_params, vec![incoming_setup])
     }
 
     #[test]
     fn get_modified_setup_handles_empty_incoming_setup() {
-        let incoming_setup= vec![
-        ];
-        let incoming_map = vec_to_map(incoming_setup.clone());
-        let existing_setup = vec_to_map(vec![
+        let incoming_setup= vec![];
+        let existing_setup = vec_to_map_out(vec![
             UiSetupResponseValue::new ("existing-name", "existing-value", Configured)
         ]);
         let configured_setup = HashMap::new();
@@ -536,28 +537,30 @@ mod tests {
         let mut subject = SetupReporterReal::new();
         subject.combiner = Box::new (combiner);
 
-        let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup);
+        let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup.clone());
 
         assert_eq! (result, existing_setup);
         let get_values_params = get_values_params_arc.lock().unwrap ();
-        assert_eq! (*get_values_params, vec![incoming_map])
+        assert_eq! (*get_values_params, vec![incoming_setup])
     }
 
     #[test]
     fn get_modified_setup_handles_merge_of_old_and_new() {
         let incoming_setup= vec![
-            UiSetupResponseValue::new("incoming-new", "new-value", Set),
-            UiSetupResponseValue::new("override", "override-value", Set)
+            UiSetupRequestValue::new("incoming-new", "new-value"),
+            UiSetupRequestValue::new("override", "override-value"),
+            UiSetupRequestValue::clear("name-to-clear"),
         ];
-        let incoming_map = vec_to_map(incoming_setup.clone());
-        let existing_setup = vec_to_map(vec![
+        let existing_setup = vec_to_map_out(vec![
             UiSetupResponseValue::new ("override", "original-value", Default),
-            UiSetupResponseValue::new ("existing-name", "existing-value", Configured)
+            UiSetupResponseValue::new ("existing-name", "existing-value", Configured),
+            UiSetupResponseValue::new ("name-to-clear", "non-blank-value", Default),
         ]);
-        let configured_setup = vec_to_map(vec![
+        let configured_setup = vec_to_map_out(vec![
             UiSetupResponseValue::new("incoming-new", "new-value", Set),
             UiSetupResponseValue::new("override", "override-value", Set),
             UiSetupResponseValue::new("persistent", "persistent-value", Configured),
+            UiSetupResponseValue::new("name-to-clear", "", Blank),
         ]);
         let get_values_params_arc = Arc::new (Mutex::new (vec![]));
         let combiner = ValueCombinerMock::new()
@@ -566,16 +569,17 @@ mod tests {
         let mut subject = SetupReporterReal::new();
         subject.combiner = Box::new (combiner);
 
-        let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup);
+        let result = subject.get_modified_setup(existing_setup, incoming_setup.clone());
 
-        assert_eq! (result, vec_to_map(vec![
+        assert_eq! (result, vec_to_map_out(vec![
             UiSetupResponseValue::new("incoming-new", "new-value", Set),
             UiSetupResponseValue::new("override", "override-value", Set),
             UiSetupResponseValue::new("persistent", "persistent-value", Configured),
             UiSetupResponseValue::new("existing-name", "existing-value", Configured),
+            UiSetupResponseValue::new("name-to-clear", "", Blank),
         ]));
         let get_values_params = get_values_params_arc.lock().unwrap ();
-        assert_eq! (*get_values_params, vec![incoming_map])
+        assert_eq! (*get_values_params, vec![incoming_setup])
     }
 
     #[test]
@@ -645,15 +649,15 @@ mod tests {
         config.set_past_neighbors(Some(vec![neighbor1, neighbor2]), "password");
 
         let params = vec![
-            ("data-directory", home_dir.to_str().unwrap(), Set),
-            ("db-password", "password", Set),
-            ("ip", "4.3.2.1", Set),
+            ("data-directory", home_dir.to_str().unwrap()),
+            ("db-password", "password"),
+            ("ip", "4.3.2.1"),
         ].into_iter()
-            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .map (|(name, value)| UiSetupRequestValue::new(name, value))
+            .collect_vec();
         let subject = ValueCombinerReal{};
 
-        let result = subject.get_values (&params);
+        let result = subject.get_values (params);
 
         let expected_result = vec![
             ("blockchain-service-url", "", Blank),
@@ -702,11 +706,11 @@ mod tests {
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga"),
         ].into_iter()
-            .map (|(name, value)| (name.to_string(), UiSetupResponseValue::new(name, value, Set)))
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .map (|(name, value)| UiSetupRequestValue::new(name, value))
+            .collect_vec();
         let subject = ValueCombinerReal{};
 
-        let result = subject.get_values (&params);
+        let result = subject.get_values (params);
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Set),
@@ -756,10 +760,10 @@ mod tests {
             ("SUB_REAL_USER", "9999:9999:booga"),
         ].into_iter()
             .for_each (|(name, value)| std::env::set_var (name, value));
-        let params = HashMap::new();
+        let params = vec![];
         let subject = ValueCombinerReal{};
 
-        let result = subject.get_values (&params);
+        let result = subject.get_values (params);
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Configured),
@@ -778,6 +782,70 @@ mod tests {
             ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Configured),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga", Configured),
+        ].into_iter()
+            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
+            .collect_vec();
+        let presentable_result = result.into_iter()
+            .sorted_by_key (|(k, _)| k.clone())
+            .collect_vec();
+        assert_eq! (presentable_result, expected_result);
+    }
+
+    #[test]
+    fn get_configured_values_database_nonexistent_all_but_requireds_cleared() {
+        let _guard = EnvironmentGuard::new();
+        let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_nonexistent_all_but_requireds_cleared");
+        vec![
+            ("SUB_BLOCKCHAIN_SERVICE_URL", "https://example.com"),
+            ("SUB_CHAIN", "ropsten"),
+            ("SUB_CLANDESTINE_PORT", "1234"),
+            ("SUB_CONSUMING_PRIVATE_KEY", "0011223344556677001122334455667700112233445566770011223344556677"),
+            ("SUB_DATA_DIRECTORY", home_dir.to_str().unwrap()),
+            ("SUB_DB_PASSWORD", "password"),
+            ("SUB_DNS_SERVERS", "8.8.8.8"),
+            ("SUB_EARNING_WALLET", "0x0123456789012345678901234567890123456789"),
+            ("SUB_GAS_PRICE", "50"),
+            ("SUB_IP", "4.3.2.1"),
+            ("SUB_LOG_LEVEL", "error"),
+            ("SUB_NEIGHBORHOOD_MODE", "originate-only"),
+            ("SUB_NEIGHBORS", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            #[cfg(not(target_os = "windows"))]
+            ("SUB_REAL_USER", "9999:9999:booga"),
+        ].into_iter()
+            .for_each (|(name, value)| std::env::set_var (name, value));
+        let params = vec![
+            "blockchain-service-url",
+            "clandestine-port",
+            "config-file",
+            "consuming-private-key",
+            "db-password",
+            "neighbors",
+            #[cfg(not(target_os = "windows"))]
+            "real-user",
+        ].into_iter()
+            .map(|name| UiSetupRequestValue::clear(name))
+            .collect_vec();
+        let subject = ValueCombinerReal{};
+
+        let result = subject.get_values (params);
+
+        let expected_result = vec![
+            ("blockchain-service-url", "", Blank),
+            ("chain", "ropsten", Configured),
+            ("clandestine-port", "", Blank),
+            ("config-file", "", Blank),
+            ("consuming-private-key", "", Blank),
+            ("data-directory", home_dir.to_str().unwrap(), Configured),
+            ("db-password", "", Blank),
+            ("dns-servers", "8.8.8.8", Configured),
+            ("earning-wallet", "0x0123456789012345678901234567890123456789", Configured),
+            ("gas-price", "50", Configured),
+            ("ip", "4.3.2.1", Configured),
+            ("log-level", "error", Configured),
+            ("neighborhood-mode", "originate-only", Configured),
+            ("neighbors", "", Blank),
+            #[cfg(not(target_os = "windows"))]
+            ("real-user", "", Blank),
         ].into_iter()
             .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
             .collect_vec();
@@ -960,4 +1028,11 @@ mod tests {
 
         assert_eq! (result, None);
     }
+
+    fn vec_to_map_out (vector: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
+        vector.into_iter ()
+            .map (|uisrv| (uisrv.name.clone(), uisrv))
+            .collect::<HashMap<String, UiSetupResponseValue>>()
+    }
+
 }
