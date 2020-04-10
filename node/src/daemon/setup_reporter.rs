@@ -33,13 +33,38 @@ impl SetupReporter for SetupReporterReal {
             .filter (|p| p.value.is_none())
             .map (|p| p.name.clone())
             .collect::<HashSet<String>>();
-        let mut args = incoming_setup.into_iter()
-            .filter (|p| p.value.is_some())
-            .flat_map(|p| vec![format!("--{}", p.name), p.value.expect("Value disappeared!")])
-            .collect::<Vec<String>>();
-        args.insert(0, "program".to_string());
+        let incoming_setup_translated = incoming_setup.iter()
+            .flat_map(|uisrv| match &uisrv.value {
+                None => None,
+                Some(value) => Some ((uisrv.name.to_string(), UiSetupResponseValue::new(&uisrv.name, value, Set))),
+            })
+            .collect::<HashMap<String, UiSetupResponseValue>>();
+        let mut existing_and_incoming = existing_setup.iter()
+            .flat_map(|(k, v)| match v.status {
+                Blank => None,
+                Required => None,
+                _ => Some ((k.clone(), v.clone()))
+            })
+            .collect::<HashMap<String, UiSetupResponseValue>>();
+        existing_and_incoming.extend (incoming_setup_translated.clone());
+        let required_and_available_value_names = value_retrievers().into_iter()
+            .filter (|vr| vr.is_required (&existing_and_incoming))
+            .filter (|vr| existing_and_incoming.contains_key(vr.value_name()))
+            .map (|vr| vr.value_name())
+            .collect_vec();
+        let mut incoming_setup_plus_available_required = required_and_available_value_names.into_iter()
+            .flat_map (|name| match existing_and_incoming.get (name) {
+                None => None,
+                Some (uisrv) => Some ((name.to_string(), uisrv.clone()))
+            })
+            .collect::<HashMap<String, UiSetupResponseValue>>();
+        incoming_setup_plus_available_required.extend (incoming_setup_translated);
+        let mut combined_args = incoming_setup_plus_available_required.into_iter()
+            .flat_map (|(_, uisrv)| vec![format!("--{}", uisrv.name), uisrv.value.to_string()])
+            .collect_vec();
+        combined_args.insert(0, "program".to_string());
         let app = shared_app(app_head());
-        let (config_file_path, user_specified) = determine_config_file_path(&app, &args);
+        let (config_file_path, user_specified) = determine_config_file_path(&app, &combined_args);
 
         let configured_multi_config = {
             MultiConfig::new(
@@ -55,7 +80,7 @@ impl SetupReporter for SetupReporterReal {
             MultiConfig::new(
                 &app,
                 vec![
-                    Box::new(CommandLineVcl::new(args.clone())),
+                    Box::new(CommandLineVcl::new(combined_args.clone())),
                 ],
             )
         };
@@ -64,7 +89,7 @@ impl SetupReporter for SetupReporterReal {
             MultiConfig::new(
                 &app,
                 vec![
-                    Box::new(CommandLineVcl::new(args)),
+                    Box::new(CommandLineVcl::new(combined_args)),
                     Box::new(EnvironmentVcl::new(&app)),
                     Box::new(ConfigFileVcl::new(&config_file_path, user_specified)),
                 ],
@@ -81,7 +106,7 @@ impl SetupReporter for SetupReporterReal {
         let initializer = DbInitializerReal::new();
         let path = &bootstrap_config.data_directory;
         let chain_id = bootstrap_config.blockchain_bridge_config.chain_id;
-        let value_retrievers = retrievers();
+        let value_retrievers = value_retrievers();
         match initializer.initialize(path, chain_id, false) {
             Ok(conn) => {
                 let persistent_config = PersistentConfigurationReal::from(conn);
@@ -137,31 +162,31 @@ impl SetupReporterReal {
             .collect::<HashMap<String, UiSetupResponseValue>>();
         let db_password_opt = value_m!(setup_multi_config, "db-password", String);
         value_retrievers.iter().for_each(|retriever| {
-            if let Some(value) = retriever.computed_default(bootstrap_config, persistent_config_opt, &db_password_opt) {
-                result.insert (retriever.value_name().to_string(), UiSetupResponseValue::new (retriever.value_name(), &value, Default));
-            }
-            if let Some(value) = value_m! (configured_multi_config, retriever.value_name(), String) {
-                if let Some(existing_value) = result.get (retriever.value_name()) {
-                    if (existing_value.status == Default) && (value != existing_value.value) {
+            let already_set = match result.get (retriever.value_name()) {
+                Some (uisrv) => uisrv.status == Set,
+                None => false,
+            };
+            if !already_set {
+                if let Some(value) = retriever.computed_default(bootstrap_config, persistent_config_opt, &db_password_opt) {
+                    result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Default));
+                }
+                if let Some(value) = value_m!(configured_multi_config, retriever.value_name(), String) {
+                    if let Some(existing_value) = result.get(retriever.value_name()) {
+                        if (existing_value.status == Default) && (value != existing_value.value) {
+                            result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Configured));
+                        } else {}
+                    } else {
                         result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Configured));
                     }
-                    else {
-                    }
                 }
-                else {
-                    result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Configured));
-                }
-            }
-            if let Some(value) = value_m! (setup_multi_config, retriever.value_name(), String) {
-                if let Some(existing_value) = result.get (retriever.value_name()) {
-                    if (existing_value.status != Set) && (value != existing_value.value) {
+                if let Some(value) = value_m!(setup_multi_config, retriever.value_name(), String) {
+                    if let Some(existing_value) = result.get(retriever.value_name()) {
+                        if (existing_value.status != Set) && (value != existing_value.value) {
+                            result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Set));
+                        } else {}
+                    } else {
                         result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Set));
                     }
-                    else {
-                    }
-                }
-                else {
-                    result.insert(retriever.value_name().to_string(), UiSetupResponseValue::new(retriever.value_name(), &value, Set));
                 }
             }
         });
@@ -230,10 +255,21 @@ trait ValueRetriever {
     }
 }
 
+fn is_required_for_blockchain(params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    match params.get ("neighborhood-mode") {
+        Some (nhm) if &nhm.value == "zero-hop" => false,
+        _ => true,
+    }
+}
+
 struct BlockchainServiceUrl {}
 impl ValueRetriever for BlockchainServiceUrl {
     fn value_name(&self) -> &'static str {
         "blockchain-service-url"
+    }
+
+    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        is_required_for_blockchain(params)
     }
 }
 
@@ -246,6 +282,10 @@ impl ValueRetriever for Chain {
     fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, _persistent_config_opt: Option<&dyn PersistentConfiguration>, _db_password_opt: &Option<String>) -> Option<String> {
         Some (DEFAULT_CHAIN_NAME.to_string())
     }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        true
+    }
 }
 
 struct ClandestinePort {}
@@ -256,6 +296,10 @@ impl ValueRetriever for ClandestinePort {
 
     fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
         persistent_config_opt.map (|pc| pc.clandestine_port().to_string())
+    }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        true
     }
 }
 
@@ -278,12 +322,20 @@ impl ValueRetriever for DataDirectory {
     fn value_name(&self) -> &'static str {
         "data-directory"
     }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        true
+    }
 }
 
 struct DbPassword {}
 impl ValueRetriever for DbPassword {
     fn value_name(&self) -> &'static str {
         "db-password"
+    }
+
+    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        is_required_for_blockchain(params)
     }
 }
 
@@ -311,6 +363,10 @@ impl ValueRetriever for EarningWallet {
     fn computed_default(&self, bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
         Some(bootstrapper_config.earning_wallet.to_string())
     }
+
+    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        is_required_for_blockchain(params)
+    }
 }
 
 struct GasPrice {}
@@ -321,6 +377,10 @@ impl ValueRetriever for GasPrice {
 
     fn computed_default(&self, bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
         persistent_config_opt.map(|pc| pc.gas_price().to_string())
+    }
+
+    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        is_required_for_blockchain(params)
     }
 }
 
@@ -348,6 +408,10 @@ impl ValueRetriever for LogLevel {
     fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
         Some("warn".to_string())
     }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        true
+    }
 }
 
 struct NeighborhoodMode {}
@@ -358,6 +422,10 @@ impl ValueRetriever for NeighborhoodMode {
 
     fn computed_default(&self, _bootstrapper_config: &BootstrapperConfig, persistent_config_opt: Option<&dyn PersistentConfiguration>, db_password_opt: &Option<String>) -> Option<String> {
         Some("standard".to_string())
+    }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        true
     }
 }
 
@@ -383,6 +451,14 @@ impl ValueRetriever for Neighbors {
             _ => None
         }
     }
+
+    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+        match _params.get ("neighborhood-mode") {
+            Some (nhm) if &nhm.value == "standard" => false,
+            Some (nhm) if &nhm.value == "zero-hop" => false,
+            _ => true,
+        }
+    }
 }
 
 struct RealUser {}
@@ -403,7 +479,7 @@ impl ValueRetriever for RealUser {
     }
 }
 
-fn retrievers () -> Vec<Box<dyn ValueRetriever>> {
+fn value_retrievers() -> Vec<Box<dyn ValueRetriever>> {
     vec![
         Box::new (BlockchainServiceUrl {}),
         Box::new (Chain{}),
@@ -450,119 +526,6 @@ mod tests {
     use crate::sub_lib::wallet::Wallet;
     use std::sync::{Mutex, Arc};
     use std::cell::RefCell;
-    //
-    // struct ValueCombinerMock {
-    //     get_values_params: Arc<Mutex<Vec<(HashMap<String, UiSetupResponseValue>, Vec<UiSetupRequestValue>)>>>,
-    //     get_values_results: RefCell<Vec<HashMap<String, UiSetupResponseValue>>>,
-    // }
-    //
-    // impl ValueCombiner for ValueCombinerMock {
-    //     fn get_values(&self, existing_setup: HashMap<String, UiSetupResponseValue>, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue, RandomState> {
-    //         self.get_values_params.lock().unwrap().push ((existing_setup, setup_params));
-    //         self.get_values_results.borrow_mut().remove (0)
-    //     }
-    // }
-    //
-    // impl ValueCombinerMock {
-    //     fn new () -> Self {
-    //         Self {
-    //             get_values_params: Arc::new (Mutex::new (vec![])),
-    //             get_values_results: RefCell::new (vec![]),
-    //         }
-    //     }
-    //
-    //     fn get_values_params (mut self, params: &Arc<Mutex<Vec<(HashMap<String, UiSetupResponseValue>, Vec<UiSetupRequestValue>)>>>) -> Self {
-    //         self.get_values_params = params.clone();
-    //         self
-    //     }
-    //
-    //     fn get_values_result (self, result: HashMap<String, UiSetupResponseValue>) -> Self {
-    //         self.get_values_results.borrow_mut().push(result);
-    //         self
-    //     }
-    // }
-    //
-    // #[test]
-    // fn get_modified_setup_handles_empty_existing_setup() {
-    //     let incoming_setup= vec![
-    //         UiSetupRequestValue::new ("incoming-name", "incoming-value")
-    //     ];
-    //     let existing_setup= HashMap::new();
-    //     let configured_setup = vec_to_map_out (vec![
-    //         UiSetupResponseValue::new ("configured-name", "configured-value", Configured)
-    //     ]);
-    //     let get_values_params_arc = Arc::new (Mutex::new (vec![]));
-    //     let combiner = ValueCombinerMock::new()
-    //         .get_values_params (&get_values_params_arc)
-    //         .get_values_result (configured_setup.clone());
-    //     let mut subject = SetupReporterReal::new();
-    //     subject.combiner = Box::new (combiner);
-    //
-    //     let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup.clone());
-    //
-    //     assert_eq! (result, configured_setup);
-    //     let get_values_params = get_values_params_arc.lock().unwrap ();
-    //     assert_eq! (*get_values_params, vec![(existing_setup, incoming_setup)])
-    // }
-    //
-    // #[test]
-    // fn get_modified_setup_handles_empty_incoming_setup() {
-    //     let incoming_setup= vec![];
-    //     let existing_setup = vec_to_map_out(vec![
-    //         UiSetupResponseValue::new ("existing-name", "existing-value", Configured)
-    //     ]);
-    //     let configured_setup = existing_setup.clone();
-    //     let get_values_params_arc = Arc::new (Mutex::new (vec![]));
-    //     let combiner = ValueCombinerMock::new()
-    //         .get_values_params (&get_values_params_arc)
-    //         .get_values_result (configured_setup.clone());
-    //     let mut subject = SetupReporterReal::new();
-    //     subject.combiner = Box::new (combiner);
-    //
-    //     let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup.clone());
-    //
-    //     assert_eq! (result, existing_setup);
-    //     let get_values_params = get_values_params_arc.lock().unwrap ();
-    //     assert_eq! (*get_values_params, vec![(existing_setup, incoming_setup)])
-    // }
-    //
-    // #[test]
-    // fn get_modified_setup_handles_merge_of_old_and_new() {
-    //     let incoming_setup= vec![
-    //         UiSetupRequestValue::new("incoming-new", "new-value"),
-    //         UiSetupRequestValue::new("override", "override-value"),
-    //         UiSetupRequestValue::clear("name-to-clear"),
-    //     ];
-    //     let existing_setup = vec_to_map_out(vec![
-    //         UiSetupResponseValue::new ("override", "original-value", Default),
-    //         UiSetupResponseValue::new ("existing-name", "existing-value", Configured),
-    //         UiSetupResponseValue::new ("name-to-clear", "non-blank-value", Default),
-    //     ]);
-    //     let configured_setup = vec_to_map_out(vec![
-    //         UiSetupResponseValue::new("incoming-new", "new-value", Set),
-    //         UiSetupResponseValue::new("override", "override-value", Set),
-    //         UiSetupResponseValue::new("persistent", "persistent-value", Configured),
-    //         UiSetupResponseValue::new("name-to-clear", "", Blank),
-    //     ]);
-    //     let get_values_params_arc = Arc::new (Mutex::new (vec![]));
-    //     let combiner = ValueCombinerMock::new()
-    //         .get_values_params (&get_values_params_arc)
-    //         .get_values_result (configured_setup.clone());
-    //     let mut subject = SetupReporterReal::new();
-    //     subject.combiner = Box::new (combiner);
-    //
-    //     let result = subject.get_modified_setup(existing_setup.clone(), incoming_setup.clone());
-    //
-    //     assert_eq! (result, vec_to_map_out(vec![
-    //         UiSetupResponseValue::new("incoming-new", "new-value", Set),
-    //         UiSetupResponseValue::new("override", "override-value", Set),
-    //         UiSetupResponseValue::new("persistent", "persistent-value", Configured),
-    //         UiSetupResponseValue::new("existing-name", "existing-value", Configured),
-    //         UiSetupResponseValue::new("name-to-clear", "", Blank),
-    //     ]));
-    //     let get_values_params = get_values_params_arc.lock().unwrap ();
-    //     assert_eq! (*get_values_params, vec![(existing_setup, incoming_setup)])
-    // }
 
     #[test]
     fn parameter_names_include_some_classic_ones() {
@@ -606,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn get_configured_values_database_populated_only_requireds_set() {
+    fn get_modified_setup_database_populated_only_requireds_set() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_populated_only_requireds_set");
         let db_initializer = DbInitializerReal::new ();
@@ -630,7 +593,7 @@ mod tests {
         };
         config.set_past_neighbors(Some(vec![neighbor1, neighbor2]), "password");
 
-        let params = vec![
+        let incoming_setup = vec![
             ("data-directory", home_dir.to_str().unwrap()),
             ("db-password", "password"),
             ("ip", "4.3.2.1"),
@@ -639,10 +602,10 @@ mod tests {
             .collect_vec();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup (HashMap::new(), params);
+        let result = subject.get_modified_setup (HashMap::new(), incoming_setup);
 
         let expected_result = vec![
-            ("blockchain-service-url", "", Blank),
+            ("blockchain-service-url", "", Required),
             ("chain", "mainnet", Default),
             ("clandestine-port", "1234", Default),
             ("config-file", "config.toml", Default),
@@ -668,10 +631,10 @@ mod tests {
     }
 
     #[test]
-    fn get_configured_values_database_nonexistent_everything_set() {
+    fn get_modified_setup_database_nonexistent_everything_preexistent() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_nonexistent_everything_set");
-        let params = vec![
+        let existing_setup = vec![
             ("blockchain-service-url", "https://example.com"),
             ("chain", "ropsten"),
             ("clandestine-port", "1234"),
@@ -688,11 +651,11 @@ mod tests {
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga"),
         ].into_iter()
-            .map (|(name, value)| UiSetupRequestValue::new(name, value))
-            .collect_vec();
+            .map (|(name, value)| (name.to_string(), UiSetupResponseValue::new(name, value, Set)))
+            .collect::<HashMap<String, UiSetupResponseValue>>();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup (HashMap::new(), params);
+        let result = subject.get_modified_setup (existing_setup, vec![]);
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Set),
@@ -721,7 +684,60 @@ mod tests {
     }
 
     #[test]
-    fn get_configured_values_database_nonexistent_nothing_set_everything_in_environment() {
+    fn get_modified_setup_database_nonexistent_everything_set() {
+        let _guard = EnvironmentGuard::new();
+        let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_nonexistent_everything_set");
+        let incoming_setup = vec![
+            ("blockchain-service-url", "https://example.com"),
+            ("chain", "ropsten"),
+            ("clandestine-port", "1234"),
+            ("consuming-private-key", "0011223344556677001122334455667700112233445566770011223344556677"),
+            ("data-directory", home_dir.to_str().unwrap()),
+            ("db-password", "password"),
+            ("dns-servers", "8.8.8.8"),
+            ("earning-wallet", "0x0123456789012345678901234567890123456789"),
+            ("gas-price", "50"),
+            ("ip", "4.3.2.1"),
+            ("log-level", "error"),
+            ("neighborhood-mode", "originate-only"),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            #[cfg(not(target_os = "windows"))]
+            ("real-user", "9999:9999:booga"),
+        ].into_iter()
+            .map (|(name, value)| UiSetupRequestValue::new(name, value))
+            .collect_vec();
+        let subject = SetupReporterReal::new();
+
+        let result = subject.get_modified_setup (HashMap::new(), incoming_setup);
+
+        let expected_result = vec![
+            ("blockchain-service-url", "https://example.com", Set),
+            ("chain", "ropsten", Set),
+            ("clandestine-port", "1234", Set),
+            ("config-file", "config.toml", Default),
+            ("consuming-private-key", "0011223344556677001122334455667700112233445566770011223344556677", Set),
+            ("data-directory", home_dir.to_str().unwrap(), Set),
+            ("db-password", "password", Set),
+            ("dns-servers", "8.8.8.8", Set),
+            ("earning-wallet", "0x0123456789012345678901234567890123456789", Set),
+            ("gas-price", "50", Set),
+            ("ip", "4.3.2.1", Set),
+            ("log-level", "error", Set),
+            ("neighborhood-mode", "originate-only", Set),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Set),
+            #[cfg(not(target_os = "windows"))]
+            ("real-user", "9999:9999:booga", Set),
+        ].into_iter()
+            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
+            .collect_vec();
+        let presentable_result = result.into_iter()
+            .sorted_by_key (|(k, _)| k.clone())
+            .collect_vec();
+        assert_eq! (presentable_result, expected_result);
+    }
+
+    #[test]
+    fn get_modified_setup_database_nonexistent_nothing_set_everything_in_environment() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_nonexistent_nothing_set_everything_in_environment");
         vec![
@@ -774,7 +790,7 @@ mod tests {
     }
 
     #[test]
-    fn get_configured_values_database_nonexistent_all_but_requireds_cleared() {
+    fn get_modified_setup_database_nonexistent_all_but_requireds_cleared() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists("setup_reporter", "get_configured_values_database_nonexistent_all_but_requireds_cleared");
         vec![
@@ -812,20 +828,20 @@ mod tests {
         let result = subject.get_modified_setup (HashMap::new(), params);
 
         let expected_result = vec![
-            ("blockchain-service-url", "", Blank),
+            ("blockchain-service-url", "", Required),
             ("chain", "ropsten", Configured),
-            ("clandestine-port", "", Blank),
+            ("clandestine-port", "", Required),
             ("config-file", "", Blank),
             ("consuming-private-key", "", Blank),
             ("data-directory", home_dir.to_str().unwrap(), Configured),
-            ("db-password", "", Blank),
+            ("db-password", "", Required),
             ("dns-servers", "8.8.8.8", Configured),
             ("earning-wallet", "0x0123456789012345678901234567890123456789", Configured),
             ("gas-price", "50", Configured),
             ("ip", "4.3.2.1", Configured),
             ("log-level", "error", Configured),
             ("neighborhood-mode", "originate-only", Configured),
-            ("neighbors", "", Blank),
+            ("neighbors", "", Required),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "", Blank),
         ].into_iter()
@@ -906,16 +922,74 @@ mod tests {
         assert_eq! (result, None)
     }
 
+    fn verify_requirements(subject: &dyn ValueRetriever, param_name: &str, value_predictions: Vec<(&str, bool)>) {
+        value_predictions.into_iter()
+            .for_each (|(param_value, prediction)| {
+                let params = vec![
+                    (param_name.to_string(), UiSetupResponseValue::new (param_name, param_value, Set))
+                ].into_iter()
+                    .collect::<HashMap<String, UiSetupResponseValue>>();
+
+                let result = subject.is_required (&params);
+
+                assert_eq! (result, prediction, "{:?}", params);
+            })
+    }
+
+    fn verify_needed_for_blockchain (subject: &dyn ValueRetriever) {
+        verify_requirements (subject, "neighborhood-mode", vec![
+            ("standard", true),
+            ("zero-hop", false),
+            ("originate-only", true),
+            ("consume-only", true),
+        ]);
+    }
+
     #[test]
     fn ip_requirements () {
-        let subject = Ip {};
-        let make_params = |value: &str| vec![("neighborhood-mode".to_string(), UiSetupResponseValue::new("neighborhood-mode", value, Set))].into_iter().collect::<HashMap<String, UiSetupResponseValue>>();
-        let verify_requirement = |mode: &str, prediction: bool| assert_eq! (subject.is_required (&make_params(mode)), prediction);
+        verify_requirements (&Ip{}, "neighborhood-mode", vec![
+            ("standard", true),
+            ("zero-hop", false),
+            ("originate-only", false),
+            ("consume-only", false),
+        ]);
+    }
 
-        verify_requirement ("standard", true);
-        verify_requirement ("zero-hop", false);
-        verify_requirement ("originate-only", false);
-        verify_requirement ("consume-only", false);
+    #[test]
+    fn neighbors_requirements () {
+        verify_requirements (&Neighbors{}, "neighborhood-mode", vec![
+            ("standard", false),
+            ("zero-hop", false),
+            ("originate-only", true),
+            ("consume-only", true),
+        ]);
+    }
+
+    fn blockchain_requirements() {
+        verify_needed_for_blockchain(&BlockchainServiceUrl{});
+        verify_needed_for_blockchain(&DbPassword{});
+        verify_needed_for_blockchain(&EarningWallet{});
+        verify_needed_for_blockchain(&GasPrice{});
+    }
+
+    #[test]
+    fn dumb_requirements () {
+        let params = HashMap::new();
+        assert_eq! (BlockchainServiceUrl {}.is_required(&params), true);
+        assert_eq! (Chain{}.is_required(&params), true);
+        assert_eq! (ClandestinePort{}.is_required(&params), true);
+        assert_eq! (ConfigFile{}.is_required(&params), false);
+        assert_eq! (ConsumingPrivateKey{}.is_required(&params), false);
+        assert_eq! (DataDirectory{}.is_required(&params), true);
+        assert_eq! (DbPassword{}.is_required(&params), true);
+        assert_eq! (DnsServers{}.is_required(&params), true);
+        assert_eq! (EarningWallet{}.is_required(&params), true);
+        assert_eq! (GasPrice{}.is_required(&params), true);
+        assert_eq! (Ip{}.is_required(&params), true);
+        assert_eq! (LogLevel{}.is_required(&params), true);
+        assert_eq! (NeighborhoodMode{}.is_required(&params), true);
+        assert_eq! (Neighbors{}.is_required(&params), true);
+        assert_eq! (crate::daemon::setup_reporter::RealUser{}.is_required(&params), false);
     }
 
     #[test]
