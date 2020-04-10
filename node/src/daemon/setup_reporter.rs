@@ -25,59 +25,15 @@ pub trait SetupReporter {
     fn get_modified_setup (&self, existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue>;
 }
 
-pub struct SetupReporterReal {
-    combiner: Box<dyn ValueCombiner>,
-}
+pub struct SetupReporterReal {}
 
 impl SetupReporter for SetupReporterReal {
     fn get_modified_setup(&self, mut existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue> {
-        self.combiner.get_values (existing_setup.clone(), incoming_setup)
-    }
-}
-
-impl SetupReporterReal {
-    pub fn new () -> Self {
-        Self {
-            combiner: Box::new (ValueCombinerReal{}),
-        }
-    }
-
-    pub fn get_default_params() -> HashMap<String, UiSetupResponseValue> {
-        let schema = shared_app(app_head());
-        schema
-            .p
-            .opts
-            .iter()
-            .flat_map(|opt| {
-                let name = opt.b.name;
-                match opt.v.default_val {
-                    Some(os_str) => {
-                        let value = match os_str.to_str() {
-                            Some(v) => v,
-                            None => unimplemented!(),
-                        };
-                        Some((name.to_string(), UiSetupResponseValue::new (name, value, Default)))
-                    },
-                    None => None,
-                }
-            })
-            .collect()
-    }
-}
-
-trait ValueCombiner {
-    fn get_values (&self, existing_setup: HashMap<String, UiSetupResponseValue>, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue>;
-}
-
-struct ValueCombinerReal {}
-
-impl ValueCombiner for ValueCombinerReal {
-    fn get_values(&self, existing_setup: HashMap<String, UiSetupResponseValue>, setup_params: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue> {
-        let to_clear_out = setup_params.iter()
+        let to_clear_out = incoming_setup.iter()
             .filter (|p| p.value.is_none())
             .map (|p| p.name.clone())
             .collect::<HashSet<String>>();
-        let mut args = setup_params.into_iter()
+        let mut args = incoming_setup.into_iter()
             .filter (|p| p.value.is_some())
             .flat_map(|p| vec![format!("--{}", p.name), p.value.expect("Value disappeared!")])
             .collect::<Vec<String>>();
@@ -94,7 +50,7 @@ impl ValueCombiner for ValueCombinerReal {
                 ],
             )
         };
-eprintln! ("configured_multi_config: {:?}", configured_multi_config);
+        eprintln! ("configured_multi_config: {:?}", configured_multi_config);
         let setup_multi_config = {
             MultiConfig::new(
                 &app,
@@ -103,7 +59,7 @@ eprintln! ("configured_multi_config: {:?}", configured_multi_config);
                 ],
             )
         };
-eprintln! ("setup_multi_config: {:?}", setup_multi_config);
+        eprintln! ("setup_multi_config: {:?}", setup_multi_config);
         let combined_multi_config = {
             MultiConfig::new(
                 &app,
@@ -114,7 +70,7 @@ eprintln! ("setup_multi_config: {:?}", setup_multi_config);
                 ],
             )
         };
-eprintln! ("combined_multi_config: {:?}", combined_multi_config);
+        eprintln! ("combined_multi_config: {:?}", combined_multi_config);
         let mut streams = StdStreams {
             stdin: &mut ByteArrayReader::new(b""),
             stdout: &mut ByteArrayWriter::new(),
@@ -140,7 +96,32 @@ eprintln! ("combined_multi_config: {:?}", combined_multi_config);
     }
 }
 
-impl ValueCombinerReal {
+impl SetupReporterReal {
+    pub fn new () -> Self {
+        Self {}
+    }
+
+    pub fn get_default_params() -> HashMap<String, UiSetupResponseValue> {
+        let schema = shared_app(app_head());
+        schema
+            .p
+            .opts
+            .iter()
+            .flat_map(|opt| {
+                let name = opt.b.name;
+                match opt.v.default_val {
+                    Some(os_str) => {
+                        let value = match os_str.to_str() {
+                            Some(v) => v,
+                            None => unimplemented!(),
+                        };
+                        Some((name.to_string(), UiSetupResponseValue::new (name, value, Default)))
+                    },
+                    None => None,
+                }
+            })
+            .collect()
+    }
 
     fn combine_values (
         existing_setup: HashMap<String, UiSetupResponseValue>,
@@ -585,7 +566,7 @@ mod tests {
 
     #[test]
     fn parameter_names_include_some_classic_ones() {
-        let result = ValueCombinerReal::get_parameter_names();
+        let result = SetupReporterReal::get_parameter_names();
 
         assert_eq! (result.contains (&"dns-servers".to_string()), true, "{:?}", result);
         assert_eq! (result.contains (&"ip".to_string()), true, "{:?}", result);
@@ -595,7 +576,7 @@ mod tests {
 
     #[test]
     fn parameter_names_doesnt_include_censored_values() {
-        let result = ValueCombinerReal::get_parameter_names();
+        let result = SetupReporterReal::get_parameter_names();
 
         assert_eq!(result.contains(&"ui-port".to_string()), false, "{:?}", result);
         assert_eq!(result.contains(&"fake-public-key".to_string()), false, "{:?}", result);
