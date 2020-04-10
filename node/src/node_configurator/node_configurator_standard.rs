@@ -220,6 +220,7 @@ pub mod standard {
         streams: &mut StdStreams<'_>,
         persistent_config_opt: Option<&dyn PersistentConfiguration>
     ) {
+eprintln! ("unprivileged_parse_args: {:?}", multi_config);
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
@@ -321,6 +322,7 @@ pub mod standard {
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
         unprivileged_config: &mut BootstrapperConfig,
     ) -> NeighborhoodConfig {
+eprintln! ("make_neighborhood_config: {:?}", multi_config);
         let neighbor_configs: Vec<NodeDescriptor> = {
             match convert_ci_configs(multi_config) {
                 Some(configs) => configs,
@@ -331,7 +333,7 @@ pub mod standard {
                         persistent_config,
                         unprivileged_config,
                     ),
-                    None => unimplemented!()
+                    None => vec![]
                 }
             }
         };
@@ -397,32 +399,35 @@ pub mod standard {
         multi_config: &MultiConfig,
         neighbor_configs: Vec<NodeDescriptor>,
     ) -> NeighborhoodMode {
-        match value_m!(multi_config, "neighborhood-mode", String) {
+eprintln! ("make_neighborhood_mode: {:?}", multi_config);
+        let neighborhood_mode_opt = value_m!(multi_config, "neighborhood-mode", String);
+eprintln! ("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
+        match neighborhood_mode_opt {
             Some(ref s) if s == "standard" => neighborhood_mode_standard(multi_config, neighbor_configs),
             Some(ref s) if s == "originate-only" => {
                 if neighbor_configs.is_empty() {
-                    panic! ("Node cannot run as --neighborhood_mode originate-only without --neighbors specified")
+                    panic! ("Node cannot run as --neighborhood-mode originate-only without --neighbors specified")
                 }
                 NeighborhoodMode::OriginateOnly(neighbor_configs, DEFAULT_RATE_PACK)
             }
             Some(ref s) if s == "consume-only" => {
                 if neighbor_configs.is_empty() {
-                    panic! ("Node cannot run as --neighborhood_mode consume-only without --neighbors specified")
+                    panic! ("Node cannot run as --neighborhood-mode consume-only without --neighbors specified")
                 }
                 NeighborhoodMode::ConsumeOnly(neighbor_configs)
             }
             Some(ref s) if s == "zero-hop" => {
                 if !neighbor_configs.is_empty() {
-                    panic!("Node cannot run as --neighborhood_mode zero-hop if --neighbors is specified")
+                    panic!("Node cannot run as --neighborhood-mode zero-hop if --neighbors is specified")
                 }
                 if value_m!(multi_config, "ip", IpAddr).is_some() {
-                    panic!("Node cannot run as --neighborhood_mode zero-hop if --ip is specified")
+                    panic!("Node cannot run as --neighborhood-mode zero-hop if --ip is specified")
                 }
                 NeighborhoodMode::ZeroHop
             }
             // These two cases are untestable
             Some(ref s) => panic!(
-                "--neighborhood_mode {} has not been properly provided for in the code",
+                "--neighborhood-mode {} has not been properly provided for in the code",
                 s
             ),
             None => neighborhood_mode_standard(multi_config, neighbor_configs),
@@ -433,7 +438,7 @@ pub mod standard {
         NeighborhoodMode::Standard (
             NodeAddr::new(
                 &value_m!(multi_config, "ip", IpAddr).expect(
-                    "Node cannot run as --neighborhood_mode standard without --ip specified",
+                    "Node cannot run as --neighborhood-mode standard without --ip specified",
                 ),
                 &vec![],
             ),

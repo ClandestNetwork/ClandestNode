@@ -25,7 +25,7 @@ use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessagePath, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use crate::daemon::setup_reporter::SetupReporterReal;
+use crate::daemon::setup_reporter::{SetupReporterReal, SetupReporter};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -77,6 +77,7 @@ pub struct Daemon {
     node_process_id: Option<u32>,
     node_ui_port: Option<u16>,
     verifier_tools: Box<dyn VerifierTools>,
+    setup_reporter: Box<dyn SetupReporter>,
     logger: Logger,
 }
 
@@ -142,6 +143,7 @@ impl Daemon {
             node_process_id: None,
             node_ui_port: None,
             verifier_tools: Box::new(VerifierToolsReal::new()),
+            setup_reporter: Box::new(SetupReporterReal::new()),
             logger: Logger::new("Daemon"),
         }
     }
@@ -150,23 +152,18 @@ impl Daemon {
         let running = if self.port_if_node_is_running().is_some() {
             true
         } else {
-            payload.values.into_iter().for_each(|usv| {
-                match usv.value {
-                    None => self.params.remove(&usv.name),
-                    Some(value) => self.params.insert(usv.name.clone(), UiSetupResponseValue::new (&usv.name, &value, Set)),
-                };
-            });
+            let incoming_setup = payload.values;
+            let existing_setup = self.params.clone();
+            self.params = self.setup_reporter.get_modified_setup (existing_setup, incoming_setup);
             false
         };
-        let mut report = SetupReporterReal::get_default_params();
-        report.extend(self.params.clone().into_iter());
         let msg = NodeToUiMessage {
             target: ClientId(client_id),
             body: UiSetupResponse {
                 running,
-                values: report
-                    .into_iter()
-                    .map(|(name, value)| value)
+                values: self.params
+                    .iter()
+                    .map(|(name, value)| value.clone())
                     .collect(),
             }
             .tmb(context_id),
@@ -333,6 +330,7 @@ mod tests {
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
     use crate::daemon::setup_reporter::SetupReporterReal;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<HashMap<String, String>>>>,
@@ -383,6 +381,7 @@ mod tests {
         let system = System::new("test");
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);
+        subject.params.insert ("neighborhood-mode".to_string(), UiSetupResponseValue::new ("neighborhood-mode", "zero-hop", Set));
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -419,17 +418,20 @@ mod tests {
 
     #[test]
     fn accepts_full_setup_when_node_is_not_running_and_returns_settings_then_remembers_them() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "accepts_full_setup_when_node_is_not_running_and_returns_settings_then_remembers_them");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new().process_is_running_result(false);
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);
         subject.params = vec![
+            ("data-directory", format!("{:?}", home_dir).as_str()),
             ("dns-servers", "8.8.8.8"),
             ("chain", "ropsten"),
             ("config-file", "biggles.txt"),
             ("db-password", "goober"),
             ("real-user", "1234:4321:hormel"),
+            ("ip", "1.2.3.4"),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), UiSetupResponseValue::new (k, v, Set)))
@@ -478,6 +480,7 @@ mod tests {
 
     #[test]
     fn accepts_empty_setup_when_node_is_not_running_and_clears_existing_state() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "accepts_empty_setup_when_node_is_not_running_and_clears_existing_state");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new().process_is_running_result(false);
@@ -493,7 +496,8 @@ mod tests {
                 body: UiSetupRequest {
                     values: vec![
                         UiSetupRequestValue::new("chain", "ropsten"),
-                        UiSetupRequestValue::new("config-file", "biggles.txt"),
+                        UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                         UiSetupRequestValue::new("db-password", "goober"),
                         UiSetupRequestValue::new("real-user", "1234:4321:hormel"),
                     ],
@@ -527,7 +531,6 @@ mod tests {
             .collect();
         let mut expected_pairs = SetupReporterReal::get_default_params();
         adjust_expected_pairs(&mut expected_pairs, "chain", "ropsten");
-        adjust_expected_pairs(&mut expected_pairs, "config-file", "biggles.txt");
         adjust_expected_pairs(&mut expected_pairs, "db-password", "goober");
         adjust_expected_pairs(&mut expected_pairs, "real-user", "1234:4321:hormel");
 
@@ -552,6 +555,7 @@ mod tests {
 
     #[test]
     fn accepts_full_setup_when_node_is_running_and_ignores_it() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "accepts_full_setup_when_node_is_running_and_ignores_it");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new().process_is_running_result(true);
@@ -569,6 +573,7 @@ mod tests {
                 client_id: 1234,
                 body: UiSetupRequest {
                     values: vec![
+                        UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
                         UiSetupRequestValue::new("chain", "ropsten"),
                         UiSetupRequestValue::new("config-file", "biggles.txt"),
                         UiSetupRequestValue::new("db-password", "goober"),
@@ -603,6 +608,7 @@ mod tests {
 
     #[test]
     fn setup_judges_node_not_running_when_port_and_pid_are_none_without_checking_os() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "setup_judges_node_not_running_when_port_and_pid_are_none_without_checking_os");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new();
@@ -619,7 +625,11 @@ mod tests {
             .try_send(NodeFromUiMessage {
                 client_id: 1234,
                 body: UiSetupRequest {
-                    values: vec![UiSetupRequestValue::new("chain", "ropsten")],
+                    values: vec![
+                        UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                    ],
                 }
                 .tmb(4321),
             })
@@ -649,6 +659,7 @@ mod tests {
 
     #[test]
     fn setup_judges_node_not_running_when_port_and_pid_are_set_but_os_says_different() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "setup_judges_node_not_running_when_port_and_pid_are_set_but_os_says_different");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new().process_is_running_result(false); // only consulted once; second time, we already know
@@ -663,7 +674,11 @@ mod tests {
         let msg = NodeFromUiMessage {
             client_id: 1234,
             body: UiSetupRequest {
-                values: vec![UiSetupRequestValue::new("chain", "ropsten")],
+                values: vec![
+                    UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
+                    UiSetupRequestValue::new("chain", "ropsten"),
+                    UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                ],
             }
             .tmb(4321),
         };
@@ -699,11 +714,13 @@ mod tests {
 
     #[test]
     fn overrides_defaults() {
+        let home_dir = ensure_node_home_directory_exists("daemon", "overrides_defaults");
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let verifier_tools = VerifierToolsMock::new();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);
+        subject.params.insert("neighborhood-mode".to_string(), UiSetupResponseValue::new ("neighborhood-mode", "zero-hop", Set));
         let subject_addr = subject.start();
         subject_addr
             .try_send(make_bind_message(ui_gateway))
@@ -713,7 +730,10 @@ mod tests {
             .try_send(NodeFromUiMessage {
                 client_id: 1234,
                 body: UiSetupRequest {
-                    values: vec![UiSetupRequestValue::new("dns-servers", "192.168.0.1")],
+                    values: vec![
+                        UiSetupRequestValue::new("dns-servers", "192.168.0.1"),
+                        UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
+                    ],
                 }
                 .tmb(4321),
             })
@@ -843,6 +863,9 @@ mod tests {
         subject
             .params
             .insert("db-password".to_string(), UiSetupResponseValue::new("db-password", "goober", Set));
+        subject
+            .params
+            .insert("neighborhood-mode".to_string(), UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set));
         subject.verifier_tools = Box::new(verifier_tools);
         let subject_addr = subject.start();
         subject_addr

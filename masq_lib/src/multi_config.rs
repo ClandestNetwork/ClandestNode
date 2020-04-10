@@ -10,6 +10,8 @@ use std::io::{ErrorKind, Read};
 use std::path::PathBuf;
 use toml::value::Table;
 use toml::Value;
+use serde::export::Formatter;
+use serde::export::fmt::Error;
 
 #[macro_export]
 macro_rules! value_m {
@@ -47,6 +49,25 @@ macro_rules! values_m {
 
 pub struct MultiConfig<'a> {
     arg_matches: ArgMatches<'a>,
+    content: Box<dyn VirtualCommandLine>,
+}
+
+impl<'a> Debug for MultiConfig<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let representation = self.content.vcl_args().into_iter()
+            .map(|vcl_arg| {
+                let strings = vcl_arg.to_args();
+                if (strings.len() == 1) {
+                    strings[0].clone()
+                }
+                else {
+                    format!("{} {}", strings[0], strings[1])
+                }
+            })
+            .collect::<Vec<String>>()
+            .join (" ");
+        write!(f, "{{{}}}", representation)
+    }
 }
 
 impl<'a> MultiConfig<'a> {
@@ -65,6 +86,7 @@ impl<'a> MultiConfig<'a> {
                 .clone()
                 .get_matches_from_safe(merged.args().into_iter())
                 .unwrap_or_else(Self::abort),
+            content: merged
         }
     }
 
