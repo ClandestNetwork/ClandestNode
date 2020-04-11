@@ -21,14 +21,16 @@ use crate::test_utils::main_cryptde;
 use std::collections::hash_map::RandomState;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;
 
+pub type SetupCluster = HashMap<String, UiSetupResponseValue>;
+
 pub trait SetupReporter {
-    fn get_modified_setup (&self, existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue>;
+    fn get_modified_setup (&self, existing_setup: SetupCluster, incoming_setup: Vec<UiSetupRequestValue>) -> SetupCluster;
 }
 
 pub struct SetupReporterReal {}
 
 impl SetupReporter for SetupReporterReal {
-    fn get_modified_setup(&self, mut existing_setup: HashMap<String, UiSetupResponseValue>, incoming_setup: Vec<UiSetupRequestValue>) -> HashMap<String, UiSetupResponseValue> {
+    fn get_modified_setup(&self, mut existing_setup: SetupCluster, incoming_setup: Vec<UiSetupRequestValue>) -> SetupCluster {
         let to_clear_out = incoming_setup.iter()
             .filter (|p| p.value.is_none())
             .map (|p| p.name.clone())
@@ -38,14 +40,14 @@ impl SetupReporter for SetupReporterReal {
                 None => None,
                 Some(value) => Some ((uisrv.name.to_string(), UiSetupResponseValue::new(&uisrv.name, value, Set))),
             })
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .collect::<SetupCluster>();
         let mut existing_and_incoming = existing_setup.iter()
             .flat_map(|(k, v)| match v.status {
                 Blank => None,
                 Required => None,
                 _ => Some ((k.clone(), v.clone()))
             })
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .collect::<SetupCluster>();
         existing_and_incoming.extend (incoming_setup_translated.clone());
         let required_and_available_value_names = value_retrievers().into_iter()
             .filter (|vr| vr.is_required (&existing_and_incoming))
@@ -57,7 +59,7 @@ impl SetupReporter for SetupReporterReal {
                 None => None,
                 Some (uisrv) => Some ((name.to_string(), uisrv.clone()))
             })
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .collect::<SetupCluster>();
         incoming_setup_plus_available_required.extend (incoming_setup_translated);
         let mut combined_args = incoming_setup_plus_available_required.into_iter()
             .flat_map (|(_, uisrv)| vec![format!("--{}", uisrv.name), uisrv.value.to_string()])
@@ -126,7 +128,7 @@ impl SetupReporterReal {
         Self {}
     }
 
-    pub fn get_default_params() -> HashMap<String, UiSetupResponseValue> {
+    pub fn get_default_params() -> SetupCluster {
         let schema = shared_app(app_head());
         schema
             .p
@@ -149,17 +151,17 @@ impl SetupReporterReal {
     }
 
     fn combine_values (
-        existing_setup: HashMap<String, UiSetupResponseValue>,
+        existing_setup: SetupCluster,
         value_retrievers: Vec<Box<dyn ValueRetriever>>,
         setup_multi_config: &MultiConfig,
         configured_multi_config: &MultiConfig,
         bootstrap_config: &BootstrapperConfig,
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
         to_clear_out: HashSet<String>,
-    ) -> HashMap<String, UiSetupResponseValue> {
+    ) -> SetupCluster {
         let mut result = SetupReporterReal::get_default_params().into_iter()
             .chain (existing_setup)
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .collect::<SetupCluster>();
         let db_password_opt = value_m!(setup_multi_config, "db-password", String);
         value_retrievers.iter().for_each(|retriever| {
             let already_set = match result.get (retriever.value_name()) {
@@ -190,7 +192,7 @@ impl SetupReporterReal {
                 }
             }
         });
-        let mut unvalued: HashMap<String, UiSetupResponseValue> = HashMap::new();
+        let mut unvalued: SetupCluster = HashMap::new();
         value_retrievers.into_iter()
             .filter (|retriever| !result.contains_key (retriever.value_name()) || to_clear_out.contains (&retriever.value_name().to_string()))
             .map (|retriever| {
@@ -250,12 +252,12 @@ trait ValueRetriever {
         value_m! (multi_config, self.value_name(), String)
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         false
     }
 }
 
-fn is_required_for_blockchain(params: &HashMap<String, UiSetupResponseValue>) -> bool {
+fn is_required_for_blockchain(params: &SetupCluster) -> bool {
     match params.get ("neighborhood-mode") {
         Some (nhm) if &nhm.value == "zero-hop" => false,
         _ => true,
@@ -268,7 +270,7 @@ impl ValueRetriever for BlockchainServiceUrl {
         "blockchain-service-url"
     }
 
-    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, params: &SetupCluster) -> bool {
         is_required_for_blockchain(params)
     }
 }
@@ -283,7 +285,7 @@ impl ValueRetriever for Chain {
         Some (DEFAULT_CHAIN_NAME.to_string())
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -298,7 +300,7 @@ impl ValueRetriever for ClandestinePort {
         persistent_config_opt.map (|pc| pc.clandestine_port().to_string())
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -323,7 +325,7 @@ impl ValueRetriever for DataDirectory {
         "data-directory"
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -334,7 +336,7 @@ impl ValueRetriever for DbPassword {
         "db-password"
     }
 
-    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, params: &SetupCluster) -> bool {
         is_required_for_blockchain(params)
     }
 }
@@ -349,7 +351,7 @@ impl ValueRetriever for DnsServers {
         Some("1.1.1.1".to_string())
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -364,7 +366,7 @@ impl ValueRetriever for EarningWallet {
         Some(bootstrapper_config.earning_wallet.to_string())
     }
 
-    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, params: &SetupCluster) -> bool {
         is_required_for_blockchain(params)
     }
 }
@@ -379,7 +381,7 @@ impl ValueRetriever for GasPrice {
         persistent_config_opt.map(|pc| pc.gas_price().to_string())
     }
 
-    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, params: &SetupCluster) -> bool {
         is_required_for_blockchain(params)
     }
 }
@@ -390,7 +392,7 @@ impl ValueRetriever for Ip {
         "ip"
     }
 
-    fn is_required(&self, params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, params: &SetupCluster) -> bool {
         match params.get ("neighborhood-mode") {
             Some (nhm) if &nhm.value == "standard" => true,
             Some (_) => false,
@@ -409,7 +411,7 @@ impl ValueRetriever for LogLevel {
         Some("warn".to_string())
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -424,7 +426,7 @@ impl ValueRetriever for NeighborhoodMode {
         Some("standard".to_string())
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         true
     }
 }
@@ -452,7 +454,7 @@ impl ValueRetriever for Neighbors {
         }
     }
 
-    fn is_required(&self, _params: &HashMap<String, UiSetupResponseValue>) -> bool {
+    fn is_required(&self, _params: &SetupCluster) -> bool {
         match _params.get ("neighborhood-mode") {
             Some (nhm) if &nhm.value == "standard" => false,
             Some (nhm) if &nhm.value == "zero-hop" => false,
@@ -652,7 +654,7 @@ mod tests {
             ("real-user", "9999:9999:booga"),
         ].into_iter()
             .map (|(name, value)| (name.to_string(), UiSetupResponseValue::new(name, value, Set)))
-            .collect::<HashMap<String, UiSetupResponseValue>>();
+            .collect::<SetupCluster>();
         let subject = SetupReporterReal::new();
 
         let result = subject.get_modified_setup (existing_setup, vec![]);
@@ -928,7 +930,7 @@ mod tests {
                 let params = vec![
                     (param_name.to_string(), UiSetupResponseValue::new (param_name, param_value, Set))
                 ].into_iter()
-                    .collect::<HashMap<String, UiSetupResponseValue>>();
+                    .collect::<SetupCluster>();
 
                 let result = subject.is_required (&params);
 
@@ -1085,10 +1087,9 @@ mod tests {
         assert_eq! (result, None);
     }
 
-    fn vec_to_map_out (vector: Vec<UiSetupResponseValue>) -> HashMap<String, UiSetupResponseValue> {
+    fn vec_to_map_out (vector: Vec<UiSetupResponseValue>) -> SetupCluster {
         vector.into_iter ()
             .map (|uisrv| (uisrv.name.clone(), uisrv))
-            .collect::<HashMap<String, UiSetupResponseValue>>()
+            .collect::<SetupCluster>()
     }
-
 }
