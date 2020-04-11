@@ -1,6 +1,5 @@
 use crate::constants::{
-    DEFAULT_CHAIN_NAME, DEFAULT_GAS_PRICE, DEFAULT_UI_PORT, HIGHEST_USABLE_PORT,
-    LOWEST_USABLE_INSECURE_PORT,
+    DEFAULT_GAS_PRICE, DEFAULT_UI_PORT, HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT,
 };
 use crate::crash_point::CrashPoint;
 use clap::{App, Arg};
@@ -332,18 +331,18 @@ pub mod common_validators {
     }
 
     pub fn validate_ip_addresses(addresses: String) -> Result<(), String> {
-        let errors = addresses.split(",")
+        let errors = addresses
+            .split(',')
             .map(|address| validate_ip_address(address.to_string()))
             .flat_map(|result| match result {
-                Ok (_) => None,
-                Err (e) => Some(format!("{:?}", e))
+                Ok(_) => None,
+                Err(e) => Some(format!("{:?}", e)),
             })
             .collect::<Vec<String>>()
-            .join (";");
+            .join(";");
         if errors.is_empty() {
             Ok(())
-        }
-        else {
+        } else {
             Err(errors)
         }
     }

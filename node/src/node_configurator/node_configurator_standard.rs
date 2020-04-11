@@ -90,14 +90,13 @@ pub fn app() -> App<'static, 'static> {
 
 pub mod standard {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
     use std::net::SocketAddr;
+    use std::net::{IpAddr, Ipv4Addr};
 
-    use clap::{value_t, values_t};
+    use clap::value_t;
     use log::LevelFilter;
 
     use crate::blockchain::bip32::Bip32ECKeyPair;
-    use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::bootstrapper::PortConfiguration;
     use crate::http_request_start_finder::HttpRequestDiscriminatorFactory;
     use crate::node_configurator::{
@@ -117,7 +116,7 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
-    use masq_lib::constants::{HTTP_PORT, TLS_PORT, DEFAULT_UI_PORT, DEFAULT_CHAIN_NAME};
+    use masq_lib::constants::{DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
@@ -171,16 +170,20 @@ pub mod standard {
         privileged_config.blockchain_bridge_config.chain_id = chain_id;
 
         privileged_config.dns_servers = match value_m!(multi_config, "dns-servers", String) {
-            Some (joined_dns_servers) => {
-                joined_dns_servers.split(",")
-                    .map(|ip_str| SocketAddr::new (IpAddr::from_str (ip_str).expect("Bad clap validation for dns-servers"), 53))
-                    .collect()
-            },
-            None => vec![SocketAddr::new (IpAddr::V4 (Ipv4Addr::new (1, 1, 1, 1)), 53)],
+            Some(joined_dns_servers) => joined_dns_servers
+                .split(',')
+                .map(|ip_str| {
+                    SocketAddr::new(
+                        IpAddr::from_str(ip_str).expect("Bad clap validation for dns-servers"),
+                        53,
+                    )
+                })
+                .collect(),
+            None => vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 53)],
         };
 
         privileged_config.log_level =
-            value_m!(multi_config, "log-level", LevelFilter).unwrap_or (LevelFilter::Warn);
+            value_m!(multi_config, "log-level", LevelFilter).unwrap_or(LevelFilter::Warn);
 
         privileged_config.ui_gateway_config.ui_port =
             value_m!(multi_config, "ui-port", u16).unwrap_or(DEFAULT_UI_PORT);
@@ -218,13 +221,13 @@ pub mod standard {
         multi_config: &MultiConfig,
         unprivileged_config: &mut BootstrapperConfig,
         streams: &mut StdStreams<'_>,
-        persistent_config_opt: Option<&dyn PersistentConfiguration>
+        persistent_config_opt: Option<&dyn PersistentConfiguration>,
     ) {
-eprintln! ("unprivileged_parse_args: {:?}", multi_config);
+        eprintln!("unprivileged_parse_args: {:?}", multi_config);
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
-        if let Some (persistent_config) = persistent_config_opt {
+        if let Some(persistent_config) = persistent_config_opt {
             get_wallets(
                 streams,
                 multi_config,
@@ -322,7 +325,7 @@ eprintln! ("unprivileged_parse_args: {:?}", multi_config);
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
         unprivileged_config: &mut BootstrapperConfig,
     ) -> NeighborhoodConfig {
-eprintln! ("make_neighborhood_config: {:?}", multi_config);
+        eprintln!("make_neighborhood_config: {:?}", multi_config);
         let neighbor_configs: Vec<NodeDescriptor> = {
             match convert_ci_configs(multi_config) {
                 Some(configs) => configs,
@@ -333,8 +336,8 @@ eprintln! ("make_neighborhood_config: {:?}", multi_config);
                         persistent_config,
                         unprivileged_config,
                     ),
-                    None => vec![]
-                }
+                    None => vec![],
+                },
             }
         };
         NeighborhoodConfig {
@@ -345,12 +348,14 @@ eprintln! ("make_neighborhood_config: {:?}", multi_config);
     pub fn convert_ci_configs(multi_config: &MultiConfig) -> Option<Vec<NodeDescriptor>> {
         match value_m!(multi_config, "neighbors", String) {
             None => None,
-            Some (joined_configs) => {
-                let cli_configs: Vec<String> = joined_configs.split(",").map(|s| s.to_string()).collect_vec();
+            Some(joined_configs) => {
+                let cli_configs: Vec<String> = joined_configs
+                    .split(',')
+                    .map(|s| s.to_string())
+                    .collect_vec();
                 if cli_configs.is_empty() {
                     None
-                }
-                else {
+                } else {
                     let dummy_cryptde: Box<dyn CryptDE> = {
                         if value_m!(multi_config, "fake-public-key", String) == None {
                             Box::new(CryptDEReal::new(DEFAULT_CHAIN_ID))
@@ -399,11 +404,13 @@ eprintln! ("make_neighborhood_config: {:?}", multi_config);
         multi_config: &MultiConfig,
         neighbor_configs: Vec<NodeDescriptor>,
     ) -> NeighborhoodMode {
-eprintln! ("make_neighborhood_mode: {:?}", multi_config);
+        eprintln!("make_neighborhood_mode: {:?}", multi_config);
         let neighborhood_mode_opt = value_m!(multi_config, "neighborhood-mode", String);
-eprintln! ("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
+        eprintln!("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
         match neighborhood_mode_opt {
-            Some(ref s) if s == "standard" => neighborhood_mode_standard(multi_config, neighbor_configs),
+            Some(ref s) if s == "standard" => {
+                neighborhood_mode_standard(multi_config, neighbor_configs)
+            }
             Some(ref s) if s == "originate-only" => {
                 if neighbor_configs.is_empty() {
                     panic! ("Node cannot run as --neighborhood-mode originate-only without --neighbors specified")
@@ -434,8 +441,11 @@ eprintln! ("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
         }
     }
 
-    fn neighborhood_mode_standard(multi_config: &MultiConfig, neighbor_configs: Vec<NodeDescriptor>) -> NeighborhoodMode {
-        NeighborhoodMode::Standard (
+    fn neighborhood_mode_standard(
+        multi_config: &MultiConfig,
+        neighbor_configs: Vec<NodeDescriptor>,
+    ) -> NeighborhoodMode {
+        NeighborhoodMode::Standard(
             NodeAddr::new(
                 &value_m!(multi_config, "ip", IpAddr).expect(
                     "Node cannot run as --neighborhood-mode standard without --ip specified",
@@ -557,7 +567,9 @@ eprintln! ("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
 mod tests {
     use super::*;
     use crate::blockchain::bip32::Bip32ECKeyPair;
-    use crate::blockchain::blockchain_interface::{chain_id_from_name, contract_address, chain_name_from_id};
+    use crate::blockchain::blockchain_interface::{
+        chain_id_from_name, chain_name_from_id, contract_address,
+    };
     use crate::bootstrapper::RealUser;
     use crate::config_dao::{ConfigDao, ConfigDaoReal};
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
@@ -614,7 +626,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -664,7 +676,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -688,7 +700,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -748,7 +760,7 @@ mod tests {
         let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
 
@@ -780,7 +792,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration().check_password_result(Some(false))),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -829,7 +841,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration().check_password_result(Some(false))),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -856,7 +868,7 @@ mod tests {
         standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
     }
@@ -1006,7 +1018,7 @@ mod tests {
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
-            Some (&persistent_config),
+            Some(&persistent_config),
         );
 
         let consuming_private_key_bytes: Vec<u8> = consuming_private_key.from_hex().unwrap();
@@ -1784,7 +1796,7 @@ mod tests {
             &multi_config,
             &mut config,
             &mut streams,
-            Some (&make_default_persistent_configuration()),
+            Some(&make_default_persistent_configuration()),
         );
 
         let captured_output = stdout_writer.get_string();

@@ -3,6 +3,7 @@
 #[allow(unused_imports)]
 use clap::{value_t, values_t};
 use clap::{App, ArgMatches};
+use serde::export::Formatter;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs::File;
@@ -10,8 +11,6 @@ use std::io::{ErrorKind, Read};
 use std::path::PathBuf;
 use toml::value::Table;
 use toml::Value;
-use serde::export::Formatter;
-use serde::export::fmt::Error;
 
 #[macro_export]
 macro_rules! value_m {
@@ -54,18 +53,20 @@ pub struct MultiConfig<'a> {
 
 impl<'a> Debug for MultiConfig<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let representation = self.content.vcl_args().into_iter()
+        let representation = self
+            .content
+            .vcl_args()
+            .into_iter()
             .map(|vcl_arg| {
                 let strings = vcl_arg.to_args();
-                if (strings.len() == 1) {
+                if strings.len() == 1 {
                     strings[0].clone()
-                }
-                else {
+                } else {
                     format!("{} {}", strings[0], strings[1])
                 }
             })
             .collect::<Vec<String>>()
-            .join (" ");
+            .join(" ");
         write!(f, "{{{}}}", representation)
     }
 }
@@ -86,7 +87,7 @@ impl<'a> MultiConfig<'a> {
                 .clone()
                 .get_matches_from_safe(merged.args().into_iter())
                 .unwrap_or_else(Self::abort),
-            content: merged
+            content: merged,
         }
     }
 
@@ -99,7 +100,7 @@ impl<'a> MultiConfig<'a> {
         if cfg!(test) {
             panic!("{:?}. --panic to catch for testing--", e)
         } else {
-            panic! ("{:?}", e); // uncomment during testing
+            // panic! ("{:?}", e); // uncomment during testing
             e.exit();
         }
     }

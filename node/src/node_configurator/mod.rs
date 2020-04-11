@@ -7,7 +7,7 @@ pub mod node_configurator_standard;
 
 use crate::blockchain::bip32::Bip32ECKeyPair;
 use crate::blockchain::bip39::Bip39;
-use crate::blockchain::blockchain_interface::{chain_id_from_name, chain_name_from_id};
+use crate::blockchain::blockchain_interface::chain_id_from_name;
 use crate::bootstrapper::RealUser;
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal, DATABASE_FILE};
 use crate::persistent_configuration::{
@@ -20,6 +20,7 @@ use bip39::Language;
 use clap::{crate_description, crate_version, value_t, App, AppSettings, Arg};
 use dirs::{data_local_dir, home_dir};
 use masq_lib::command::StdStreams;
+use masq_lib::constants::DEFAULT_CHAIN_NAME;
 use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig, VclArg};
 use masq_lib::shared_schema::{chain_arg, config_file_arg, data_directory_arg, real_user_arg};
 use rpassword;
@@ -31,8 +32,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
-use crate::test_utils::DEFAULT_CHAIN_ID;
-use masq_lib::constants::DEFAULT_CHAIN_NAME;
 
 pub trait NodeConfigurator<T> {
     fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> T;
@@ -206,7 +205,7 @@ pub fn real_user_data_directory_and_chain_id(
     };
 
     let chain_name =
-        value_m!(multi_config, "chain", String).unwrap_or (DEFAULT_CHAIN_NAME.to_string());
+        value_m!(multi_config, "chain", String).unwrap_or_else(|| DEFAULT_CHAIN_NAME.to_string());
     let dirs_wrapper = RealDirsWrapper {};
 
     let data_directory = match value_m!(multi_config, "data-directory", PathBuf) {

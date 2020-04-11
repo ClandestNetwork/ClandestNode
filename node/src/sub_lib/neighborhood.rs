@@ -19,10 +19,9 @@ use core::fmt;
 use lazy_static::lazy_static;
 use masq_lib::ui_gateway::NodeFromUiMessage;
 use serde_derive::{Deserialize, Serialize};
-use std::fmt::{Debug, Formatter, Display};
+use std::fmt::{Debug, Display, Formatter};
 use std::net::IpAddr;
 use std::str::FromStr;
-use serde::export::fmt::Error;
 
 pub const DEFAULT_RATE_PACK: RatePack = RatePack {
     routing_byte_rate: 100,
@@ -49,10 +48,10 @@ pub enum NeighborhoodMode {
 impl Display for NeighborhoodMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NeighborhoodMode::Standard(_, _, _) => write! (f, "Standard"),
-            NeighborhoodMode::ZeroHop => write! (f, "ZeroHop"),
-            NeighborhoodMode::OriginateOnly(_, _) => write! (f, "OriginateOnly"),
-            NeighborhoodMode::ConsumeOnly(_) => write! (f, "ConsumeOnly"),
+            NeighborhoodMode::Standard(_, _, _) => write!(f, "Standard"),
+            NeighborhoodMode::ZeroHop => write!(f, "ZeroHop"),
+            NeighborhoodMode::OriginateOnly(_, _) => write!(f, "OriginateOnly"),
+            NeighborhoodMode::ConsumeOnly(_) => write!(f, "ConsumeOnly"),
         }
     }
 }

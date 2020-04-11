@@ -19,22 +19,14 @@ use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub trait RecipientsFactory {
-    fn make(
-        &self,
-        launcher: Box<dyn Launcher>,
-        ui_port: u16,
-    ) -> Recipients;
+    fn make(&self, launcher: Box<dyn Launcher>, ui_port: u16) -> Recipients;
 }
 
 #[derive(Default)]
 pub struct RecipientsFactoryReal {}
 
 impl RecipientsFactory for RecipientsFactoryReal {
-    fn make(
-        &self,
-        launcher: Box<dyn Launcher>,
-        ui_port: u16,
-    ) -> Recipients {
+    fn make(&self, launcher: Box<dyn Launcher>, ui_port: u16) -> Recipients {
         let ui_gateway_addr = UiGateway::new(&UiGatewayConfig {
             ui_port,
             node_descriptor: "".to_string(), // irrelevant; field should be removed
@@ -134,9 +126,9 @@ impl DaemonInitializer {
 
     fn bind(&mut self, sender: Sender<HashMap<String, String>>) {
         let launcher = LauncherReal::new(sender);
-        let recipients =
-            self.recipients_factory
-                .make(Box::new(launcher), self.config.ui_port);
+        let recipients = self
+            .recipients_factory
+            .make(Box::new(launcher), self.config.ui_port);
         let bind_message = DaemonBindMessage {
             to_ui_message_recipient: recipients.ui_gateway_to_sub,
             from_ui_message_recipient: recipients.ui_gateway_from_sub,
@@ -177,15 +169,8 @@ mod tests {
     }
 
     impl RecipientsFactory for RecipientsFactoryMock {
-        fn make(
-            &self,
-            launcher: Box<dyn Launcher>,
-            ui_port: u16,
-        ) -> Recipients {
-            self.make_params
-                .lock()
-                .unwrap()
-                .push((launcher, ui_port));
+        fn make(&self, launcher: Box<dyn Launcher>, ui_port: u16) -> Recipients {
+            self.make_params.lock().unwrap().push((launcher, ui_port));
             self.make_results.borrow_mut().remove(0)
         }
     }
@@ -196,14 +181,6 @@ mod tests {
                 make_params: Arc::new(Mutex::new(vec![])),
                 make_results: RefCell::new(vec![]),
             }
-        }
-
-        fn make_params(
-            mut self,
-            params: &Arc<Mutex<Vec<(Box<dyn Launcher>, u16)>>>,
-        ) -> Self {
-            self.make_params = params.clone();
-            self
         }
 
         fn make_result(self, result: Recipients) -> Self {

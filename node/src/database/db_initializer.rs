@@ -71,7 +71,7 @@ impl DbInitializer for DbInitializerReal {
         create_if_necessary: bool,
     ) -> Result<Box<dyn ConnectionWrapper>, InitializationError> {
         if !create_if_necessary && Self::is_creation_necessary(path) {
-            return Err(InitializationError::Nonexistent)
+            return Err(InitializationError::Nonexistent);
         }
         Self::create_data_directory_if_necessary(path);
         let mut flags = OpenFlags::empty();
@@ -405,10 +405,11 @@ pub mod test_utils {
             chain_id: u8,
             create_if_necessary: bool,
         ) -> Result<Box<dyn ConnectionWrapper>, InitializationError> {
-            self.initialize_parameters
-                .lock()
-                .unwrap()
-                .push((path.clone(), chain_id, create_if_necessary));
+            self.initialize_parameters.lock().unwrap().push((
+                path.clone(),
+                chain_id,
+                create_if_necessary,
+            ));
             self.initialize_results.borrow_mut().remove(0)
         }
     }
@@ -453,7 +454,7 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
     use tokio::net::TcpListener;
-    
+
     #[test]
     fn db_initialize_does_not_create_if_directed_not_to_and_directory_does_not_exist() {
         let home_dir = ensure_node_home_directory_does_not_exist(
@@ -464,11 +465,11 @@ mod tests {
 
         let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID, false);
 
-        assert_eq! (result.err().unwrap(), InitializationError::Nonexistent);
+        assert_eq!(result.err().unwrap(), InitializationError::Nonexistent);
         let result = Connection::open(&home_dir.join(DATABASE_FILE));
         match result.err().unwrap() {
             Error::SqliteFailure(_, _) => (),
-            x => panic! ("Expected SqliteFailure, got {:?}", x),
+            x => panic!("Expected SqliteFailure, got {:?}", x),
         }
     }
 
@@ -482,13 +483,13 @@ mod tests {
 
         let result = subject.initialize(&home_dir, DEFAULT_CHAIN_ID, false);
 
-        assert_eq! (result.err().unwrap(), InitializationError::Nonexistent);
+        assert_eq!(result.err().unwrap(), InitializationError::Nonexistent);
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
         let result = Connection::open_with_flags(&home_dir.join(DATABASE_FILE), flags);
         match result.err().unwrap() {
             Error::SqliteFailure(_, _) => (),
-            x => panic! ("Expected SqliteFailure, got {:?}", x),
+            x => panic!("Expected SqliteFailure, got {:?}", x),
         }
     }
 
@@ -500,7 +501,9 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
+        subject
+            .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+            .unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -519,7 +522,9 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
+        subject
+            .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+            .unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -540,7 +545,9 @@ mod tests {
         );
         let subject = DbInitializerReal::new();
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
+        subject
+            .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+            .unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -574,7 +581,9 @@ mod tests {
             .unwrap();
         }
 
-        subject.initialize(&home_dir, DEFAULT_CHAIN_ID, true).unwrap();
+        subject
+            .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+            .unwrap();
 
         let mut flags = OpenFlags::empty();
         flags.insert(OpenFlags::SQLITE_OPEN_READ_ONLY);
