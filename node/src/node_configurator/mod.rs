@@ -142,8 +142,9 @@ pub fn determine_config_file_path(app: &App, args: &Vec<String>) -> (PathBuf, bo
     let config_file_path =
         value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted");
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
-    let (_, data_directory, _) = real_user_data_directory_and_chain_id(&multi_config);
-    (data_directory.join(config_file_path), user_specified)
+    let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+    let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
+    (directory.join(config_file_path), user_specified)
 }
 
 pub fn create_wallet(
@@ -196,21 +197,22 @@ pub fn update_db_password(
     }
 }
 
-pub fn real_user_data_directory_and_chain_id(
-    multi_config: &MultiConfig,
-) -> (RealUser, PathBuf, u8) {
+pub fn real_user_data_directory_opt_and_chain_name(multi_config: &MultiConfig) -> (RealUser, Option<PathBuf>, String) {
     let real_user = match value_m!(multi_config, "real-user", RealUser) {
         None => RealUser::null().populate(),
         Some(real_user) => real_user.populate(),
     };
-
     let chain_name =
         value_m!(multi_config, "chain", String).unwrap_or_else(|| DEFAULT_CHAIN_NAME.to_string());
-    let dirs_wrapper = RealDirsWrapper {};
+    let data_directory_opt = value_m!(multi_config, "data-directory", PathBuf);
+    (real_user, data_directory_opt, chain_name)
+}
 
-    let data_directory = match value_m!(multi_config, "data-directory", PathBuf) {
-        Some(data_directory) => data_directory,
+pub fn data_directory_from_context(real_user: &RealUser, data_directory_opt: &Option<PathBuf>, chain_name: &str) -> PathBuf {
+    match data_directory_opt {
+        Some(data_directory) => data_directory.clone(),
         None => {
+            let dirs_wrapper = RealDirsWrapper {};
             let right_home_dir = real_user
                 .home_dir
                 .as_ref()
@@ -233,13 +235,7 @@ pub fn real_user_data_directory_and_chain_id(
                 .join("MASQ")
                 .join(chain_name.clone())
         }
-    };
-
-    (
-        real_user,
-        data_directory,
-        chain_id_from_name(chain_name.as_str()),
-    )
+    }
 }
 
 pub fn prepare_initialization_mode<'a>(
@@ -254,8 +250,9 @@ pub fn prepare_initialization_mode<'a>(
         ],
     );
 
-    let (_, data_directory, chain_id) = real_user_data_directory_and_chain_id(&multi_config);
-    let persistent_config_box = initialize_database(&data_directory, chain_id);
+    let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+    let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
+    let persistent_config_box = initialize_database(&directory, chain_id_from_name(&chain_name));
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
         exit(1, "Cannot re-initialize Node: already initialized")
     }
@@ -925,10 +922,11 @@ mod tests {
         let vcl = Box::new(CommandLineVcl::new(args.into()));
         let multi_config = MultiConfig::new(&app(), vec![vcl]);
 
-        let (_, directory, chain_id) = real_user_data_directory_and_chain_id(&multi_config);
+        let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+        let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
 
         assert_eq!(directory, PathBuf::from("booga"));
-        assert_eq!(chain_id, chain_id_from_name(DEFAULT_CHAIN_NAME));
+        assert_eq!(&chain_name, DEFAULT_CHAIN_NAME);
     }
 
     #[test]

@@ -99,10 +99,7 @@ pub mod standard {
     use crate::blockchain::bip32::Bip32ECKeyPair;
     use crate::bootstrapper::PortConfiguration;
     use crate::http_request_start_finder::HttpRequestDiscriminatorFactory;
-    use crate::node_configurator::{
-        determine_config_file_path, mnemonic_seed_exists, real_user_data_directory_and_chain_id,
-        request_existing_db_password,
-    };
+    use crate::node_configurator::{determine_config_file_path, mnemonic_seed_exists, request_existing_db_password, real_user_data_directory_opt_and_chain_name, data_directory_from_context};
     use crate::persistent_configuration::PersistentConfiguration;
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
@@ -121,6 +118,7 @@ pub mod standard {
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
+    use crate::blockchain::blockchain_interface::chain_id_from_name;
 
     pub fn make_service_mode_multi_config<'a>(app: &'a App, args: &Vec<String>) -> MultiConfig<'a> {
         let (config_file_path, user_specified) = determine_config_file_path(app, args);
@@ -163,11 +161,11 @@ pub mod standard {
             .blockchain_bridge_config
             .blockchain_service_url = value_m!(multi_config, "blockchain-service-url", String);
 
-        let (real_user, data_directory, chain_id) =
-            real_user_data_directory_and_chain_id(multi_config);
+        let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+        let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         privileged_config.real_user = real_user;
-        privileged_config.data_directory = data_directory;
-        privileged_config.blockchain_bridge_config.chain_id = chain_id;
+        privileged_config.data_directory = directory;
+        privileged_config.blockchain_bridge_config.chain_id = chain_id_from_name(&chain_name);
 
         privileged_config.dns_servers = match value_m!(multi_config, "dns-servers", String) {
             Some(joined_dns_servers) => joined_dns_servers
@@ -223,7 +221,6 @@ pub mod standard {
         streams: &mut StdStreams<'_>,
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
     ) {
-        eprintln!("unprivileged_parse_args: {:?}", multi_config);
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
@@ -325,7 +322,6 @@ pub mod standard {
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
         unprivileged_config: &mut BootstrapperConfig,
     ) -> NeighborhoodConfig {
-        eprintln!("make_neighborhood_config: {:?}", multi_config);
         let neighbor_configs: Vec<NodeDescriptor> = {
             match convert_ci_configs(multi_config) {
                 Some(configs) => configs,
@@ -404,9 +400,7 @@ pub mod standard {
         multi_config: &MultiConfig,
         neighbor_configs: Vec<NodeDescriptor>,
     ) -> NeighborhoodMode {
-        eprintln!("make_neighborhood_mode: {:?}", multi_config);
         let neighborhood_mode_opt = value_m!(multi_config, "neighborhood-mode", String);
-        eprintln!("neighborhood_mode_opt: {:?}", neighborhood_mode_opt);
         match neighborhood_mode_opt {
             Some(ref s) if s == "standard" => {
                 neighborhood_mode_standard(multi_config, neighbor_configs)

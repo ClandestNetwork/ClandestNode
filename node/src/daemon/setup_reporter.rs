@@ -5,7 +5,9 @@ use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
 use crate::node_configurator::node_configurator_standard::standard::{
     privileged_parse_args, unprivileged_parse_args,
 };
-use crate::node_configurator::{app_head, determine_config_file_path};
+use crate::node_configurator::{
+    app_head, determine_config_file_path, DirsWrapper, RealDirsWrapper,
+};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::sub_lib::neighborhood::NodeDescriptor;
 use crate::test_utils::main_cryptde;
@@ -93,14 +95,12 @@ impl SetupReporter for SetupReporterReal {
                 ],
             )
         };
-        eprintln!("configured_multi_config: {:?}", configured_multi_config);
         let setup_multi_config = {
             MultiConfig::new(
                 &app,
                 vec![Box::new(CommandLineVcl::new(combined_args.clone()))],
             )
         };
-        eprintln!("setup_multi_config: {:?}", setup_multi_config);
         let combined_multi_config = {
             MultiConfig::new(
                 &app,
@@ -111,7 +111,6 @@ impl SetupReporter for SetupReporterReal {
                 ],
             )
         };
-        eprintln!("combined_multi_config: {:?}", combined_multi_config);
         let mut streams = StdStreams {
             stdin: &mut ByteArrayReader::new(b""),
             stdout: &mut ByteArrayWriter::new(),
@@ -214,7 +213,7 @@ impl SetupReporterReal {
             };
             if !already_set {
                 if let Some(value) = retriever.computed_default(
-                    bootstrap_config,
+                    &bootstrap_config,
                     persistent_config_opt,
                     &db_password_opt,
                 ) {
@@ -410,6 +409,22 @@ struct DataDirectory {}
 impl ValueRetriever for DataDirectory {
     fn value_name(&self) -> &'static str {
         "data-directory"
+    }
+
+    fn computed_default(
+        &self,
+        _bootstrapper_config: &BootstrapperConfig,
+        _persistent_config_opt: Option<&dyn PersistentConfiguration>,
+        _db_password_opt: &Option<String>,
+    ) -> Option<String> {
+        let dirs_wrapper = RealDirsWrapper {};
+        match dirs_wrapper.data_dir() {
+            None => None,
+            Some(path_buf) => match path_buf.to_str() {
+                None => None,
+                Some(item) => Some(item.to_string()),
+            },
+        }
     }
 
     fn is_required(&self, _params: &SetupCluster) -> bool {
@@ -1102,6 +1117,17 @@ mod tests {
     }
 
     #[test]
+    fn data_directory_computed_default() {
+        let default_path_buf = RealDirsWrapper {}.data_dir().unwrap();
+        let default_data_directory = default_path_buf.to_str().unwrap().to_string();
+        let subject = DataDirectory {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, Some(default_data_directory))
+    }
+
+    #[test]
     fn dns_servers_computed_default() {
         let subject = DnsServers {};
 
@@ -1142,6 +1168,114 @@ mod tests {
         let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
 
         assert_eq!(result, None)
+    }
+
+    #[test]
+    fn log_level_computed_default() {
+        let subject = LogLevel {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, Some("warn".to_string()))
+    }
+
+    #[test]
+    fn neighborhood_mode_computed_default() {
+        let subject = NeighborhoodMode {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, Some("standard".to_string()))
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_present_present_ok() {
+        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .past_neighbors_params(&past_neighbors_params_arc)
+            .past_neighbors_result(Ok(Some(vec![
+                NodeDescriptor::from_str(
+                    main_cryptde(),
+                    "MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234",
+                )
+                .unwrap(),
+                NodeDescriptor::from_str(
+                    main_cryptde(),
+                    "ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321",
+                )
+                .unwrap(),
+            ])));
+        let subject = Neighbors {};
+
+        let result = subject.computed_default(
+            &BootstrapperConfig::new(),
+            Some(&persistent_config),
+            &Some("password".to_string()),
+        );
+
+        assert_eq! (result, Some ("MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234,ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321".to_string()));
+        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
+        assert_eq!(*past_neighbors_params, vec!["password".to_string()])
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_present_err() {
+        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .past_neighbors_params(&past_neighbors_params_arc)
+            .past_neighbors_result(Err(PersistentConfigError::PasswordError));
+        let subject = Neighbors {};
+
+        let result = subject.computed_default(
+            &BootstrapperConfig::new(),
+            Some(&persistent_config),
+            &Some("password".to_string()),
+        );
+
+        assert_eq!(result, None);
+        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
+        assert_eq!(*past_neighbors_params, vec!["password".to_string()])
+    }
+
+    #[test]
+    fn neighbors_computed_default_present_absent() {
+        // absence of configured result will cause panic if past_neighbors is called
+        let persistent_config = PersistentConfigurationMock::new();
+        let subject = Neighbors {};
+
+        let result =
+            subject.computed_default(&BootstrapperConfig::new(), Some(&persistent_config), &None);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn neighbors_computed_default_absent() {
+        let subject = Neighbors {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, None);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn real_user_computed_default() {
+        let subject = crate::daemon::setup_reporter::RealUser {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, Some(RealUser::default().populate().to_string()));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn real_user_computed_default() {
+        let subject = crate::daemon::setup_reporter::RealUser {};
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+
+        assert_eq!(result, None);
     }
 
     fn verify_requirements(
@@ -1235,119 +1369,5 @@ mod tests {
             crate::daemon::setup_reporter::RealUser {}.is_required(&params),
             false
         );
-    }
-
-    #[test]
-    fn log_level_computed_default() {
-        let subject = LogLevel {};
-
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
-
-        assert_eq!(result, Some("warn".to_string()))
-    }
-
-    #[test]
-    fn neighborhood_mode_computed_default() {
-        let subject = NeighborhoodMode {};
-
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
-
-        assert_eq!(result, Some("standard".to_string()))
-    }
-
-    #[test]
-    fn neighbors_computed_default_present_present_present_ok() {
-        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
-        let persistent_config = PersistentConfigurationMock::new()
-            .past_neighbors_params(&past_neighbors_params_arc)
-            .past_neighbors_result(Ok(Some(vec![
-                NodeDescriptor::from_str(
-                    main_cryptde(),
-                    "MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234",
-                )
-                .unwrap(),
-                NodeDescriptor::from_str(
-                    main_cryptde(),
-                    "ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321",
-                )
-                .unwrap(),
-            ])));
-        let subject = Neighbors {};
-
-        let result = subject.computed_default(
-            &BootstrapperConfig::new(),
-            Some(&persistent_config),
-            &Some("password".to_string()),
-        );
-
-        assert_eq! (result, Some ("MTEyMjMzNDQ1NTY2Nzc4ODExMjIzMzQ0NTU2Njc3ODg@1.2.3.4:1234,ODg3NzY2NTU0NDMzMjIxMTg4Nzc2NjU1NDQzMzIyMTE@4.3.2.1:4321".to_string()));
-        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
-        assert_eq!(*past_neighbors_params, vec!["password".to_string()])
-    }
-
-    #[test]
-    fn neighbors_computed_default_present_present_err() {
-        let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
-        let persistent_config = PersistentConfigurationMock::new()
-            .past_neighbors_params(&past_neighbors_params_arc)
-            .past_neighbors_result(Err(PersistentConfigError::PasswordError));
-        let subject = Neighbors {};
-
-        let result = subject.computed_default(
-            &BootstrapperConfig::new(),
-            Some(&persistent_config),
-            &Some("password".to_string()),
-        );
-
-        assert_eq!(result, None);
-        let past_neighbors_params = past_neighbors_params_arc.lock().unwrap();
-        assert_eq!(*past_neighbors_params, vec!["password".to_string()])
-    }
-
-    #[test]
-    fn neighbors_computed_default_present_absent() {
-        // absence of configured result will cause panic if past_neighbors is called
-        let persistent_config = PersistentConfigurationMock::new();
-        let subject = Neighbors {};
-
-        let result =
-            subject.computed_default(&BootstrapperConfig::new(), Some(&persistent_config), &None);
-
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn neighbors_computed_default_absent() {
-        // absence of configured result will cause panic if past_neighbors is called
-        let persistent_config = PersistentConfigurationMock::new();
-        let subject = Neighbors {};
-
-        let result = subject.computed_default(
-            &BootstrapperConfig::new(),
-            Some(&persistent_config),
-            &Some("booga".to_string()),
-        );
-
-        assert_eq!(result, None);
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    #[test]
-    fn real_user_computed_default() {
-        let subject = crate::daemon::setup_reporter::RealUser {};
-
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
-
-        assert_eq!(result, Some(RealUser::default().populate().to_string()));
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn real_user_computed_default() {
-        let subject = crate::daemon::setup_reporter::RealUser {};
-
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
-
-        assert_eq!(result, None);
     }
 }
