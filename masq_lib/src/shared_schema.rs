@@ -249,7 +249,8 @@ pub fn shared_app(head: App<'static, 'static>) -> App<'static, 'static> {
             .value_name("DNS-SERVERS")
             .min_values(0)
             // .default_value("1.1.1.1") // TODO: This is wrong. We should get this from the system DNS configuration.
-            // .use_delimiter(true)
+            // .default_value("1.1.1.1") // TODO: This is wrong. We should get this from the system DNS configuration.
+            .use_delimiter(true)
             .validator(common_validators::validate_ip_addresses)
             .help(DNS_SERVERS_HELP),
     )
