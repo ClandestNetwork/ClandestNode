@@ -97,9 +97,13 @@ pub mod standard {
     use log::LevelFilter;
 
     use crate::blockchain::bip32::Bip32ECKeyPair;
+    use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::bootstrapper::PortConfiguration;
     use crate::http_request_start_finder::HttpRequestDiscriminatorFactory;
-    use crate::node_configurator::{determine_config_file_path, mnemonic_seed_exists, request_existing_db_password, real_user_data_directory_opt_and_chain_name, data_directory_from_context};
+    use crate::node_configurator::{
+        data_directory_from_context, determine_config_file_path, mnemonic_seed_exists,
+        real_user_data_directory_opt_and_chain_name, request_existing_db_password,
+    };
     use crate::persistent_configuration::PersistentConfiguration;
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
@@ -118,7 +122,6 @@ pub mod standard {
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
-    use crate::blockchain::blockchain_interface::chain_id_from_name;
 
     pub fn make_service_mode_multi_config<'a>(app: &'a App, args: &Vec<String>) -> MultiConfig<'a> {
         let (config_file_path, user_specified) = determine_config_file_path(app, args);
@@ -161,7 +164,8 @@ pub mod standard {
             .blockchain_bridge_config
             .blockchain_service_url = value_m!(multi_config, "blockchain-service-url", String);
 
-        let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+        let (real_user, data_directory_opt, chain_name) =
+            real_user_data_directory_opt_and_chain_name(&multi_config);
         let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         privileged_config.real_user = real_user;
         privileged_config.data_directory = directory;

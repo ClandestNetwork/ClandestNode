@@ -1,9 +1,12 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use crate::blockchain::blockchain_interface::chain_id_from_name;
 use crate::bootstrapper::RealUser;
 use crate::config_dao::{ConfigDao, ConfigDaoReal};
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal, DATABASE_FILE};
-use crate::node_configurator::{app_head, real_user_data_directory_opt_and_chain_name, data_directory_from_context};
+use crate::node_configurator::{
+    app_head, data_directory_from_context, real_user_data_directory_opt_and_chain_name,
+};
 use crate::privilege_drop::{PrivilegeDropper, PrivilegeDropperReal};
 use clap::Arg;
 use heck::MixedCase;
@@ -13,7 +16,6 @@ use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg};
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::path::PathBuf;
-use crate::blockchain::blockchain_interface::chain_id_from_name;
 
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";
@@ -84,7 +86,8 @@ fn distill_args(args: &Vec<String>) -> (RealUser, PathBuf, u8) {
         Box::new(EnvironmentVcl::new(&app)),
     ];
     let multi_config = MultiConfig::new(&app, vcls);
-    let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+    let (real_user, data_directory_opt, chain_name) =
+        real_user_data_directory_opt_and_chain_name(&multi_config);
     let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
     (real_user, directory, chain_id_from_name(&chain_name))
 }

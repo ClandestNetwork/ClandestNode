@@ -1,13 +1,12 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
+use crate::blockchain::blockchain_interface::chain_name_from_id;
 use crate::bootstrapper::BootstrapperConfig;
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
 use crate::node_configurator::node_configurator_standard::standard::{
     privileged_parse_args, unprivileged_parse_args,
 };
-use crate::node_configurator::{
-    app_head, determine_config_file_path, DirsWrapper, RealDirsWrapper,
-};
+use crate::node_configurator::{app_head, data_directory_from_context, determine_config_file_path};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::sub_lib::neighborhood::NodeDescriptor;
 use crate::test_utils::main_cryptde;
@@ -413,18 +412,18 @@ impl ValueRetriever for DataDirectory {
 
     fn computed_default(
         &self,
-        _bootstrapper_config: &BootstrapperConfig,
+        bootstrapper_config: &BootstrapperConfig,
         _persistent_config_opt: Option<&dyn PersistentConfiguration>,
         _db_password_opt: &Option<String>,
     ) -> Option<String> {
-        let dirs_wrapper = RealDirsWrapper {};
-        match dirs_wrapper.data_dir() {
-            None => None,
-            Some(path_buf) => match path_buf.to_str() {
-                None => None,
-                Some(item) => Some(item.to_string()),
-            },
-        }
+        let real_user = &bootstrapper_config.real_user;
+        let chain_name = chain_name_from_id(bootstrapper_config.blockchain_bridge_config.chain_id);
+        let data_directory_opt = None;
+        Some(
+            data_directory_from_context(&real_user, &data_directory_opt, chain_name)
+                .to_string_lossy()
+                .to_string(),
+        )
     }
 
     fn is_required(&self, _params: &SetupCluster) -> bool {
@@ -1118,13 +1117,19 @@ mod tests {
 
     #[test]
     fn data_directory_computed_default() {
-        let default_path_buf = RealDirsWrapper {}.data_dir().unwrap();
-        let default_data_directory = default_path_buf.to_str().unwrap().to_string();
+        let real_user = RealUser::null().populate();
+        let expected = data_directory_from_context(&real_user, &None, DEFAULT_CHAIN_NAME)
+            .to_string_lossy()
+            .to_string();
+        let mut config = BootstrapperConfig::new();
+        config.real_user = real_user;
+        config.blockchain_bridge_config.chain_id = chain_id_from_name(DEFAULT_CHAIN_NAME);
+
         let subject = DataDirectory {};
 
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+        let result = subject.computed_default(&config, None, &None);
 
-        assert_eq!(result, Some(default_data_directory))
+        assert_eq!(result, Some(expected))
     }
 
     #[test]
@@ -1369,5 +1374,12 @@ mod tests {
             crate::daemon::setup_reporter::RealUser {}.is_required(&params),
             false
         );
+    }
+
+    #[test]
+    fn run_me_privileged() {
+        let real_user = RealUser::null().populate();
+        let directory = data_directory_from_context(&real_user, &None, "mainnet");
+        eprintln!("default data directory: {:?}", directory);
     }
 }

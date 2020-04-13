@@ -37,13 +37,13 @@ impl Command for SetupCommand {
                 }
                 writeln!(
                     context.stdout(),
-                    "NAME                      VALUE                      STATUS"
+                    "NAME                      VALUE                                                            STATUS"
                 )
                 .expect("writeln! failed");
                 response.values.into_iter().for_each(|value| {
                     writeln!(
                         context.stdout(),
-                        "{:26}{:27}{:?}",
+                        "{:26}{:65}{:?}",
                         value.name,
                         value.value,
                         value.status
@@ -171,7 +171,7 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "NAME                      VALUE                      STATUS\nchain                     ropsten                    Configured\nneighborhood-mode         zero-hop                   Set\n");
+            "NAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Configured\nneighborhood-mode         zero-hop                                                         Set\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 
@@ -228,7 +228,7 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE                      STATUS\nchain                     ropsten                    Set\nclandestine-port          8534                       Default\nneighborhood-mode         zero-hop                   Configured\n");
+            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Set\nclandestine-port          8534                                                             Default\nneighborhood-mode         zero-hop                                                         Configured\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 }

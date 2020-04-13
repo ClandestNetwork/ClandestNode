@@ -194,20 +194,19 @@ mod tests {
         let second_actual_response: UiUnmarshalError = connection.receive().unwrap();
 
         let requests = stop_handle.stop();
+        let actual_body: UiSetupResponse = UiSetupResponse::fmb(requests[0].clone().unwrap().body)
+            .unwrap()
+            .0;
         assert_eq!(
-            requests[0],
-            Ok(NodeFromUiMessage {
-                client_id: 0,
-                body: UiSetupResponse {
-                    running: true,
-                    values: vec![UiSetupResponseValue {
-                        name: "direction".to_string(),
-                        value: "to UI".to_string(),
-                        status: Set,
-                    }],
-                }
-                .tmb(1234),
-            })
+            actual_body,
+            UiSetupResponse {
+                running: true,
+                values: vec![UiSetupResponseValue {
+                    name: "direction".to_string(),
+                    value: "to UI".to_string(),
+                    status: Set,
+                }],
+            }
         );
         assert_eq!(
             (first_actual_response, 1234),

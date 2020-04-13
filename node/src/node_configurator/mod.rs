@@ -142,7 +142,8 @@ pub fn determine_config_file_path(app: &App, args: &Vec<String>) -> (PathBuf, bo
     let config_file_path =
         value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted");
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
-    let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+    let (real_user, data_directory_opt, chain_name) =
+        real_user_data_directory_opt_and_chain_name(&multi_config);
     let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
     (directory.join(config_file_path), user_specified)
 }
@@ -197,7 +198,9 @@ pub fn update_db_password(
     }
 }
 
-pub fn real_user_data_directory_opt_and_chain_name(multi_config: &MultiConfig) -> (RealUser, Option<PathBuf>, String) {
+pub fn real_user_data_directory_opt_and_chain_name(
+    multi_config: &MultiConfig,
+) -> (RealUser, Option<PathBuf>, String) {
     let real_user = match value_m!(multi_config, "real-user", RealUser) {
         None => RealUser::null().populate(),
         Some(real_user) => real_user.populate(),
@@ -208,17 +211,21 @@ pub fn real_user_data_directory_opt_and_chain_name(multi_config: &MultiConfig) -
     (real_user, data_directory_opt, chain_name)
 }
 
-pub fn data_directory_from_context(real_user: &RealUser, data_directory_opt: &Option<PathBuf>, chain_name: &str) -> PathBuf {
+pub fn data_directory_from_context(
+    real_user: &RealUser,
+    data_directory_opt: &Option<PathBuf>,
+    chain_name: &str,
+) -> PathBuf {
     match data_directory_opt {
         Some(data_directory) => data_directory.clone(),
         None => {
-            let dirs_wrapper = RealDirsWrapper {};
             let right_home_dir = real_user
                 .home_dir
                 .as_ref()
                 .expect("No real-user home directory; specify --real-user")
                 .to_string_lossy()
                 .to_string();
+            let dirs_wrapper = RealDirsWrapper {};
             let wrong_home_dir = dirs_wrapper
                 .home_dir()
                 .expect("No privileged home directory; specify --data-directory")
@@ -250,7 +257,8 @@ pub fn prepare_initialization_mode<'a>(
         ],
     );
 
-    let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+    let (real_user, data_directory_opt, chain_name) =
+        real_user_data_directory_opt_and_chain_name(&multi_config);
     let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
     let persistent_config_box = initialize_database(&directory, chain_id_from_name(&chain_name));
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
@@ -922,7 +930,8 @@ mod tests {
         let vcl = Box::new(CommandLineVcl::new(args.into()));
         let multi_config = MultiConfig::new(&app(), vec![vcl]);
 
-        let (real_user, data_directory_opt, chain_name) = real_user_data_directory_opt_and_chain_name(&multi_config);
+        let (real_user, data_directory_opt, chain_name) =
+            real_user_data_directory_opt_and_chain_name(&multi_config);
         let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
 
         assert_eq!(directory, PathBuf::from("booga"));
