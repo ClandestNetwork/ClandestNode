@@ -131,7 +131,6 @@ impl Handler<NodeFromUiMessage> for Daemon {
             ),
         }
         debug!(&self.logger, "NodeFromUiMessage handled");
-        ()
     }
 }
 
