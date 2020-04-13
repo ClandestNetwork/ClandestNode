@@ -658,6 +658,7 @@ mod tests {
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Configured, Required, Set};
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    #[cfg(not(target_os = "windows"))]
     use std::default::Default;
     use std::net::IpAddr;
     use std::str::FromStr;

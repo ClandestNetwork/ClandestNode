@@ -15,7 +15,7 @@ use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
-use masq_lib::messages::UiSetupResponseValueStatus::Set;
+use masq_lib::messages::UiSetupResponseValueStatus::{Required, Blank};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
     UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
@@ -131,6 +131,7 @@ impl Handler<NodeFromUiMessage> for Daemon {
             ),
         }
         debug!(&self.logger, "NodeFromUiMessage handled");
+        ()
     }
 }
 
@@ -190,7 +191,7 @@ impl Daemon {
             None => match self.launcher.launch(
                 self.params
                     .iter()
-                    .filter(|(_, v)| v.status == Set)
+                    .filter(|(_, v)| v.status != Blank && v.status != Required)
                     .map(|(k, v)| (k.to_string(), v.value.to_string()))
                     .collect(),
             ) {
@@ -335,6 +336,7 @@ mod tests {
     use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
+    use masq_lib::messages::UiSetupResponseValueStatus::Set;
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<HashMap<String, String>>>>,
