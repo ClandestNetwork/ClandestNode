@@ -15,7 +15,7 @@ use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
-use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Required};
+use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
     UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
@@ -190,7 +190,7 @@ impl Daemon {
             None => match self.launcher.launch(
                 self.params
                     .iter()
-                    .filter(|(_, v)| v.status != Blank && v.status != Required)
+                    .filter(|(_, v)| v.status == Set || v.status == Configured)
                     .map(|(k, v)| (k.to_string(), v.value.to_string()))
                     .collect(),
             ) {
