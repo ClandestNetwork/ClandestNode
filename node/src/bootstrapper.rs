@@ -15,7 +15,7 @@ use crate::listener_handler::ListenerHandlerFactoryReal;
 use crate::node_configurator::node_configurator_standard::{
     NodeConfiguratorStandardPrivileged, NodeConfiguratorStandardUnprivileged,
 };
-use crate::node_configurator::{DirsWrapper, NodeConfigurator, RealDirsWrapper};
+use crate::node_configurator::{DirsWrapper, NodeConfigurator, RealDirsWrapper, ConfiguratorError};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::privilege_drop::{IdWrapper, IdWrapperReal};
 use crate::server_initializer::LoggerInitializerWrapper;
@@ -361,8 +361,11 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
         &self.config
     }
 
-    fn initialize_as_privileged(&mut self, args: &[String], streams: &mut StdStreams) {
-        self.config = NodeConfiguratorStandardPrivileged {}.configure(&args.to_vec(), streams);
+    fn initialize_as_privileged(&mut self, args: &[String], streams: &mut StdStreams) -> Result<(), ConfiguratorError> {
+        self.config = match NodeConfiguratorStandardPrivileged::new().configure(&args.to_vec(), streams) {
+            Ok(config) => config,
+            Err(_) => unimplemented!("Test-drive me!"),
+        };
 
         self.logger_initializer.init(
             self.config.data_directory.clone(),
@@ -386,13 +389,17 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
                 }
                 self.listener_handlers.push(listener_handler);
             });
+        Ok(())
     }
 
-    fn initialize_as_unprivileged(&mut self, args: &[String], streams: &mut StdStreams) {
+    fn initialize_as_unprivileged(&mut self, args: &[String], streams: &mut StdStreams) -> Result<(), ConfiguratorError> {
         // NOTE: The following line of code is not covered by unit tests
         fdlimit::raise_fd_limit();
-        let unprivileged_config = NodeConfiguratorStandardUnprivileged::new(&self.config)
-            .configure(&args.to_vec(), streams);
+        let unprivileged_config = match NodeConfiguratorStandardUnprivileged::new(&self.config)
+            .configure(&args.to_vec(), streams) {
+            Ok (config) => config,
+            Err (_) => unimplemented!("Test-drive me!"),
+        };
         self.config.merge_unprivileged(unprivileged_config);
         self.establish_clandestine_port();
         let (cryptde_ref, _) = Bootstrapper::initialize_cryptdes(
@@ -413,6 +420,7 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
         for f in self.listener_handlers.iter_mut() {
             f.bind_subs(stream_handler_pool_subs.add_sub.clone());
         }
+        Ok(())
     }
 }
 
@@ -806,7 +814,7 @@ mod tests {
         subject.initialize_as_privileged(
             &make_default_cli_params(),
             &mut FakeStreamHolder::new().streams(),
-        );
+        ).unwrap();
 
         let mut all_calls = vec![];
         all_calls.extend(first_handler_log.lock().unwrap().dump());
@@ -847,7 +855,7 @@ mod tests {
                 "zero-hop".to_string(),
             ],
             &mut FakeStreamHolder::new().streams(),
-        );
+        ).unwrap();
 
         let config = subject.config;
         assert_eq!(
@@ -883,7 +891,7 @@ mod tests {
             .into();
         let args_slice: &[String] = args.as_slice();
 
-        subject.initialize_as_privileged(args_slice, &mut FakeStreamHolder::new().streams());
+        subject.initialize_as_privileged(args_slice, &mut FakeStreamHolder::new().streams()).unwrap();
 
         let init_params = init_params_arc.lock().unwrap();
         assert_eq!(
@@ -923,7 +931,7 @@ mod tests {
                 data_dir.to_str().unwrap().to_string(),
             ],
             &mut FakeStreamHolder::new().streams(),
-        );
+        ).unwrap();
 
         let config = subject.config;
         assert!(!config.ui_gateway_config.node_descriptor.is_empty());
@@ -956,7 +964,7 @@ mod tests {
                 "11".to_string(),
             ],
             &mut FakeStreamHolder::new().streams(),
-        );
+        ).unwrap();
 
         let config = subject.config;
         assert_eq!(Some(11u64), config.blockchain_bridge_config.gas_price);
@@ -989,8 +997,8 @@ mod tests {
         ];
         let mut holder = FakeStreamHolder::new();
 
-        subject.initialize_as_privileged(&args, &mut holder.streams());
-        subject.initialize_as_unprivileged(&args, &mut holder.streams());
+        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
+        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
 
         let config = subject.config;
         assert!(config.neighborhood_config.mode.node_addr_opt().is_none());
@@ -1032,8 +1040,8 @@ mod tests {
             ))
             .build();
 
-        subject.initialize_as_privileged(&args, &mut holder.streams());
-        subject.initialize_as_unprivileged(&args, &mut holder.streams());
+        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
+        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
 
         let dns_servers_guard = dns_servers_arc.lock().unwrap();
         assert_eq!(
@@ -1066,7 +1074,7 @@ mod tests {
                 String::from("111.111.111.111"),
             ],
             &mut FakeStreamHolder::new().streams(),
-        );
+        ).unwrap();
     }
 
     #[test]
@@ -1241,7 +1249,7 @@ mod tests {
                 data_dir.display().to_string(),
             ],
             &mut holder.streams(),
-        );
+        ).unwrap();
 
         subject.initialize_as_unprivileged(
             &vec![
@@ -1254,7 +1262,7 @@ mod tests {
                 data_dir.display().to_string(),
             ],
             &mut holder.streams(),
-        );
+        ).unwrap();
 
         let calls = clandestine_listener_handler_log_arc.lock().unwrap().dump();
         assert_eq!(
@@ -1293,9 +1301,9 @@ mod tests {
             .add_listener_handler(Box::new(yet_another_listener_handler))
             .config(config)
             .build();
-        subject.initialize_as_privileged(&args, &mut holder.streams());
+        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
 
-        subject.initialize_as_unprivileged(&args, &mut holder.streams());
+        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
 
         // Checking log message cause I don't know how to get at add_stream_sub
         let tlh = TestLogHandler::new();
@@ -1374,8 +1382,8 @@ mod tests {
             data_dir.to_str().unwrap().to_string(),
         ];
 
-        subject.initialize_as_privileged(&args, &mut holder.streams());
-        subject.initialize_as_unprivileged(&args, &mut holder.streams());
+        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
+        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
 
         thread::spawn(|| {
             tokio::run(subject);

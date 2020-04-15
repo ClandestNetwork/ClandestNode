@@ -1,13 +1,7 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::blockchain::bip39::Bip39;
-use crate::node_configurator::{
-    app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg, exit,
-    flushed_write, language_arg, mnemonic_passphrase_arg, mnemonic_seed_exists,
-    prepare_initialization_mode, request_password_with_confirmation, request_password_with_retry,
-    update_db_password, Either, NodeConfigurator, WalletCreationConfig, WalletCreationConfigMaker,
-    DB_PASSWORD_HELP, EARNING_WALLET_HELP,
-};
+use crate::node_configurator::{app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg, exit, flushed_write, language_arg, mnemonic_passphrase_arg, mnemonic_seed_exists, prepare_initialization_mode, request_password_with_confirmation, request_password_with_retry, update_db_password, Either, NodeConfigurator, WalletCreationConfig, WalletCreationConfigMaker, DB_PASSWORD_HELP, EARNING_WALLET_HELP, ConfiguratorError};
 use crate::persistent_configuration::PersistentConfiguration;
 use crate::sub_lib::cryptde::PlainData;
 use bip39::{Language, Mnemonic};
@@ -22,7 +16,7 @@ pub struct NodeConfiguratorRecoverWallet {
 }
 
 impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorRecoverWallet {
-    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> WalletCreationConfig {
+    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<WalletCreationConfig, ConfiguratorError> {
         let (multi_config, persistent_config_box) = prepare_initialization_mode(&self.app, args);
         let persistent_config = persistent_config_box.as_ref();
 
@@ -31,7 +25,7 @@ impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorRecoverWallet {
         create_wallet(&config, persistent_config);
         update_db_password(&config, persistent_config);
 
-        config
+        Ok (config)
     }
 }
 
@@ -404,7 +398,7 @@ mod tests {
             .into();
         let subject = NodeConfiguratorRecoverWallet::new();
 
-        let config = subject.configure(&args, &mut FakeStreamHolder::new().streams());
+        let config = subject.configure(&args, &mut FakeStreamHolder::new().streams()).unwrap();
 
         let persistent_config = initialize_database(&home_dir, DEFAULT_CHAIN_ID);
         assert_eq!(persistent_config.check_password(password), Some(true));

@@ -162,14 +162,18 @@ impl Runner for RunnerReal {
 
     fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
         let configurator = NodeConfiguratorInitialization {};
-        let config = configurator.configure(args, streams);
-        let mut initializer = DaemonInitializer::new(
-            config,
-            Box::new(ChannelFactoryReal::new()),
-            Box::new(RecipientsFactoryReal::new()),
-            Box::new(RerunnerReal::new()),
-        );
-        initializer.go(streams, args);
+        match configurator.configure(args, streams) {
+            Ok(config) => {
+                let mut initializer = DaemonInitializer::new(
+                    config,
+                    Box::new(ChannelFactoryReal::new()),
+                    Box::new(RecipientsFactoryReal::new()),
+                    Box::new(RerunnerReal::new()),
+                );
+                initializer.go(streams, args);
+            },
+            Err(_) => unimplemented!("Test-drive me!"),
+        }
         1
     }
 
@@ -180,8 +184,10 @@ impl Runner for RunnerReal {
         configurator: &dyn NodeConfigurator<WalletCreationConfig>,
         privilege_dropper: &dyn PrivilegeDropper,
     ) -> i32 {
-        let config = configurator.configure(args, streams);
-        privilege_dropper.drop_privileges(&config.real_user);
+        match configurator.configure(args, streams) {
+            Ok(config) => privilege_dropper.drop_privileges(&config.real_user),
+            Err(_) => unimplemented!("Test-drive me!")
+        }
         0
     }
 }
