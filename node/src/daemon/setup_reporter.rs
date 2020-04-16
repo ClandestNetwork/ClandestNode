@@ -206,58 +206,52 @@ impl SetupReporterReal {
             .collect::<SetupCluster>();
         let db_password_opt = value_m!(setup_multi_config, "db-password", String);
         value_retrievers.iter().for_each(|retriever| {
-            let already_set = match result.get(retriever.value_name()) {
-                Some(uisrv) => uisrv.status == Set,
-                None => false,
-            };
-            if !already_set {
-                if let Some(value) = retriever.computed_default(
-                    &bootstrap_config,
-                    persistent_config_opt,
-                    &db_password_opt,
-                ) {
-                    result.insert(
-                        retriever.value_name().to_string(),
-                        UiSetupResponseValue::new(retriever.value_name(), &value, Default),
-                    );
-                }
-                if let Some(value) =
-                    value_m!(configured_multi_config, retriever.value_name(), String)
-                {
-                    if let Some(existing_value) = result.get(retriever.value_name()) {
-                        if (existing_value.status == Default) && (value != existing_value.value) {
-                            result.insert(
-                                retriever.value_name().to_string(),
-                                UiSetupResponseValue::new(
-                                    retriever.value_name(),
-                                    &value,
-                                    Configured,
-                                ),
-                            );
-                        } else {
-                        }
-                    } else {
+            if let Some(value) = retriever.computed_default(
+                &bootstrap_config,
+                persistent_config_opt,
+                &db_password_opt,
+            ) {
+                result.insert(
+                    retriever.value_name().to_string(),
+                    UiSetupResponseValue::new(retriever.value_name(), &value, Default),
+                );
+            }
+            if let Some(value) =
+                value_m!(configured_multi_config, retriever.value_name(), String)
+            {
+                if let Some(existing_value) = result.get(retriever.value_name()) {
+                    if (existing_value.status == Default) && (value != existing_value.value) {
                         result.insert(
                             retriever.value_name().to_string(),
-                            UiSetupResponseValue::new(retriever.value_name(), &value, Configured),
+                            UiSetupResponseValue::new(
+                                retriever.value_name(),
+                                &value,
+                                Configured,
+                            ),
                         );
-                    }
-                }
-                if let Some(value) = value_m!(setup_multi_config, retriever.value_name(), String) {
-                    if let Some(existing_value) = result.get(retriever.value_name()) {
-                        if (existing_value.status != Set) && (value != existing_value.value) {
-                            result.insert(
-                                retriever.value_name().to_string(),
-                                UiSetupResponseValue::new(retriever.value_name(), &value, Set),
-                            );
-                        } else {
-                        }
                     } else {
+                    }
+                } else {
+                    result.insert(
+                        retriever.value_name().to_string(),
+                        UiSetupResponseValue::new(retriever.value_name(), &value, Configured),
+                    );
+                }
+            }
+            if let Some(value) = value_m!(setup_multi_config, retriever.value_name(), String) {
+                if let Some(existing_value) = result.get(retriever.value_name()) {
+                    if value != existing_value.value {
                         result.insert(
                             retriever.value_name().to_string(),
                             UiSetupResponseValue::new(retriever.value_name(), &value, Set),
                         );
+                    } else {
                     }
+                } else {
+                    result.insert(
+                        retriever.value_name().to_string(),
+                        UiSetupResponseValue::new(retriever.value_name(), &value, Set),
+                    );
                 }
             }
         });
@@ -266,7 +260,7 @@ impl SetupReporterReal {
             .into_iter()
             .filter(|retriever| {
                 !result.contains_key(retriever.value_name())
-                    || to_clear_out.contains(&retriever.value_name().to_string())
+                    && to_clear_out.contains(&retriever.value_name().to_string())
             })
             .map(|retriever| {
                 let is_required = retriever.is_required(&result);
@@ -1085,6 +1079,20 @@ mod tests {
             .sorted_by_key(|(k, _)| k.clone())
             .collect_vec();
         assert_eq!(presentable_result, expected_result);
+    }
+
+    #[test]
+    fn blanking_a_parameter_with_a_default_produces_that_default() {
+        let _guard = EnvironmentGuard::new();
+        let subject = SetupReporterReal::new();
+
+        let result = subject.get_modified_setup(HashMap::new(), vec![
+            UiSetupRequestValue::new ("ip", "1.2.3.4"),
+            UiSetupRequestValue::clear ("chain"),
+        ]);
+
+        let actual_chain = result.get("chain").unwrap();
+        assert_eq! (actual_chain, &UiSetupResponseValue::new ("chain", DEFAULT_CHAIN_NAME, Default));
     }
 
     #[test]
