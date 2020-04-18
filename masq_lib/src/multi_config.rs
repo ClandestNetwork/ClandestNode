@@ -184,6 +184,12 @@ pub trait VirtualCommandLine {
     fn args(&self) -> Vec<String>;
 }
 
+impl Debug for dyn VirtualCommandLine {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.args())
+    }
+}
+
 pub fn merge(
     lower_priority: Box<dyn VirtualCommandLine>,
     higher_priority: Box<dyn VirtualCommandLine>,
