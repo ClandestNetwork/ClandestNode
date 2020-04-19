@@ -1,7 +1,9 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::bootstrapper::BootstrapperConfig;
-use crate::node_configurator::{app_head, initialize_database, NodeConfigurator, ConfiguratorError};
+use crate::node_configurator::{
+    app_head, initialize_database, ConfiguratorError, NodeConfigurator,
+};
 use clap::App;
 use indoc::indoc;
 use masq_lib::command::StdStreams;
@@ -12,7 +14,11 @@ use masq_lib::shared_schema::{shared_app, ui_port_arg};
 pub struct NodeConfiguratorStandardPrivileged {}
 
 impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged {
-    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams) -> Result<BootstrapperConfig, ConfiguratorError> {
+    fn configure(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams,
+    ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
         let multi_config = standard::make_service_mode_multi_config(&app, args);
         let mut bootstrapper_config = BootstrapperConfig::new();
@@ -23,8 +29,8 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged
 }
 
 impl NodeConfiguratorStandardPrivileged {
-    pub fn new () -> Self {
-        Self{}
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -33,7 +39,11 @@ pub struct NodeConfiguratorStandardUnprivileged {
 }
 
 impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileged {
-    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<BootstrapperConfig, ConfiguratorError> {
+    fn configure(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
         let persistent_config = initialize_database(
             &self.privileged_config.data_directory,
@@ -960,14 +970,16 @@ mod tests {
         }
         let subject = NodeConfiguratorStandardPrivileged {};
 
-        let configuration = subject.configure(
-            &vec![
-                "".to_string(),
-                "--data-directory".to_string(),
-                home_dir.to_str().unwrap().to_string(),
-            ],
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        let configuration = subject
+            .configure(
+                &vec![
+                    "".to_string(),
+                    "--data-directory".to_string(),
+                    home_dir.to_str().unwrap().to_string(),
+                ],
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
 
         assert_eq!(
             configuration.dns_servers,
@@ -1886,7 +1898,9 @@ mod tests {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
-        subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
     }
 
     #[test]
@@ -1901,7 +1915,9 @@ mod tests {
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
-        subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
     }
 
     #[test]
@@ -1911,7 +1927,9 @@ mod tests {
             .param("--ip", "1.2.3.4")
             .param("--chain", "dev");
 
-        let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         assert_eq!(
             config.blockchain_bridge_config.chain_id,
@@ -1926,7 +1944,9 @@ mod tests {
             .param("--ip", "1.2.3.4")
             .param("--chain", "ropsten");
 
-        let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         assert_eq!(
             config.blockchain_bridge_config.chain_id,
@@ -1939,7 +1959,9 @@ mod tests {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
 
-        let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         assert_eq!(
             chain_name_from_id(config.blockchain_bridge_config.chain_id),
@@ -1954,8 +1976,9 @@ mod tests {
             .param("--ip", "1.2.3.4")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
 
-        let bootstrapper_config =
-            subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let bootstrapper_config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
         assert_eq!(
             bootstrapper_config.blockchain_bridge_config.chain_id,
             chain_id_from_name(TEST_DEFAULT_CHAIN_NAME)
@@ -1976,7 +1999,9 @@ mod tests {
             .param("--ip", "1.2.3.4")
             .param("--gas-price", expected_gas_price);
 
-        let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         assert_eq!(
             config.blockchain_bridge_config.gas_price,
@@ -1995,7 +2020,9 @@ mod tests {
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
 
-        let config = subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        let config = subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         assert_eq!(config.blockchain_bridge_config.gas_price, None);
     }
@@ -2006,7 +2033,9 @@ mod tests {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
 
-        subject.configure(&args.into(), &mut FakeStreamHolder::new().streams()).unwrap();
+        subject
+            .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .unwrap();
     }
 
     #[test]

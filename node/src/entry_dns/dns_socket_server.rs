@@ -9,10 +9,10 @@ use tokio::prelude::Future;
 const DNS_PORT: u16 = 53;
 
 use crate::entry_dns::processing;
+use crate::node_configurator::ConfiguratorError;
 use crate::sub_lib::udp_socket_wrapper::UdpSocketWrapperReal;
 use crate::sub_lib::udp_socket_wrapper::UdpSocketWrapperTrait;
 use masq_lib::utils::localhost;
-use crate::node_configurator::ConfiguratorError;
 
 pub struct DnsSocketServer {
     socket_wrapper: Box<dyn UdpSocketWrapperTrait>,
@@ -55,7 +55,11 @@ impl SocketServer<()> for DnsSocketServer {
         &()
     }
 
-    fn initialize_as_privileged(&mut self, _args: &[String], _streams: &mut StdStreams<'_>) -> Result<(), ConfiguratorError> {
+    fn initialize_as_privileged(
+        &mut self,
+        _args: &[String],
+        _streams: &mut StdStreams<'_>,
+    ) -> Result<(), ConfiguratorError> {
         let socket_addr = SocketAddr::new(localhost(), DNS_PORT);
         self.socket_wrapper
             .bind(socket_addr)
@@ -63,7 +67,11 @@ impl SocketServer<()> for DnsSocketServer {
         Ok(())
     }
 
-    fn initialize_as_unprivileged(&mut self, _args: &[String], _streams: &mut StdStreams<'_>) -> Result<(), ConfiguratorError> {
+    fn initialize_as_unprivileged(
+        &mut self,
+        _args: &[String],
+        _streams: &mut StdStreams<'_>,
+    ) -> Result<(), ConfiguratorError> {
         self.buf = [0; 65536];
         Ok(())
     }
@@ -192,7 +200,9 @@ mod tests {
         let socket_wrapper = make_socket_wrapper_mock();
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
-        subject.initialize_as_privileged(&vec![], &mut FakeStreamHolder::new().streams()).unwrap();
+        subject
+            .initialize_as_privileged(&vec![], &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         let unwrapped_guts = socket_wrapper.guts.lock().unwrap();
         let borrowed_guts = unwrapped_guts.borrow();
@@ -254,7 +264,9 @@ mod tests {
 
             let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
-            subject.initialize_as_unprivileged(&vec![], &mut holder.streams()).unwrap();
+            subject
+                .initialize_as_unprivileged(&vec![], &mut holder.streams())
+                .unwrap();
             tokio::run(subject);
 
             let unwrapped_guts = socket_wrapper.guts.lock().unwrap();
@@ -300,7 +312,9 @@ mod tests {
 
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
-        subject.initialize_as_unprivileged(&vec![], &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_unprivileged(&vec![], &mut holder.streams())
+            .unwrap();
 
         let result = subject.poll();
 
@@ -332,7 +346,9 @@ mod tests {
 
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
-        subject.initialize_as_unprivileged(&vec![], &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_unprivileged(&vec![], &mut holder.streams())
+            .unwrap();
 
         let result = subject.poll();
 

@@ -171,7 +171,7 @@ impl Runner for RunnerReal {
                     Box::new(RerunnerReal::new()),
                 );
                 initializer.go(streams, args);
-            },
+            }
             Err(_) => unimplemented!("Test-drive me!"),
         }
         1
@@ -186,7 +186,7 @@ impl Runner for RunnerReal {
     ) -> i32 {
         match configurator.configure(args, streams) {
             Ok(config) => privilege_dropper.drop_privileges(&config.real_user),
-            Err(_) => unimplemented!("Test-drive me!")
+            Err(_) => unimplemented!("Test-drive me!"),
         }
         0
     }

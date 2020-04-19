@@ -15,7 +15,7 @@ use crate::listener_handler::ListenerHandlerFactoryReal;
 use crate::node_configurator::node_configurator_standard::{
     NodeConfiguratorStandardPrivileged, NodeConfiguratorStandardUnprivileged,
 };
-use crate::node_configurator::{DirsWrapper, NodeConfigurator, RealDirsWrapper, ConfiguratorError};
+use crate::node_configurator::{ConfiguratorError, DirsWrapper, NodeConfigurator, RealDirsWrapper};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::privilege_drop::{IdWrapper, IdWrapperReal};
 use crate::server_initializer::LoggerInitializerWrapper;
@@ -361,11 +361,16 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
         &self.config
     }
 
-    fn initialize_as_privileged(&mut self, args: &[String], streams: &mut StdStreams) -> Result<(), ConfiguratorError> {
-        self.config = match NodeConfiguratorStandardPrivileged::new().configure(&args.to_vec(), streams) {
-            Ok(config) => config,
-            Err(_) => unimplemented!("Test-drive me!"),
-        };
+    fn initialize_as_privileged(
+        &mut self,
+        args: &[String],
+        streams: &mut StdStreams,
+    ) -> Result<(), ConfiguratorError> {
+        self.config =
+            match NodeConfiguratorStandardPrivileged::new().configure(&args.to_vec(), streams) {
+                Ok(config) => config,
+                Err(_) => unimplemented!("Test-drive me!"),
+            };
 
         self.logger_initializer.init(
             self.config.data_directory.clone(),
@@ -392,13 +397,18 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
         Ok(())
     }
 
-    fn initialize_as_unprivileged(&mut self, args: &[String], streams: &mut StdStreams) -> Result<(), ConfiguratorError> {
+    fn initialize_as_unprivileged(
+        &mut self,
+        args: &[String],
+        streams: &mut StdStreams,
+    ) -> Result<(), ConfiguratorError> {
         // NOTE: The following line of code is not covered by unit tests
         fdlimit::raise_fd_limit();
         let unprivileged_config = match NodeConfiguratorStandardUnprivileged::new(&self.config)
-            .configure(&args.to_vec(), streams) {
-            Ok (config) => config,
-            Err (_) => unimplemented!("Test-drive me!"),
+            .configure(&args.to_vec(), streams)
+        {
+            Ok(config) => config,
+            Err(_) => unimplemented!("Test-drive me!"),
         };
         self.config.merge_unprivileged(unprivileged_config);
         self.establish_clandestine_port();
@@ -811,10 +821,12 @@ mod tests {
             .add_listener_handler(Box::new(third_handler))
             .build();
 
-        subject.initialize_as_privileged(
-            &make_default_cli_params(),
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        subject
+            .initialize_as_privileged(
+                &make_default_cli_params(),
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
 
         let mut all_calls = vec![];
         all_calls.extend(first_handler_log.lock().unwrap().dump());
@@ -848,14 +860,16 @@ mod tests {
             .add_listener_handler(second_handler)
             .build();
 
-        subject.initialize_as_privileged(
-            &vec![
-                "MASQNode".to_string(),
-                "--neighborhood-mode".to_string(),
-                "zero-hop".to_string(),
-            ],
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        subject
+            .initialize_as_privileged(
+                &vec![
+                    "MASQNode".to_string(),
+                    "--neighborhood-mode".to_string(),
+                    "zero-hop".to_string(),
+                ],
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
 
         let config = subject.config;
         assert_eq!(
@@ -891,7 +905,9 @@ mod tests {
             .into();
         let args_slice: &[String] = args.as_slice();
 
-        subject.initialize_as_privileged(args_slice, &mut FakeStreamHolder::new().streams()).unwrap();
+        subject
+            .initialize_as_privileged(args_slice, &mut FakeStreamHolder::new().streams())
+            .unwrap();
 
         let init_params = init_params_arc.lock().unwrap();
         assert_eq!(
@@ -922,16 +938,18 @@ mod tests {
             .config(config)
             .build();
 
-        subject.initialize_as_unprivileged(
-            &vec![
-                "MASQNode".to_string(),
-                String::from("--ip"),
-                String::from("1.2.3.4"),
-                String::from("--data-directory"),
-                data_dir.to_str().unwrap().to_string(),
-            ],
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        subject
+            .initialize_as_unprivileged(
+                &vec![
+                    "MASQNode".to_string(),
+                    String::from("--ip"),
+                    String::from("1.2.3.4"),
+                    String::from("--data-directory"),
+                    data_dir.to_str().unwrap().to_string(),
+                ],
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
 
         let config = subject.config;
         assert!(!config.ui_gateway_config.node_descriptor.is_empty());
@@ -953,18 +971,20 @@ mod tests {
             .config(config)
             .build();
 
-        subject.initialize_as_unprivileged(
-            &vec![
-                "MASQNode".to_string(),
-                String::from("--data-directory"),
-                data_dir.to_str().unwrap().to_string(),
-                String::from("--ip"),
-                String::from("1.2.3.4"),
-                String::from("--gas-price"),
-                "11".to_string(),
-            ],
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        subject
+            .initialize_as_unprivileged(
+                &vec![
+                    "MASQNode".to_string(),
+                    String::from("--data-directory"),
+                    data_dir.to_str().unwrap().to_string(),
+                    String::from("--ip"),
+                    String::from("1.2.3.4"),
+                    String::from("--gas-price"),
+                    "11".to_string(),
+                ],
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
 
         let config = subject.config;
         assert_eq!(Some(11u64), config.blockchain_bridge_config.gas_price);
@@ -997,8 +1017,12 @@ mod tests {
         ];
         let mut holder = FakeStreamHolder::new();
 
-        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
-        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_privileged(&args, &mut holder.streams())
+            .unwrap();
+        subject
+            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .unwrap();
 
         let config = subject.config;
         assert!(config.neighborhood_config.mode.node_addr_opt().is_none());
@@ -1040,8 +1064,12 @@ mod tests {
             ))
             .build();
 
-        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
-        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_privileged(&args, &mut holder.streams())
+            .unwrap();
+        subject
+            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .unwrap();
 
         let dns_servers_guard = dns_servers_arc.lock().unwrap();
         assert_eq!(
@@ -1067,14 +1095,16 @@ mod tests {
             ))
             .build();
 
-        subject.initialize_as_privileged(
-            &vec![
-                String::from("MASQNode"),
-                String::from("--ip"),
-                String::from("111.111.111.111"),
-            ],
-            &mut FakeStreamHolder::new().streams(),
-        ).unwrap();
+        subject
+            .initialize_as_privileged(
+                &vec![
+                    String::from("MASQNode"),
+                    String::from("--ip"),
+                    String::from("111.111.111.111"),
+                ],
+                &mut FakeStreamHolder::new().streams(),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -1242,27 +1272,31 @@ mod tests {
             .add_listener_handler(Box::new(clandestine_listener_handler))
             .build();
         let mut holder = FakeStreamHolder::new();
-        subject.initialize_as_privileged(
-            &vec![
-                "MASQNode".to_string(),
-                "--data-directory".to_string(),
-                data_dir.display().to_string(),
-            ],
-            &mut holder.streams(),
-        ).unwrap();
+        subject
+            .initialize_as_privileged(
+                &vec![
+                    "MASQNode".to_string(),
+                    "--data-directory".to_string(),
+                    data_dir.display().to_string(),
+                ],
+                &mut holder.streams(),
+            )
+            .unwrap();
 
-        subject.initialize_as_unprivileged(
-            &vec![
-                "MASQNode".to_string(),
-                "--clandestine-port".to_string(),
-                "1234".to_string(),
-                "--ip".to_string(),
-                "1.2.3.4".to_string(),
-                String::from("--data-directory"),
-                data_dir.display().to_string(),
-            ],
-            &mut holder.streams(),
-        ).unwrap();
+        subject
+            .initialize_as_unprivileged(
+                &vec![
+                    "MASQNode".to_string(),
+                    "--clandestine-port".to_string(),
+                    "1234".to_string(),
+                    "--ip".to_string(),
+                    "1.2.3.4".to_string(),
+                    String::from("--data-directory"),
+                    data_dir.display().to_string(),
+                ],
+                &mut holder.streams(),
+            )
+            .unwrap();
 
         let calls = clandestine_listener_handler_log_arc.lock().unwrap().dump();
         assert_eq!(
@@ -1301,9 +1335,13 @@ mod tests {
             .add_listener_handler(Box::new(yet_another_listener_handler))
             .config(config)
             .build();
-        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_privileged(&args, &mut holder.streams())
+            .unwrap();
 
-        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .unwrap();
 
         // Checking log message cause I don't know how to get at add_stream_sub
         let tlh = TestLogHandler::new();
@@ -1382,8 +1420,12 @@ mod tests {
             data_dir.to_str().unwrap().to_string(),
         ];
 
-        subject.initialize_as_privileged(&args, &mut holder.streams()).unwrap();
-        subject.initialize_as_unprivileged(&args, &mut holder.streams()).unwrap();
+        subject
+            .initialize_as_privileged(&args, &mut holder.streams())
+            .unwrap();
+        subject
+            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .unwrap();
 
         thread::spawn(|| {
             tokio::run(subject);

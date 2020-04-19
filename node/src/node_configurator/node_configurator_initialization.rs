@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::node_configurator::{app_head, NodeConfigurator, ConfiguratorError};
+use crate::node_configurator::{app_head, ConfiguratorError, NodeConfigurator};
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
@@ -25,13 +25,17 @@ pub struct InitializationConfig {
 pub struct NodeConfiguratorInitialization {}
 
 impl NodeConfigurator<InitializationConfig> for NodeConfiguratorInitialization {
-    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams) -> Result<InitializationConfig, ConfiguratorError> {
+    fn configure(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams,
+    ) -> Result<InitializationConfig, ConfiguratorError> {
         let app = app();
         let multi_config =
             MultiConfig::new(&app, vec![Box::new(CommandLineVcl::new(args.clone()))]);
         let mut config = InitializationConfig::default();
         initialization::parse_args(&multi_config, &mut config, streams);
-        Ok (config)
+        Ok(config)
     }
 }
 

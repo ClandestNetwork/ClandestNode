@@ -33,7 +33,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
 
-#[derive (Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Required {
     pub parameter: String,
     pub reason: String,
@@ -48,13 +48,17 @@ impl Required {
     }
 }
 
-#[derive (Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ConfiguratorError {
     Requireds(Vec<Required>),
 }
 
 pub trait NodeConfigurator<T> {
-    fn configure(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<T, ConfiguratorError>;
+    fn configure(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<T, ConfiguratorError>;
 }
 
 pub const CONSUMING_WALLET_HELP: &str = "The BIP32 derivation path for the wallet from which your Node \
@@ -954,8 +958,8 @@ mod tests {
             real_user_data_directory_opt_and_chain_name(&multi_config);
         let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
 
-        let expected_root = RealDirsWrapper{}.data_dir().unwrap();
-        let expected_directory = expected_root.join ("MASQ").join(DEFAULT_CHAIN_NAME);
+        let expected_root = RealDirsWrapper {}.data_dir().unwrap();
+        let expected_directory = expected_root.join("MASQ").join(DEFAULT_CHAIN_NAME);
         assert_eq!(directory, expected_directory);
         assert_eq!(&chain_name, DEFAULT_CHAIN_NAME);
     }
