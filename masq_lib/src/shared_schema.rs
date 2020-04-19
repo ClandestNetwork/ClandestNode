@@ -2,6 +2,7 @@ use crate::constants::{
     DEFAULT_GAS_PRICE, DEFAULT_UI_PORT, HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT,
 };
 use crate::crash_point::CrashPoint;
+use crate::shared_schema::ConfiguratorError::Requireds;
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 
@@ -248,7 +249,7 @@ pub fn shared_app(head: App<'static, 'static>) -> App<'static, 'static> {
             .long("dns-servers")
             .value_name("DNS-SERVERS")
             .min_values(0)
-            .use_delimiter(true)
+            .max_values(1)
             .validator(common_validators::validate_ip_addresses)
             .help(DNS_SERVERS_HELP),
     )
@@ -427,6 +428,41 @@ pub mod common_validators {
             Ok(port_number) if port_number < LOWEST_USABLE_INSECURE_PORT => Err(port),
             Ok(_) => Ok(()),
             Err(_) => Err(port),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Required {
+    pub parameter: String,
+    pub reason: String,
+}
+
+impl Required {
+    pub fn new(parameter: &str, reason: &str) -> Self {
+        Self {
+            parameter: parameter.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ConfiguratorError {
+    Requireds(Vec<Required>),
+}
+
+impl ConfiguratorError {
+    pub fn required(parameter: &str, reason: &str) -> Self {
+        ConfiguratorError::Requireds(vec![Required::new(parameter, reason)])
+    }
+
+    pub fn another_required(self, parameter: &str, reason: &str) -> Self {
+        match self {
+            Requireds(mut requireds) => {
+                requireds.push(Required::new(parameter, reason));
+                ConfiguratorError::Requireds(requireds)
+            }
         }
     }
 }

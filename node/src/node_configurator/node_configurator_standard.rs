@@ -1,16 +1,15 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::bootstrapper::BootstrapperConfig;
-use crate::node_configurator::{
-    app_head, initialize_database, ConfiguratorError, NodeConfigurator,
-};
+use crate::node_configurator::{app_head, initialize_database, NodeConfigurator};
 use clap::App;
 use indoc::indoc;
 use masq_lib::command::StdStreams;
 use masq_lib::crash_point::CrashPoint;
-use masq_lib::shared_schema::UI_PORT_HELP;
 use masq_lib::shared_schema::{shared_app, ui_port_arg};
+use masq_lib::shared_schema::{ConfiguratorError, UI_PORT_HELP};
 
+#[derive(Default)]
 pub struct NodeConfiguratorStandardPrivileged {}
 
 impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged {
@@ -20,10 +19,10 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged
         streams: &mut StdStreams,
     ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
-        let multi_config = standard::make_service_mode_multi_config(&app, args);
+        let multi_config = standard::make_service_mode_multi_config(&app, args)?;
         let mut bootstrapper_config = BootstrapperConfig::new();
         standard::establish_port_configurations(&mut bootstrapper_config);
-        standard::privileged_parse_args(&multi_config, &mut bootstrapper_config, streams);
+        standard::privileged_parse_args(&multi_config, &mut bootstrapper_config, streams)?;
         Ok(bootstrapper_config)
     }
 }
@@ -50,13 +49,13 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
             self.privileged_config.blockchain_bridge_config.chain_id,
         );
         let mut unprivileged_config = BootstrapperConfig::new();
-        let multi_config = standard::make_service_mode_multi_config(&app, args);
+        let multi_config = standard::make_service_mode_multi_config(&app, args)?;
         standard::unprivileged_parse_args(
             &multi_config,
             &mut unprivileged_config,
             streams,
             Some(persistent_config.as_ref()),
-        );
+        )?;
         standard::configure_database(&unprivileged_config, persistent_config.as_ref());
         Ok(unprivileged_config)
     }
@@ -135,13 +134,17 @@ pub mod standard {
     use itertools::Itertools;
     use masq_lib::constants::{DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
+    use masq_lib::shared_schema::ConfiguratorError;
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
 
-    pub fn make_service_mode_multi_config<'a>(app: &'a App, args: &Vec<String>) -> MultiConfig<'a> {
-        let (config_file_path, user_specified) = determine_config_file_path(app, args);
-        MultiConfig::new(
+    pub fn make_service_mode_multi_config<'a>(
+        app: &'a App,
+        args: &Vec<String>,
+    ) -> Result<MultiConfig<'a>, ConfiguratorError> {
+        let (config_file_path, user_specified) = determine_config_file_path(app, args)?;
+        MultiConfig::try_new(
             &app,
             vec![
                 Box::new(CommandLineVcl::new(args.clone())),
@@ -175,7 +178,7 @@ pub mod standard {
         multi_config: &MultiConfig,
         privileged_config: &mut BootstrapperConfig,
         _streams: &mut StdStreams<'_>,
-    ) {
+    ) -> Result<(), ConfiguratorError> {
         privileged_config
             .blockchain_bridge_config
             .blockchain_service_url = value_m!(multi_config, "blockchain-service-url", String);
@@ -187,7 +190,8 @@ pub mod standard {
         privileged_config.data_directory = directory;
         privileged_config.blockchain_bridge_config.chain_id = chain_id_from_name(&chain_name);
 
-        privileged_config.dns_servers = match value_m!(multi_config, "dns-servers", String) {
+        let joined_dns_servers_opt = value_m!(multi_config, "dns-servers", String);
+        privileged_config.dns_servers = match joined_dns_servers_opt {
             Some(joined_dns_servers) => joined_dns_servers
                 .split(',')
                 .map(|ip_str| {
@@ -233,6 +237,7 @@ pub mod standard {
                 privileged_config.alias_cryptde_null_opt = Some(alias_cryptde_null);
             }
         }
+        Ok(())
     }
 
     pub fn unprivileged_parse_args(
@@ -240,7 +245,7 @@ pub mod standard {
         unprivileged_config: &mut BootstrapperConfig,
         streams: &mut StdStreams<'_>,
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
-    ) {
+    ) -> Result<(), ConfiguratorError> {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         unprivileged_config.blockchain_bridge_config.gas_price =
             value_m!(multi_config, "gas-price", u64);
@@ -252,12 +257,18 @@ pub mod standard {
                 unprivileged_config,
             )
         }
-        unprivileged_config.neighborhood_config = make_neighborhood_config(
+        match make_neighborhood_config(
             multi_config,
             streams,
             persistent_config_opt,
             unprivileged_config,
-        );
+        ) {
+            Ok(config) => {
+                unprivileged_config.neighborhood_config = config;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub fn configure_database(
@@ -341,7 +352,7 @@ pub mod standard {
         streams: &mut StdStreams,
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
         unprivileged_config: &mut BootstrapperConfig,
-    ) -> NeighborhoodConfig {
+    ) -> Result<NeighborhoodConfig, ConfiguratorError> {
         let neighbor_configs: Vec<NodeDescriptor> = {
             match convert_ci_configs(multi_config) {
                 Some(configs) => configs,
@@ -356,8 +367,9 @@ pub mod standard {
                 },
             }
         };
-        NeighborhoodConfig {
-            mode: make_neighborhood_mode(multi_config, neighbor_configs),
+        match make_neighborhood_mode(multi_config, neighbor_configs) {
+            Ok(mode) => Ok(NeighborhoodConfig { mode }),
+            Err(e) => Err(e),
         }
     }
 
@@ -419,7 +431,7 @@ pub mod standard {
     fn make_neighborhood_mode(
         multi_config: &MultiConfig,
         neighbor_configs: Vec<NodeDescriptor>,
-    ) -> NeighborhoodMode {
+    ) -> Result<NeighborhoodMode, ConfiguratorError> {
         let neighborhood_mode_opt = value_m!(multi_config, "neighborhood-mode", String);
         match neighborhood_mode_opt {
             Some(ref s) if s == "standard" => {
@@ -427,24 +439,32 @@ pub mod standard {
             }
             Some(ref s) if s == "originate-only" => {
                 if neighbor_configs.is_empty() {
-                    panic! ("Node cannot run as --neighborhood-mode originate-only without --neighbors specified")
+                    Err(ConfiguratorError::required("neighborhood-mode", "Node cannot run as --neighborhood-mode originate-only without --neighbors specified"))
+                } else {
+                    Ok(NeighborhoodMode::OriginateOnly(
+                        neighbor_configs,
+                        DEFAULT_RATE_PACK,
+                    ))
                 }
-                NeighborhoodMode::OriginateOnly(neighbor_configs, DEFAULT_RATE_PACK)
             }
             Some(ref s) if s == "consume-only" => {
                 if neighbor_configs.is_empty() {
-                    panic! ("Node cannot run as --neighborhood-mode consume-only without --neighbors specified")
+                    Err(ConfiguratorError::required("neighborhood-mode", "Node cannot run as --neighborhood-mode consume-only without --neighbors specified"))
+                } else {
+                    Ok(NeighborhoodMode::ConsumeOnly(neighbor_configs))
                 }
-                NeighborhoodMode::ConsumeOnly(neighbor_configs)
             }
             Some(ref s) if s == "zero-hop" => {
                 if !neighbor_configs.is_empty() {
-                    panic!("Node cannot run as --neighborhood-mode zero-hop if --neighbors is specified")
+                    Err(ConfiguratorError::required("neighborhood-mode", "Node cannot run as --neighborhood-mode zero-hop if --neighbors is specified"))
+                } else if value_m!(multi_config, "ip", IpAddr).is_some() {
+                    Err(ConfiguratorError::required(
+                        "neighborhood-mode",
+                        "Node cannot run as --neighborhood-mode zero-hop if --ip is specified",
+                    ))
+                } else {
+                    Ok(NeighborhoodMode::ZeroHop)
                 }
-                if value_m!(multi_config, "ip", IpAddr).is_some() {
-                    panic!("Node cannot run as --neighborhood-mode zero-hop if --ip is specified")
-                }
-                NeighborhoodMode::ZeroHop
             }
             // These two cases are untestable
             Some(ref s) => panic!(
@@ -458,17 +478,21 @@ pub mod standard {
     fn neighborhood_mode_standard(
         multi_config: &MultiConfig,
         neighbor_configs: Vec<NodeDescriptor>,
-    ) -> NeighborhoodMode {
-        NeighborhoodMode::Standard(
-            NodeAddr::new(
-                &value_m!(multi_config, "ip", IpAddr).expect(
+    ) -> Result<NeighborhoodMode, ConfiguratorError> {
+        let ip = match value_m!(multi_config, "ip", IpAddr) {
+            Some(ip) => ip,
+            None => {
+                return Err(ConfiguratorError::required(
+                    "neighborhood-mode",
                     "Node cannot run as --neighborhood-mode standard without --ip specified",
-                ),
-                &vec![],
-            ),
+                ))
+            }
+        };
+        Ok(NeighborhoodMode::Standard(
+            NodeAddr::new(&ip, &vec![]),
             neighbor_configs,
             DEFAULT_RATE_PACK,
-        )
+        ))
     }
 
     fn get_earning_wallet_from_address(
@@ -604,6 +628,7 @@ mod tests {
     use masq_lib::multi_config::{
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
     };
+    use masq_lib::shared_schema::ConfiguratorError;
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
@@ -623,7 +648,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_standard_happy_path() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -635,7 +660,7 @@ mod tests {
                     )
                     .into(),
             ))],
-        );
+        ).unwrap();
 
         let result = standard::make_neighborhood_config(
             &multi_config,
@@ -647,7 +672,7 @@ mod tests {
         let dummy_cryptde = CryptDEReal::new(DEFAULT_CHAIN_ID);
         assert_eq!(
             result,
-            NeighborhoodConfig {
+            Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::Standard(
                     NodeAddr::new(&IpAddr::from_str("1.2.3.4").unwrap(), &vec![]),
                     vec![
@@ -664,16 +689,13 @@ mod tests {
                     ],
                     DEFAULT_RATE_PACK
                 )
-            }
+            })
         );
     }
 
     #[test]
-    #[should_panic(
-        expected = "Node cannot run as --neighborhood_mode standard without --ip specified"
-    )]
     fn make_neighborhood_config_standard_missing_ip() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -685,19 +707,28 @@ mod tests {
                     .param("--fake-public-key", "booga")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
-        standard::make_neighborhood_config(
+        let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
             Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
+
+        assert_eq!(
+            result,
+            Err(ConfiguratorError::required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode standard without --ip specified"
+            ))
+        )
     }
 
     #[test]
     fn make_neighborhood_config_originate_only_doesnt_need_ip() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -709,7 +740,8 @@ mod tests {
                     .param("--fake-public-key", "booga")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
         let result = standard::make_neighborhood_config(
             &multi_config,
@@ -720,7 +752,7 @@ mod tests {
 
         assert_eq!(
             result,
-            NeighborhoodConfig {
+            Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::OriginateOnly(
                     vec![
                         NodeDescriptor::from_str(main_cryptde(), "QmlsbA:1.2.3.4:1234;2345")
@@ -729,35 +761,35 @@ mod tests {
                     ],
                     DEFAULT_RATE_PACK
                 )
-            }
+            })
         );
     }
 
     #[test]
-    #[should_panic(
-        expected = "Node cannot run as --neighborhood_mode originate-only without --neighbors specified"
-    )]
     fn make_neighborhood_config_originate_only_does_need_at_least_one_neighbor() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
                     .param("--neighborhood-mode", "originate-only")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
-        standard::make_neighborhood_config(
+        let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
             Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
+
+        assert_eq! (result, Err(ConfiguratorError::required("neighborhood-mode", "Node cannot run as --neighborhood-mode originate-only without --neighbors specified")))
     }
 
     #[test]
     fn make_neighborhood_config_consume_only_doesnt_need_ip() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -769,7 +801,8 @@ mod tests {
                     .param("--fake-public-key", "booga")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
         let result = standard::make_neighborhood_config(
             &multi_config,
@@ -780,47 +813,26 @@ mod tests {
 
         assert_eq!(
             result,
-            NeighborhoodConfig {
+            Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::ConsumeOnly(vec![
                     NodeDescriptor::from_str(main_cryptde(), "QmlsbA:1.2.3.4:1234;2345").unwrap(),
                     NodeDescriptor::from_str(main_cryptde(), "VGVk:2.3.4.5:3456;4567").unwrap()
                 ],)
-            }
+            })
         );
     }
 
     #[test]
-    #[should_panic(
-        expected = "Node cannot run as --neighborhood_mode consume-only without --neighbors specified"
-    )]
     fn make_neighborhood_config_consume_only_does_need_at_least_one_neighbor() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
                     .param("--neighborhood-mode", "consume-only")
                     .into(),
             ))],
-        );
-
-        standard::make_neighborhood_config(
-            &multi_config,
-            &mut FakeStreamHolder::new().streams(),
-            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
-            &mut BootstrapperConfig::new(),
-        );
-    }
-
-    #[test]
-    fn make_neighborhood_config_zero_hop_doesnt_need_ip_or_neighbors() {
-        let multi_config = MultiConfig::new(
-            &app(),
-            vec![Box::new(CommandLineVcl::new(
-                ArgsBuilder::new()
-                    .param("--neighborhood-mode", "zero-hop")
-                    .into(),
-            ))],
-        );
+        )
+        .unwrap();
 
         let result = standard::make_neighborhood_config(
             &multi_config,
@@ -831,18 +843,43 @@ mod tests {
 
         assert_eq!(
             result,
-            NeighborhoodConfig {
+            Err(ConfiguratorError::required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode consume-only without --neighbors specified"
+            ))
+        )
+    }
+
+    #[test]
+    fn make_neighborhood_config_zero_hop_doesnt_need_ip_or_neighbors() {
+        let multi_config = MultiConfig::try_new(
+            &app(),
+            vec![Box::new(CommandLineVcl::new(
+                ArgsBuilder::new()
+                    .param("--neighborhood-mode", "zero-hop")
+                    .into(),
+            ))],
+        )
+        .unwrap();
+
+        let result = standard::make_neighborhood_config(
+            &multi_config,
+            &mut FakeStreamHolder::new().streams(),
+            Some(&make_default_persistent_configuration().check_password_result(Some(false))),
+            &mut BootstrapperConfig::new(),
+        );
+
+        assert_eq!(
+            result,
+            Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::ZeroHop
-            }
+            })
         );
     }
 
     #[test]
-    #[should_panic(
-        expected = "Node cannot run as --neighborhood_mode zero-hop if --ip is specified"
-    )]
     fn make_neighborhood_config_zero_hop_cant_tolerate_ip() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -850,22 +887,28 @@ mod tests {
                     .param("--ip", "1.2.3.4")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
-        standard::make_neighborhood_config(
+        let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
             Some(&make_default_persistent_configuration().check_password_result(Some(false))),
             &mut BootstrapperConfig::new(),
         );
+
+        assert_eq!(
+            result,
+            Err(ConfiguratorError::required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode zero-hop if --ip is specified"
+            ))
+        )
     }
 
     #[test]
-    #[should_panic(
-        expected = "Node cannot run as --neighborhood_mode zero-hop if --neighbors is specified"
-    )]
     fn make_neighborhood_config_zero_hop_cant_tolerate_neighbors() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new()
@@ -877,19 +920,28 @@ mod tests {
                     .param("--fake-public-key", "booga")
                     .into(),
             ))],
-        );
+        )
+        .unwrap();
 
-        standard::make_neighborhood_config(
+        let result = standard::make_neighborhood_config(
             &multi_config,
             &mut FakeStreamHolder::new().streams(),
             Some(&make_default_persistent_configuration()),
             &mut BootstrapperConfig::new(),
         );
+
+        assert_eq!(
+            result,
+            Err(ConfiguratorError::required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode zero-hop if --neighbors is specified"
+            ))
+        )
     }
 
     #[test]
     fn get_past_neighbors_handles_good_password_but_no_past_neighbors() {
-        let multi_config = MultiConfig::new(&app(), vec![]);
+        let multi_config = MultiConfig::try_new(&app(), vec![]).unwrap();
         let persistent_config =
             make_default_persistent_configuration().past_neighbors_result(Ok(None));
         let mut unprivileged_config = BootstrapperConfig::new();
@@ -907,7 +959,7 @@ mod tests {
 
     #[test]
     fn get_past_neighbors_handles_unavailable_password() {
-        let multi_config = MultiConfig::new(&app(), vec![]);
+        let multi_config = MultiConfig::try_new(&app(), vec![]).unwrap();
         let persistent_config = make_default_persistent_configuration().check_password_result(None);
         let mut unprivileged_config = BootstrapperConfig::new();
         unprivileged_config.db_password_opt = Some("password".to_string());
@@ -925,7 +977,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Could not retrieve past neighbors: PasswordError")]
     fn get_past_neighbors_does_not_like_error_getting_past_neighbors() {
-        let multi_config = MultiConfig::new(&app(), vec![]);
+        let multi_config = MultiConfig::try_new(&app(), vec![]).unwrap();
         let persistent_config = PersistentConfigurationMock::new()
             .check_password_result(Some(false))
             .past_neighbors_result(Err(PersistentConfigError::PasswordError));
@@ -945,12 +997,13 @@ mod tests {
         expected = "Neighbor syntax error. Should be <public key>[@ | :]<node address>, not 'ooga'"
     )]
     fn convert_ci_configs_does_not_like_neighbors_with_bad_syntax() {
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new().param("--neighbors", "ooga,booga").into(),
             ))],
-        );
+        )
+        .unwrap();
 
         let _ = standard::convert_ci_configs(&multi_config);
     }
@@ -1017,25 +1070,28 @@ mod tests {
             .param("--data-directory", home_dir.to_str().unwrap())
             .param("--ip", "1.2.3.4");
         let mut bootstrapper_config = BootstrapperConfig::new();
-        let multi_config = MultiConfig::new(
+        let multi_config = MultiConfig::try_new(
             &app(),
             vec![
                 Box::new(CommandLineVcl::new(args.into())),
                 Box::new(ConfigFileVcl::new(&config_file_path, false)),
             ],
-        );
+        )
+        .unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
         standard::unprivileged_parse_args(
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
             Some(&persistent_config),
-        );
+        )
+        .unwrap();
         let consuming_private_key_bytes: Vec<u8> = consuming_private_key.from_hex().unwrap();
         let consuming_keypair =
             Bip32ECKeyPair::from_raw_secret(consuming_private_key_bytes.as_ref()).unwrap();
@@ -1089,13 +1145,14 @@ mod tests {
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             value_m!(multi_config, "config-file", PathBuf),
@@ -1171,14 +1228,15 @@ mod tests {
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::unprivileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
             Some(&persistent_config),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             value_m!(multi_config, "config-file", PathBuf),
@@ -1221,14 +1279,15 @@ mod tests {
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::unprivileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
             Some(&make_default_persistent_configuration().check_password_result(Some(false))),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             Some(PathBuf::from("config.toml")),
@@ -1263,7 +1322,7 @@ mod tests {
         config.db_password_opt = Some("password".to_string());
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
         let past_neighbors_params_arc = Arc::new(Mutex::new(vec![]));
         let persistent_configuration = make_persistent_config(
             None,
@@ -1281,7 +1340,8 @@ mod tests {
             &mut config,
             &mut FakeStreamHolder::new().streams(),
             Some(&persistent_configuration),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             config.neighborhood_config.mode.neighbor_configs(),
@@ -1300,13 +1360,14 @@ mod tests {
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             Some(PathBuf::from("config.toml")),
@@ -1331,13 +1392,14 @@ mod tests {
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
 
         #[cfg(target_os = "linux")]
         assert_eq!(
@@ -1355,7 +1417,7 @@ mod tests {
     fn make_multi_config<'a>(args: ArgsBuilder) -> MultiConfig<'a> {
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        MultiConfig::new(&app(), vcls)
+        MultiConfig::try_new(&app(), vcls).unwrap()
     }
 
     fn make_persistent_config(
@@ -1743,10 +1805,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "error: Invalid value for \\'--consuming-private-key <PRIVATE-KEY>\\': not valid hex"
-    )]
-    fn unprivileged_parse_args_with_invalid_consuming_wallet_private_key_panics_correctly() {
+    fn unprivileged_parse_args_with_invalid_consuming_wallet_private_key_reacts_correctly() {
         let home_directory = ensure_node_home_directory_exists(
             "node_configurator",
             "parse_args_with_invalid_consuming_wallet_private_key_panics_correctly",
@@ -1760,19 +1819,17 @@ mod tests {
 
         let faux_environment = CommandLineVcl::from(vcl_args);
 
-        let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> = vec![
             Box::new(faux_environment),
             Box::new(CommandLineVcl::new(args.into())),
         ];
-        let multi_config = MultiConfig::new(&app(), vcls);
 
-        standard::unprivileged_parse_args(
-            &multi_config,
-            &mut config,
-            &mut FakeStreamHolder::new().streams(),
-            Some(&PersistentConfigurationMock::new()),
-        );
+        let result = MultiConfig::try_new(&app(), vcls).err().unwrap();
+
+        assert_eq!(
+            result,
+            ConfiguratorError::required("consuming-private-key", "Invalid value: not valid hex")
+        )
     }
 
     #[test]
@@ -1799,7 +1856,7 @@ mod tests {
             Box::new(faux_environment),
             Box::new(CommandLineVcl::new(args.into())),
         ];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&b""[..]),
@@ -1812,7 +1869,8 @@ mod tests {
             &mut config,
             &mut streams,
             Some(&make_default_persistent_configuration()),
-        );
+        )
+        .unwrap();
 
         let captured_output = stdout_writer.get_string();
         let expected_output = "";
@@ -1826,7 +1884,7 @@ mod tests {
 
     #[test]
     fn get_db_password_shortcuts_if_its_already_gotten() {
-        let multi_config = MultiConfig::new(&app(), vec![]);
+        let multi_config = MultiConfig::try_new(&app(), vec![]).unwrap();
         let mut holder = FakeStreamHolder::new();
         let mut config = BootstrapperConfig::new();
         let persistent_config =
@@ -1845,7 +1903,7 @@ mod tests {
 
     #[test]
     fn get_db_password_doesnt_bother_if_database_has_no_password_yet() {
-        let multi_config = MultiConfig::new(&app(), vec![]);
+        let multi_config = MultiConfig::try_new(&app(), vec![]).unwrap();
         let mut holder = FakeStreamHolder::new();
         let mut config = BootstrapperConfig::new();
         let persistent_config = make_default_persistent_configuration().check_password_result(None);
@@ -1865,13 +1923,14 @@ mod tests {
         let args = make_default_cli_params();
         let mut config = BootstrapperConfig::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&app(), vec![vcl]);
+        let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(config.crash_point, CrashPoint::None);
     }
@@ -1881,13 +1940,14 @@ mod tests {
         let args = make_default_cli_params().param("--crash-point", "panic");
         let mut config = BootstrapperConfig::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&app(), vec![vcl]);
+        let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(config.crash_point, CrashPoint::Panic);
     }
@@ -2028,14 +2088,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "error: Invalid value for \\'--gas-price <GAS-PRICE>\\': unleaded")]
     fn privileged_configuration_rejects_invalid_gas_price() {
         let subject = NodeConfiguratorStandardPrivileged {};
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
 
-        subject
+        let result = subject
             .configure(&args.into(), &mut FakeStreamHolder::new().streams())
+            .err()
             .unwrap();
+
+        assert_eq!(
+            result,
+            ConfiguratorError::required("gas-price", "Invalid value: unleaded")
+        )
     }
 
     #[test]

@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
-use crate::node_configurator::ConfiguratorError;
 use masq_lib::command::StdStreams;
+use masq_lib::shared_schema::ConfiguratorError;
 use std::marker::Send;
 use tokio::prelude::Future;
 

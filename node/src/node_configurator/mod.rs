@@ -22,7 +22,9 @@ use dirs::{data_local_dir, home_dir};
 use masq_lib::command::StdStreams;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;
 use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig, VclArg};
-use masq_lib::shared_schema::{chain_arg, config_file_arg, data_directory_arg, real_user_arg};
+use masq_lib::shared_schema::{
+    chain_arg, config_file_arg, data_directory_arg, real_user_arg, ConfiguratorError,
+};
 use rpassword;
 use rpassword::read_password_with_reader;
 use rustc_hex::FromHex;
@@ -32,26 +34,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
-
-#[derive(Debug, PartialEq)]
-pub struct Required {
-    pub parameter: String,
-    pub reason: String,
-}
-
-impl Required {
-    pub fn new(parameter: &str, reason: &str) -> Self {
-        Self {
-            parameter: parameter.to_string(),
-            reason: reason.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ConfiguratorError {
-    Requireds(Vec<Required>),
-}
 
 pub trait NodeConfigurator<T> {
     fn configure(
@@ -141,7 +123,10 @@ pub fn mnemonic_passphrase_arg<'a>() -> Arg<'a, 'a> {
         .help(MNEMONIC_PASSPHRASE_HELP)
 }
 
-pub fn determine_config_file_path(app: &App, args: &Vec<String>) -> (PathBuf, bool) {
+pub fn determine_config_file_path(
+    app: &App,
+    args: &Vec<String>,
+) -> Result<(PathBuf, bool), ConfiguratorError> {
     let orientation_schema = App::new("MASQNode")
         .arg(chain_arg())
         .arg(real_user_arg())
@@ -162,14 +147,14 @@ pub fn determine_config_file_path(app: &App, args: &Vec<String>) -> (PathBuf, bo
     .map(|vcl_arg| vcl_arg.dup())
     .collect();
     let orientation_vcl = CommandLineVcl::from(orientation_args);
-    let multi_config = MultiConfig::new(&orientation_schema, vec![Box::new(orientation_vcl)]);
+    let multi_config = MultiConfig::try_new(&orientation_schema, vec![Box::new(orientation_vcl)])?;
     let config_file_path =
-        value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted");
+        value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted"); // TODO 290b: Check this
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(&multi_config);
     let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-    (directory.join(config_file_path), user_specified)
+    Ok((directory.join(config_file_path), user_specified))
 }
 
 pub fn create_wallet(
@@ -185,7 +170,7 @@ pub fn create_wallet(
                 &derivation_path_info.mnemonic_seed,
                 &derivation_path_info.db_password,
             )
-            .expect("Failed to set mnemonic seed");
+            .expect("Failed to set mnemonic seed"); // TODO 290b: Check this
         if let Some(consuming_derivation_path) = &derivation_path_info.consuming_derivation_path_opt
         {
             persistent_config.set_consuming_wallet_derivation_path(
@@ -207,7 +192,7 @@ pub fn initialize_database(
                 "Can't initialize database at {:?}: {:?}",
                 data_directory.join(DATABASE_FILE),
                 e
-            )
+            ) // TODO 290b: Check this
         });
     Box::new(PersistentConfigurationReal::from(conn))
 }
@@ -246,18 +231,18 @@ pub fn data_directory_from_context(
             let right_home_dir = real_user
                 .home_dir
                 .as_ref()
-                .expect("No real-user home directory; specify --real-user")
+                .expect("No real-user home directory; specify --real-user") // TODO 290b: Check this
                 .to_string_lossy()
                 .to_string();
             let dirs_wrapper = RealDirsWrapper {};
             let wrong_home_dir = dirs_wrapper
                 .home_dir()
-                .expect("No privileged home directory; specify --data-directory")
+                .expect("No privileged home directory; specify --data-directory") // TODO 290b: Check this
                 .to_string_lossy()
                 .to_string();
             let wrong_local_data_dir = dirs_wrapper
                 .data_dir()
-                .expect("No privileged local data directory; specify --data-directory")
+                .expect("No privileged local data directory; specify --data-directory") // TODO 290b: Check this
                 .to_string_lossy()
                 .to_string();
             let right_local_data_dir =
@@ -272,14 +257,14 @@ pub fn data_directory_from_context(
 pub fn prepare_initialization_mode<'a>(
     app: &'a App,
     args: &Vec<String>,
-) -> (MultiConfig<'a>, Box<dyn PersistentConfiguration>) {
-    let multi_config = MultiConfig::new(
+) -> Result<(MultiConfig<'a>, Box<dyn PersistentConfiguration>), ConfiguratorError> {
+    let multi_config = MultiConfig::try_new(
         &app,
         vec![
             Box::new(CommandLineVcl::new(args.clone())),
             Box::new(EnvironmentVcl::new(&app)),
         ],
-    );
+    )?;
 
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(&multi_config);
@@ -288,7 +273,7 @@ pub fn prepare_initialization_mode<'a>(
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
         exit(1, "Cannot re-initialize Node: already initialized")
     }
-    (multi_config, persistent_config_box)
+    Ok((multi_config, persistent_config_box))
 }
 
 pub fn request_new_db_password(
@@ -915,7 +900,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "1 Cannot re-initialize Node: already initialized")]
     fn prepare_initialization_mode_fails_if_mnemonic_seed_already_exists() {
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator",
@@ -939,7 +923,17 @@ mod tests {
             .param("--data-directory", data_dir.to_str().unwrap())
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
 
-        prepare_initialization_mode(&app, &args.into());
+        let result = prepare_initialization_mode(&app, &args.into())
+            .err()
+            .unwrap();
+
+        assert_eq!(
+            result,
+            ConfiguratorError::required(
+                "recover-wallet, generate-wallet",
+                "Cannot re-initialize Node: already initialized"
+            )
+        )
     }
 
     fn determine_config_file_path_app() -> App<'static, 'static> {
@@ -952,7 +946,7 @@ mod tests {
     fn real_user_data_directory_and_chain_id_picks_correct_directory_for_default_chain() {
         let args = ArgsBuilder::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&app(), vec![vcl]);
+        let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         let (real_user, data_directory_opt, chain_name) =
             real_user_data_directory_opt_and_chain_name(&multi_config);
@@ -973,7 +967,7 @@ mod tests {
             .param("--config-file", "booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             &format!("{}", config_file_path.parent().unwrap().display()),
@@ -991,7 +985,7 @@ mod tests {
         std::env::set_var("SUB_CONFIG_FILE", "booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             "data_dir",
@@ -1010,7 +1004,7 @@ mod tests {
             .param("--config-file", "/tmp/booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             "/tmp/booga.toml",
@@ -1028,7 +1022,7 @@ mod tests {
             .param("--config-file", r"\tmp\booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             r"\tmp\booga.toml",
@@ -1046,7 +1040,7 @@ mod tests {
             .param("--config-file", r"c:\tmp\booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             r"c:\tmp\booga.toml",
@@ -1064,7 +1058,7 @@ mod tests {
             .param("--config-file", r"\\TMP\booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             r"\\TMP\booga.toml",
@@ -1083,7 +1077,7 @@ mod tests {
             .param("--config-file", r"c:tmp\booga.toml");
 
         let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into());
+            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
 
         assert_eq!(
             r"c:tmp\booga.toml",
@@ -1368,7 +1362,7 @@ mod tests {
     fn make_wallet_creation_config_defaults() {
         let subject = TameWalletCreationConfigMaker::new();
         let vcl = Box::new(CommandLineVcl::new(vec!["test".to_string()]));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&b"a terrible db password\na terrible db password\n"[..]),
@@ -1417,7 +1411,7 @@ mod tests {
             .param("--db-password", "db password")
             .param("--real-user", "123::");
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&[]),
@@ -1464,7 +1458,7 @@ mod tests {
             .param("--db-password", "db password")
             .param("--real-user", "123::");
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&[]),
@@ -1503,7 +1497,7 @@ mod tests {
             stderr: &mut ByteArrayWriter::new(),
         };
         let vcl = Box::new(CommandLineVcl::new(vec!["test".to_string()]));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
 
         subject.make_wallet_creation_config(&multi_config, streams);
     }

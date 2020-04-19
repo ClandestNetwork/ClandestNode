@@ -5,8 +5,8 @@ use crate::node_configurator::{
     app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg, exit,
     flushed_write, language_arg, mnemonic_passphrase_arg, mnemonic_seed_exists,
     prepare_initialization_mode, request_password_with_confirmation, request_password_with_retry,
-    update_db_password, ConfiguratorError, Either, NodeConfigurator, WalletCreationConfig,
-    WalletCreationConfigMaker, DB_PASSWORD_HELP, EARNING_WALLET_HELP,
+    update_db_password, Either, NodeConfigurator, WalletCreationConfig, WalletCreationConfigMaker,
+    DB_PASSWORD_HELP, EARNING_WALLET_HELP,
 };
 use crate::persistent_configuration::PersistentConfiguration;
 use crate::sub_lib::cryptde::PlainData;
@@ -15,7 +15,9 @@ use clap::{value_t, values_t, App, Arg};
 use indoc::indoc;
 use masq_lib::command::StdStreams;
 use masq_lib::multi_config::MultiConfig;
-use masq_lib::shared_schema::{chain_arg, data_directory_arg, db_password_arg, real_user_arg};
+use masq_lib::shared_schema::{
+    chain_arg, data_directory_arg, db_password_arg, real_user_arg, ConfiguratorError,
+};
 
 pub struct NodeConfiguratorRecoverWallet {
     app: App<'static, 'static>,
@@ -27,7 +29,7 @@ impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorRecoverWallet {
         args: &Vec<String>,
         streams: &mut StdStreams<'_>,
     ) -> Result<WalletCreationConfig, ConfiguratorError> {
-        let (multi_config, persistent_config_box) = prepare_initialization_mode(&self.app, args);
+        let (multi_config, persistent_config_box) = prepare_initialization_mode(&self.app, args)?;
         let persistent_config = persistent_config_box.as_ref();
 
         let config = self.parse_args(&multi_config, streams, persistent_config);
@@ -447,7 +449,7 @@ mod tests {
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&subject.app, vcls);
+        let multi_config = MultiConfig::try_new(&subject.app, vcls).unwrap();
 
         let config = subject.parse_args(
             &multi_config,
@@ -492,7 +494,7 @@ mod tests {
             .param("--mnemonic-passphrase", "mnemonic passphrase");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
 
         subject.parse_args(
             &multi_config,
@@ -589,7 +591,7 @@ mod tests {
             .param("--db-password", "rick-rolled");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::new(&subject.app, vec![vcl]);
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
 
         subject.parse_args(
             &multi_config,

@@ -20,7 +20,7 @@ use masq_lib::messages::{UiSetupRequestValue, UiSetupResponseValue, UiSetupRespo
 use masq_lib::multi_config::{
     CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig, VirtualCommandLine,
 };
-use masq_lib::shared_schema::shared_app;
+use masq_lib::shared_schema::{shared_app, ConfiguratorError};
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -33,7 +33,7 @@ pub trait SetupReporter {
         &self,
         existing_setup: SetupCluster,
         incoming_setup: Vec<UiSetupRequestValue>,
-    ) -> SetupCluster;
+    ) -> Result<SetupCluster, ConfiguratorError>;
 }
 
 pub struct SetupReporterReal {}
@@ -43,7 +43,7 @@ impl SetupReporter for SetupReporterReal {
         &self,
         mut existing_setup: SetupCluster,
         incoming_setup: Vec<UiSetupRequestValue>,
-    ) -> SetupCluster {
+    ) -> Result<SetupCluster, ConfiguratorError> {
         let default_setup = Self::get_default_params();
         incoming_setup
             .iter()
@@ -66,14 +66,14 @@ impl SetupReporter for SetupReporterReal {
                 &default_setup,
                 &existing_setup,
                 &incoming_setup,
-            ]));
+            ]))?;
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         let configured_setup = Self::calculate_configured_setup(
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]),
             &data_directory,
             &chain_name,
-        );
+        )?;
 
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
@@ -81,7 +81,7 @@ impl SetupReporter for SetupReporterReal {
             &existing_setup,
             &incoming_setup,
         ]);
-        value_retrievers()
+        Ok(value_retrievers()
             .into_iter()
             .map(|retriever| {
                 let make_blank_or_required = || {
@@ -103,7 +103,7 @@ impl SetupReporter for SetupReporterReal {
                     None => make_blank_or_required(),
                 }
             })
-            .collect::<SetupCluster>()
+            .collect::<SetupCluster>())
     }
 }
 
@@ -143,8 +143,8 @@ impl SetupReporterReal {
 
     fn calculate_fundamentals(
         combined_setup: SetupCluster,
-    ) -> (crate::bootstrapper::RealUser, Option<PathBuf>, String) {
-        let multi_config = Self::make_multi_config(None, true, false);
+    ) -> Result<(crate::bootstrapper::RealUser, Option<PathBuf>, String), ConfiguratorError> {
+        let multi_config = Self::make_multi_config(None, true, false)?;
         let real_user = match (
             value_m!(multi_config, "real-user", String),
             combined_setup.get("real-user"),
@@ -175,22 +175,22 @@ impl SetupReporterReal {
             (None, Some(uisrv)) => uisrv.value.clone(),
             (None, None) => DEFAULT_CHAIN_NAME.to_string(),
         };
-        (real_user, data_directory_opt, chain_name)
+        Ok((real_user, data_directory_opt, chain_name))
     }
 
     fn calculate_configured_setup(
         combined_setup: SetupCluster,
         data_directory: &PathBuf,
         chain_name: &str,
-    ) -> SetupCluster {
+    ) -> Result<SetupCluster, ConfiguratorError> {
         let db_password_opt = combined_setup.get("db-password").map(|v| v.value.clone());
         let command_line = Self::make_command_line(combined_setup);
-        let multi_config = Self::make_multi_config(Some(command_line), true, true);
+        let multi_config = Self::make_multi_config(Some(command_line), true, true)?;
         let (bootstrapper_config, persistent_config_opt) = Self::run_configuration(
             &multi_config,
             data_directory,
             chain_id_from_name(chain_name),
-        );
+        )?;
         let mut setup = value_retrievers()
             .into_iter()
             .map(|r| {
@@ -214,7 +214,7 @@ impl SetupReporterReal {
             Some(uisrv) if &uisrv.value == "config.toml" => uisrv.status = Default,
             _ => (),
         };
-        setup
+        Ok(setup)
     }
 
     fn combine_clusters(clusters: Vec<&SetupCluster>) -> SetupCluster {
@@ -260,7 +260,7 @@ impl SetupReporterReal {
         command_line_opt: Option<Vec<String>>,
         environment: bool,
         config_file: bool,
-    ) -> MultiConfig<'a> {
+    ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let app = shared_app(app_head());
         let mut vcls: Vec<Box<dyn VirtualCommandLine>> = vec![];
         if let Some(command_line) = command_line_opt.clone() {
@@ -275,27 +275,28 @@ impl SetupReporterReal {
                 None => vec![],
             };
             let (config_file_path, user_specified) =
-                determine_config_file_path(&app, &command_line);
+                determine_config_file_path(&app, &command_line)?;
             vcls.push(Box::new(ConfigFileVcl::new(
                 &config_file_path,
                 user_specified,
             )));
         }
-        MultiConfig::new(&app, vcls)
+        MultiConfig::try_new(&app, vcls)
     }
 
     fn run_configuration(
         multi_config: &MultiConfig,
         data_directory: &PathBuf,
         chain_id: u8,
-    ) -> (BootstrapperConfig, Option<Box<dyn PersistentConfiguration>>) {
+    ) -> Result<(BootstrapperConfig, Option<Box<dyn PersistentConfiguration>>), ConfiguratorError>
+    {
         let mut streams = StdStreams {
             stdin: &mut ByteArrayReader::new(b""),
             stdout: &mut ByteArrayWriter::new(),
             stderr: &mut ByteArrayWriter::new(),
         };
         let mut bootstrapper_config = BootstrapperConfig::new();
-        privileged_parse_args(multi_config, &mut bootstrapper_config, &mut streams);
+        privileged_parse_args(multi_config, &mut bootstrapper_config, &mut streams)?;
         let initializer = DbInitializerReal::new();
         match initializer.initialize(data_directory, chain_id, false) {
             Ok(conn) => {
@@ -305,12 +306,17 @@ impl SetupReporterReal {
                     &mut bootstrapper_config,
                     &mut streams,
                     Some(&persistent_config),
-                );
-                (bootstrapper_config, Some(Box::new(persistent_config)))
+                )?;
+                Ok((bootstrapper_config, Some(Box::new(persistent_config))))
             }
             Err(_) => {
-                unprivileged_parse_args(multi_config, &mut bootstrapper_config, &mut streams, None);
-                (bootstrapper_config, None)
+                unprivileged_parse_args(
+                    multi_config,
+                    &mut bootstrapper_config,
+                    &mut streams,
+                    None,
+                )?;
+                Ok((bootstrapper_config, None))
             }
         }
     }
@@ -763,7 +769,9 @@ mod tests {
         .collect_vec();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(HashMap::new(), incoming_setup);
+        let result = subject
+            .get_modified_setup(HashMap::new(), incoming_setup)
+            .unwrap();
 
         let expected_result = vec![
             ("blockchain-service-url", "", Required),
@@ -838,7 +846,7 @@ mod tests {
             .collect::<SetupCluster>();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(existing_setup, vec![]);
+        let result = subject.get_modified_setup(existing_setup, vec![]).unwrap();
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Set),
@@ -895,7 +903,9 @@ mod tests {
             .collect_vec();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(HashMap::new(), incoming_setup);
+        let result = subject
+            .get_modified_setup(HashMap::new(), incoming_setup)
+            .unwrap();
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Set),
@@ -952,7 +962,7 @@ mod tests {
         let params = vec![];
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(HashMap::new(), params);
+        let result = subject.get_modified_setup(HashMap::new(), params).unwrap();
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Configured),
@@ -1053,7 +1063,7 @@ mod tests {
         .collect::<SetupCluster>();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(existing_setup, params);
+        let result = subject.get_modified_setup(existing_setup, params).unwrap();
 
         let expected_result = vec![
             ("blockchain-service-url", "https://example.com", Configured),
@@ -1110,7 +1120,7 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup);
+            SetupReporterReal::calculate_fundamentals(setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1144,7 +1154,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup);
+            SetupReporterReal::calculate_fundamentals(setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1180,7 +1190,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup);
+            SetupReporterReal::calculate_fundamentals(setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1210,7 +1220,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup);
+            SetupReporterReal::calculate_fundamentals(setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1238,7 +1248,7 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup);
+            SetupReporterReal::calculate_fundamentals(setup).unwrap();
 
         assert_eq!(real_user, crate::bootstrapper::RealUser::null().populate());
         assert_eq!(data_directory_opt, None);
@@ -1250,13 +1260,15 @@ mod tests {
         let _guard = EnvironmentGuard::new();
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(
-            HashMap::new(),
-            vec![
-                UiSetupRequestValue::new("ip", "1.2.3.4"),
-                UiSetupRequestValue::clear("chain"),
-            ],
-        );
+        let result = subject
+            .get_modified_setup(
+                HashMap::new(),
+                vec![
+                    UiSetupRequestValue::new("ip", "1.2.3.4"),
+                    UiSetupRequestValue::clear("chain"),
+                ],
+            )
+            .unwrap();
 
         let actual_chain = result.get("chain").unwrap();
         assert_eq!(

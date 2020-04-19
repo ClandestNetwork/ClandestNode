@@ -1,12 +1,12 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::node_configurator::{app_head, ConfiguratorError, NodeConfigurator};
+use crate::node_configurator::{app_head, NodeConfigurator};
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
 use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
 use masq_lib::multi_config::{CommandLineVcl, MultiConfig};
-use masq_lib::shared_schema::ui_port_arg;
+use masq_lib::shared_schema::{ui_port_arg, ConfiguratorError};
 
 lazy_static! {
     static ref UI_PORT_HELP: String = format!(
@@ -32,7 +32,7 @@ impl NodeConfigurator<InitializationConfig> for NodeConfiguratorInitialization {
     ) -> Result<InitializationConfig, ConfiguratorError> {
         let app = app();
         let multi_config =
-            MultiConfig::new(&app, vec![Box::new(CommandLineVcl::new(args.clone()))]);
+            MultiConfig::try_new(&app, vec![Box::new(CommandLineVcl::new(args.clone()))])?;
         let mut config = InitializationConfig::default();
         initialization::parse_args(&multi_config, &mut config, streams);
         Ok(config)
@@ -79,7 +79,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         initialization::parse_args(
             &multi_config,
@@ -98,7 +98,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::new(&app(), vcls);
+        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         initialization::parse_args(
             &multi_config,

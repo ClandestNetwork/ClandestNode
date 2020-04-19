@@ -5,8 +5,7 @@ use super::privilege_drop::PrivilegeDropperReal;
 use crate::bootstrapper::{BootstrapperConfig, RealUser};
 use crate::entry_dns::dns_socket_server::DnsSocketServer;
 use crate::node_configurator::node_configurator_standard::NodeConfiguratorStandardPrivileged;
-use crate::node_configurator::ConfiguratorError::Requireds;
-use crate::node_configurator::{ConfiguratorError, NodeConfigurator};
+use crate::node_configurator::NodeConfigurator;
 use crate::sub_lib;
 use crate::sub_lib::socket_server::SocketServer;
 use backtrace::Backtrace;
@@ -18,6 +17,8 @@ use flexi_logger::{DeferredNow, Duplicate, Record};
 use futures::try_ready;
 use masq_lib::command::Command;
 use masq_lib::command::StdStreams;
+use masq_lib::shared_schema::ConfiguratorError;
+use masq_lib::shared_schema::ConfiguratorError::Requireds;
 use std::any::Any;
 use std::fmt::Debug;
 use std::panic::{Location, PanicInfo};
@@ -396,10 +397,10 @@ pub mod test_utils {
 pub mod tests {
     use super::*;
     use crate::crash_test_dummy::CrashTestDummy;
-    use crate::node_configurator::{ConfiguratorError, Required};
     use crate::server_initializer::test_utils::PrivilegeDropperMock;
     use crate::test_utils::logging::{init_test_logging, TestLogHandler};
     use masq_lib::crash_point::CrashPoint;
+    use masq_lib::shared_schema::{ConfiguratorError, Required};
     use masq_lib::test_utils::fake_stream_holder::{
         ByteArrayReader, ByteArrayWriter, FakeStreamHolder,
     };
@@ -805,23 +806,23 @@ pub mod tests {
     #[test]
     fn go_should_combine_errors() {
         let dns_socket_server = SocketServerMock::new(())
-            .initialize_as_privileged_result(Err(Requireds(vec![Required::new(
+            .initialize_as_privileged_result(Err(ConfiguratorError::required(
                 "dns-iap",
                 "dns-iap-reason",
-            )])))
-            .initialize_as_unprivileged_result(Err(Requireds(vec![Required::new(
+            )))
+            .initialize_as_unprivileged_result(Err(ConfiguratorError::required(
                 "dns-iau",
                 "dns-iau-reason",
-            )])));
+            )));
         let bootstrapper = SocketServerMock::new(BootstrapperConfig::new())
-            .initialize_as_privileged_result(Err(Requireds(vec![Required::new(
+            .initialize_as_privileged_result(Err(ConfiguratorError::required(
                 "boot-iap",
                 "boot-iap-reason",
-            )])))
-            .initialize_as_unprivileged_result(Err(Requireds(vec![Required::new(
+            )))
+            .initialize_as_unprivileged_result(Err(ConfiguratorError::required(
                 "boot-iau",
                 "boot-iau-reason",
-            )])));
+            )));
         let privilege_dropper = PrivilegeDropperMock::new();
         let mut subject = ServerInitializer {
             dns_socket_server: Box::new(dns_socket_server),

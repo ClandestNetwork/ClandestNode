@@ -15,7 +15,7 @@ use crate::listener_handler::ListenerHandlerFactoryReal;
 use crate::node_configurator::node_configurator_standard::{
     NodeConfiguratorStandardPrivileged, NodeConfiguratorStandardUnprivileged,
 };
-use crate::node_configurator::{ConfiguratorError, DirsWrapper, NodeConfigurator, RealDirsWrapper};
+use crate::node_configurator::{DirsWrapper, NodeConfigurator, RealDirsWrapper};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::privilege_drop::{IdWrapper, IdWrapperReal};
 use crate::server_initializer::LoggerInitializerWrapper;
@@ -38,6 +38,7 @@ use log::LevelFilter;
 use masq_lib::command::StdStreams;
 use masq_lib::constants::DEFAULT_UI_PORT;
 use masq_lib::crash_point::CrashPoint;
+use masq_lib::shared_schema::ConfiguratorError;
 use std::collections::HashMap;
 use std::env::var;
 use std::fmt::{Debug, Error, Formatter};

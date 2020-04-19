@@ -154,9 +154,13 @@ impl Daemon {
         } else {
             let incoming_setup = payload.values;
             let existing_setup = self.params.clone();
-            self.params = self
+            self.params = match self
                 .setup_reporter
-                .get_modified_setup(existing_setup, incoming_setup);
+                .get_modified_setup(existing_setup, incoming_setup)
+            {
+                Ok(setup) => setup,
+                Err(e) => unimplemented!("{:?}", e), // TODO GH-290b: Drive something in here
+            };
             false
         };
         let msg = NodeToUiMessage {
@@ -331,6 +335,7 @@ mod tests {
         UiSetupResponseValue, UiSetupResponseValueStatus, UiShutdownRequest, UiStartOrder,
         UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
     };
+    use masq_lib::shared_schema::ConfiguratorError;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::cell::RefCell;
     use std::collections::HashSet;
@@ -370,7 +375,7 @@ mod tests {
 
     struct SetupReporterMock {
         get_modified_setup_params: Arc<Mutex<Vec<(SetupCluster, Vec<UiSetupRequestValue>)>>>,
-        get_modified_setup_results: RefCell<Vec<SetupCluster>>,
+        get_modified_setup_results: RefCell<Vec<Result<SetupCluster, ConfiguratorError>>>,
     }
 
     impl SetupReporter for SetupReporterMock {
@@ -378,7 +383,7 @@ mod tests {
             &self,
             existing_setup: SetupCluster,
             incoming_setup: Vec<UiSetupRequestValue>,
-        ) -> SetupCluster {
+        ) -> Result<SetupCluster, ConfiguratorError> {
             self.get_modified_setup_params
                 .lock()
                 .unwrap()
@@ -403,7 +408,10 @@ mod tests {
             self
         }
 
-        fn get_modified_setup_result(self, result: SetupCluster) -> Self {
+        fn get_modified_setup_result(
+            self,
+            result: Result<SetupCluster, ConfiguratorError>,
+        ) -> Self {
             self.get_modified_setup_results.borrow_mut().push(result);
             self
         }
@@ -488,7 +496,7 @@ mod tests {
         let combined_setup = make_setup_cluster(vec![("combined", "setup", Set)]);
         let setup_reporter = SetupReporterMock::new()
             .get_modified_setup_params(&get_modified_setup_params_arc)
-            .get_modified_setup_result(combined_setup);
+            .get_modified_setup_result(Ok(combined_setup));
         let system = System::new("test");
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);

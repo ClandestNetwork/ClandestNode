@@ -1,8 +1,10 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use crate::shared_schema::{ConfiguratorError, Required};
 #[allow(unused_imports)]
 use clap::{value_t, values_t};
 use clap::{App, ArgMatches};
+use regex::Regex;
 use serde::export::Formatter;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -76,33 +78,68 @@ impl<'a> MultiConfig<'a> {
     /// several VirtualCommandLine objects in increasing priority order. That is, values found in
     /// VirtualCommandLine objects placed later in the list will override values found in
     /// VirtualCommandLine objects placed earlier.
-    pub fn new(schema: &App<'a, 'a>, vcls: Vec<Box<dyn VirtualCommandLine>>) -> MultiConfig<'a> {
+    pub fn try_new(
+        schema: &App<'a, 'a>,
+        vcls: Vec<Box<dyn VirtualCommandLine>>,
+    ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let initial: Box<dyn VirtualCommandLine> =
             Box::new(CommandLineVcl::new(vec![String::new()]));
         let merged = vcls
             .into_iter()
             .fold(initial, |so_far, vcl| merge(so_far, vcl));
-        MultiConfig {
-            arg_matches: schema
-                .clone()
-                .get_matches_from_safe(merged.args().into_iter())
-                .unwrap_or_else(Self::abort),
+        let arg_matches = match schema
+            .clone()
+            .get_matches_from_safe(merged.args().into_iter())
+        {
+            Ok(matches) => matches,
+            Err(e) => return Err(Self::make_configurator_error(e)),
+        };
+        Ok(MultiConfig {
+            arg_matches,
             content: merged,
-        }
+        })
     }
 
     pub fn arg_matches(&'a self) -> &ArgMatches<'a> {
         &self.arg_matches
     }
 
-    fn abort(e: clap::Error) -> ArgMatches<'a> {
-        // This doesn't appear to work. I don't know why not.
-        if cfg!(test) {
-            panic!("{:?}. --panic to catch for testing--", e)
-        } else {
-            panic!("{:?}", e); // uncomment during testing
-            e.exit();
+    fn make_configurator_error(e: clap::Error) -> ConfiguratorError {
+        let invalid_value_regex =
+            Regex::new("Invalid value for.*'--(.*?) <.*? (.*)$").expect("Bad regex");
+        if let Some(captures) = invalid_value_regex.captures(&e.message) {
+            let name = &captures[1];
+            let message = format!("Invalid value: {}", &captures[2]);
+            return ConfiguratorError::required(name, &message);
         }
+        if e.message
+            .contains("The following required arguments were not provided:")
+        {
+            let mut remaining_message = match e.message.find("USAGE:") {
+                Some(idx) => e.message[0..idx].to_string(),
+                None => e.message.to_string(),
+            };
+            let required_value_regex = Regex::new("--(.*?) ").expect("Bad regex");
+            let mut requireds: Vec<Required> = vec![];
+            while let Some(captures) = required_value_regex.captures(&remaining_message) {
+                requireds.push(Required::new(
+                    &captures[1],
+                    "Required parameter not provided",
+                ));
+                match remaining_message.find(&captures[1]) {
+                    Some(idx) => remaining_message = remaining_message[idx..].to_string(),
+                    None => remaining_message = "".to_string(),
+                }
+            }
+            return ConfiguratorError::Requireds(requireds);
+        }
+        unimplemented!(
+            // TODO: GH-290b Figure something out here
+            "info: {:?}; kind: {:?}; message: {:?}",
+            e.info,
+            e.kind,
+            e.message
+        );
     }
 }
 
@@ -404,7 +441,7 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -427,7 +464,7 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -450,7 +487,7 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -479,7 +516,7 @@ pub(crate) mod tests {
                 "20,21".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -504,7 +541,7 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -529,7 +566,7 @@ pub(crate) mod tests {
                 "20,21".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -552,7 +589,7 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -575,7 +612,7 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -599,7 +636,7 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let (result, user_specified) = value_user_specified_m!(subject, "numeric-arg", u64);
 
@@ -624,7 +661,7 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let (result, user_specified) = value_user_specified_m!(subject, "numeric-arg", u64);
 
@@ -655,7 +692,7 @@ pub(crate) mod tests {
             "--numeric-arg".to_string(),
             "20".to_string(),
         ]))];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let (numeric_arg_result, user_specified_numeric) =
             value_user_specified_m!(subject, "numeric-arg", u64);
@@ -683,7 +720,7 @@ pub(crate) mod tests {
                 "--nonvalued".to_string(),
             ])),
         ];
-        let subject = MultiConfig::new(&schema, vcls);
+        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
 
         let result = subject.arg_matches();
 
@@ -691,17 +728,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "The following required arguments were not provided:")]
     fn clap_match_error_produces_panic() {
-        let schema = App::new("test").arg(
-            Arg::with_name("numeric-arg")
-                .long("numeric-arg")
-                .takes_value(true)
-                .required(true),
-        );
+        let schema = App::new("test")
+            .arg(
+                Arg::with_name("numeric-arg")
+                    .long("numeric-arg")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::with_name("another-arg")
+                    .long("another-arg")
+                    .takes_value(true)
+                    .required(true),
+            );
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(vec![String::new()]))];
-        MultiConfig::new(&schema, vcls);
+
+        let result = MultiConfig::try_new(&schema, vcls).err().unwrap();
+
+        let expected =
+            ConfiguratorError::required("another-arg", "Required parameter not provided")
+                .another_required("numeric-arg", "Required parameter not provided");
+        assert_eq!(result, expected);
     }
 
     //////

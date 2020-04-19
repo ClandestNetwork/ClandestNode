@@ -12,7 +12,7 @@ use clap::Arg;
 use heck::MixedCase;
 use masq_lib::command::StdStreams;
 use masq_lib::multi_config::{CommandLineVcl, EnvironmentVcl, MultiConfig, VirtualCommandLine};
-use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg};
+use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg, ConfiguratorError};
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::path::PathBuf;
@@ -20,8 +20,8 @@ use std::path::PathBuf;
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";
 
-pub fn dump_config(args: &Vec<String>, streams: &mut StdStreams) -> i32 {
-    let (real_user, data_directory, chain_id) = distill_args(args);
+pub fn dump_config(args: &Vec<String>, streams: &mut StdStreams) -> Result<i32, ConfiguratorError> {
+    let (real_user, data_directory, chain_id) = distill_args(args)?;
     PrivilegeDropperReal::new().drop_privileges(&real_user);
     let config_dao = make_config_dao(&data_directory, chain_id);
     let configuration = config_dao
@@ -29,7 +29,7 @@ pub fn dump_config(args: &Vec<String>, streams: &mut StdStreams) -> i32 {
         .expect("Couldn't fetch configuration");
     let json = configuration_to_json(configuration);
     write_string(streams, json);
-    0
+    Ok(0)
 }
 
 fn write_string(streams: &mut StdStreams, json: String) {
@@ -69,7 +69,7 @@ fn make_config_dao(data_directory: &PathBuf, chain_id: u8) -> ConfigDaoReal {
     ConfigDaoReal::new(conn)
 }
 
-fn distill_args(args: &Vec<String>) -> (RealUser, PathBuf, u8) {
+fn distill_args(args: &Vec<String>) -> Result<(RealUser, PathBuf, u8), ConfiguratorError> {
     let app = app_head()
         .arg(
             Arg::with_name("dump-config")
@@ -85,11 +85,11 @@ fn distill_args(args: &Vec<String>) -> (RealUser, PathBuf, u8) {
         Box::new(CommandLineVcl::new(args.clone())),
         Box::new(EnvironmentVcl::new(&app)),
     ];
-    let multi_config = MultiConfig::new(&app, vcls);
+    let multi_config = MultiConfig::try_new(&app, vcls)?;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(&multi_config);
     let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-    (real_user, directory, chain_id_from_name(&chain_name))
+    Ok((real_user, directory, chain_id_from_name(&chain_name)))
 }
 
 #[cfg(test)]
@@ -123,7 +123,8 @@ mod tests {
                 .opt("--dump-config")
                 .into(),
             &mut holder.streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let output = holder.stdout.get_string();
@@ -175,7 +176,8 @@ mod tests {
                 .opt("--dump-config")
                 .into(),
             &mut holder.streams(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let output = holder.stdout.get_string();

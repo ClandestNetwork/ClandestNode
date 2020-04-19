@@ -9,9 +9,9 @@ use tokio::prelude::Future;
 const DNS_PORT: u16 = 53;
 
 use crate::entry_dns::processing;
-use crate::node_configurator::ConfiguratorError;
 use crate::sub_lib::udp_socket_wrapper::UdpSocketWrapperReal;
 use crate::sub_lib::udp_socket_wrapper::UdpSocketWrapperTrait;
+use masq_lib::shared_schema::ConfiguratorError;
 use masq_lib::utils::localhost;
 
 pub struct DnsSocketServer {

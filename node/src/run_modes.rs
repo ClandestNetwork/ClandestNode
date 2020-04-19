@@ -157,7 +157,10 @@ impl Runner for RunnerReal {
     }
 
     fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
-        config_dumper::dump_config(args, streams)
+        match config_dumper::dump_config(args, streams) {
+            Ok(exit_code) => exit_code,
+            Err(e) => unimplemented!("{:?}", e), // TODO GH-290b Drive something in here
+        }
     }
 
     fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> i32 {
