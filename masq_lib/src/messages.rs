@@ -200,6 +200,18 @@ pub enum UiSetupResponseValueStatus {
     Required,
 }
 
+impl UiSetupResponseValueStatus {
+    pub fn value(self) -> u8 {
+        match self {
+            UiSetupResponseValueStatus::Blank => 0,
+            UiSetupResponseValueStatus::Required => 0,
+            UiSetupResponseValueStatus::Default => 1,
+            UiSetupResponseValueStatus::Configured => 2,
+            UiSetupResponseValueStatus::Set => 3,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupResponseValue {
     pub name: String,

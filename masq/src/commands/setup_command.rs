@@ -31,10 +31,6 @@ impl Command for SetupCommand {
                         .partial_cmp(&b.name)
                         .expect("String comparison failed")
                 });
-                if response.running {
-                    writeln!(context.stdout(), "Note: no changes were made to the setup because the Node is currently running.")
-                        .expect ("writeln! failed");
-                }
                 writeln!(
                     context.stdout(),
                     "NAME                      VALUE                                                            STATUS"
@@ -50,6 +46,10 @@ impl Command for SetupCommand {
                     )
                     .expect("writeln! failed")
                 });
+                if response.running {
+                    writeln!(context.stdout(), "\nNOTE: no changes were made to the setup because the Node is currently running.")
+                        .expect ("writeln! failed");
+                }
                 Ok(())
             }
             Err(e) => Err(e),
@@ -228,7 +228,7 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "Note: no changes were made to the setup because the Node is currently running.\nNAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Set\nclandestine-port          8534                                                             Default\nneighborhood-mode         zero-hop                                                         Configured\n");
+            "NAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Set\nclandestine-port          8534                                                             Default\nneighborhood-mode         zero-hop                                                         Configured\n\nNOTE: no changes were made to the setup because the Node is currently running.\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 }
