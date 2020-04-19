@@ -71,11 +71,6 @@ impl DbInitializer for DbInitializerReal {
         create_if_necessary: bool,
     ) -> Result<Box<dyn ConnectionWrapper>, InitializationError> {
         let is_creation_necessary = Self::is_creation_necessary(path);
-        eprintln!("path is {:?}", path);
-        eprintln!(
-            "initialize: create_if_necessary is {} and is_creation_necessary is {}",
-            create_if_necessary, is_creation_necessary
-        );
         if !create_if_necessary && is_creation_necessary {
             return Err(InitializationError::Nonexistent);
         }

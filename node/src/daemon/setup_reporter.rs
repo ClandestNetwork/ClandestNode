@@ -1483,7 +1483,7 @@ mod tests {
     fn real_user_computed_default() {
         let subject = crate::daemon::setup_reporter::RealUser {};
 
-        let result = subject.computed_default(&BootstrapperConfig::new(), None, &None);
+        let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
         assert_eq!(result, None);
     }
