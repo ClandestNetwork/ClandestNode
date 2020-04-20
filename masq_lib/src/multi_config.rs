@@ -133,13 +133,7 @@ impl<'a> MultiConfig<'a> {
             }
             return ConfiguratorError::Requireds(requireds);
         }
-        unimplemented!(
-            // TODO: GH-290b Figure something out here
-            "info: {:?}; kind: {:?}; message: {:?}",
-            e.info,
-            e.kind,
-            e.message
-        );
+        ConfiguratorError::required("<unknown>", &format! ("Unfamiliar message: {}", e.message))
     }
 }
 
@@ -420,6 +414,17 @@ pub(crate) mod tests {
     use clap::Arg;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn make_configurator_error_handles_unfamiliar_message() {
+        let result = MultiConfig::make_configurator_error(clap::Error{
+            message: "unfamiliar".to_string(),
+            kind: clap::ErrorKind::InvalidValue,
+            info: None
+        });
+
+        assert_eq! (result, ConfiguratorError::required("<unknown>", "Unfamiliar message: unfamiliar"))
+    }
 
     #[test]
     fn double_provided_optional_single_valued_parameter_with_no_default_produces_second_value() {
