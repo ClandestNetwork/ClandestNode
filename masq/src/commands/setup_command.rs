@@ -53,7 +53,7 @@ impl Command for SetupCommand {
                 Ok(())
             }
             Err(CommandError::Payload(err, msg)) if err == SETUP_ERROR => {
-                writeln!(context.stderr(), "{}", msg).expect ("writeln! failed");
+                writeln!(context.stderr(), "{}", msg).expect("writeln! failed");
                 Ok(())
             }
             Err(e) => Err(e),

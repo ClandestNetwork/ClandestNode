@@ -133,7 +133,7 @@ impl<'a> MultiConfig<'a> {
             }
             return ConfiguratorError::Requireds(requireds);
         }
-        ConfiguratorError::required("<unknown>", &format! ("Unfamiliar message: {}", e.message))
+        ConfiguratorError::required("<unknown>", &format!("Unfamiliar message: {}", e.message))
     }
 }
 
@@ -417,13 +417,16 @@ pub(crate) mod tests {
 
     #[test]
     fn make_configurator_error_handles_unfamiliar_message() {
-        let result = MultiConfig::make_configurator_error(clap::Error{
+        let result = MultiConfig::make_configurator_error(clap::Error {
             message: "unfamiliar".to_string(),
             kind: clap::ErrorKind::InvalidValue,
-            info: None
+            info: None,
         });
 
-        assert_eq! (result, ConfiguratorError::required("<unknown>", "Unfamiliar message: unfamiliar"))
+        assert_eq!(
+            result,
+            ConfiguratorError::required("<unknown>", "Unfamiliar message: unfamiliar")
+        )
     }
 
     #[test]

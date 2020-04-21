@@ -66,16 +66,21 @@ impl RunModes {
         } {
             Ok(exit_code) => exit_code,
             Err(e) => {
-                writeln!(streams.stderr, "Configuration error").expect ("writeln! error");
+                writeln!(streams.stderr, "Configuration error").expect("writeln! error");
                 match e {
-                    ConfiguratorError::Requireds(requireds) => requireds.into_iter()
-                        .for_each (|required|
-                            writeln!(streams.stderr, "{} - {}", required.parameter, required.reason)
-                                .expect ("writeln! error")
-                        ),
+                    ConfiguratorError::Requireds(requireds) => {
+                        requireds.into_iter().for_each(|required| {
+                            writeln!(
+                                streams.stderr,
+                                "{} - {}",
+                                required.parameter, required.reason
+                            )
+                            .expect("writeln! error")
+                        })
+                    }
                 }
                 1
-            },
+            }
         }
     }
 
@@ -120,7 +125,11 @@ impl RunModes {
         }
     }
 
-    fn generate_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+    fn generate_wallet(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError> {
         let configurator = NodeConfiguratorGenerateWallet::new();
         self.runner.configuration_run(
             args,
@@ -130,7 +139,11 @@ impl RunModes {
         )
     }
 
-    fn recover_wallet(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+    fn recover_wallet(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError> {
         let configurator = NodeConfiguratorRecoverWallet::new();
         self.runner.configuration_run(
             args,
@@ -142,9 +155,21 @@ impl RunModes {
 }
 
 trait Runner {
-    fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError>;
-    fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError>;
-    fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError>;
+    fn run_service(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError>;
+    fn dump_config(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError>;
+    fn initialization(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError>;
     fn configuration_run(
         &self,
         args: &Vec<String>,
@@ -157,7 +182,11 @@ trait Runner {
 struct RunnerReal {}
 
 impl Runner for RunnerReal {
-    fn run_service(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+    fn run_service(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError> {
         let system = System::new("main");
 
         let mut server_initializer = ServerInitializer::new();
@@ -170,11 +199,19 @@ impl Runner for RunnerReal {
         Ok(system.run())
     }
 
-    fn dump_config(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+    fn dump_config(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError> {
         config_dumper::dump_config(args, streams)
     }
 
-    fn initialization(&self, args: &Vec<String>, streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+    fn initialization(
+        &self,
+        args: &Vec<String>,
+        streams: &mut StdStreams<'_>,
+    ) -> Result<i32, ConfiguratorError> {
         let configurator = NodeConfiguratorInitialization {};
         let config = configurator.configure(args, streams)?;
         let mut initializer = DaemonInitializer::new(
@@ -195,8 +232,8 @@ impl Runner for RunnerReal {
         _privilege_dropper: &dyn PrivilegeDropper,
     ) -> Result<i32, ConfiguratorError> {
         match configurator.configure(args, streams) {
-            Ok(_) => Ok (0),
-            Err(e) => Err (e),
+            Ok(_) => Ok(0),
+            Err(e) => Err(e),
         }
     }
 }
@@ -227,17 +264,29 @@ mod tests {
     }
 
     impl Runner for RunnerMock {
-        fn run_service(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+        fn run_service(
+            &self,
+            args: &Vec<String>,
+            _streams: &mut StdStreams<'_>,
+        ) -> Result<i32, ConfiguratorError> {
             self.run_service_params.lock().unwrap().push(args.clone());
             self.run_service_results.borrow_mut().remove(0)
         }
 
-        fn dump_config(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+        fn dump_config(
+            &self,
+            args: &Vec<String>,
+            _streams: &mut StdStreams<'_>,
+        ) -> Result<i32, ConfiguratorError> {
             self.dump_config_params.lock().unwrap().push(args.clone());
             self.dump_config_results.borrow_mut().remove(0)
         }
 
-        fn initialization(&self, args: &Vec<String>, _streams: &mut StdStreams<'_>) -> Result<i32, ConfiguratorError> {
+        fn initialization(
+            &self,
+            args: &Vec<String>,
+            _streams: &mut StdStreams<'_>,
+        ) -> Result<i32, ConfiguratorError> {
             self.initialization_params
                 .lock()
                 .unwrap()
@@ -442,17 +491,19 @@ mod tests {
     #[test]
     fn go_accepts_requireds_errors_and_renders_them() {
         let mut subject = RunModes::new();
-        subject.runner = Box::new (RunnerMock::new()
-            .dump_config_result(Err(ConfiguratorError::required("parm1", "msg1").another_required("parm2", "msg2"))));
-        subject.privilege_dropper = Box::new(PrivilegeDropperMock::new()
-            .expect_privilege_result(true));
+        subject.runner = Box::new(RunnerMock::new().dump_config_result(Err(
+            ConfiguratorError::required("parm1", "msg1").another_required("parm2", "msg2"),
+        )));
+        subject.privilege_dropper =
+            Box::new(PrivilegeDropperMock::new().expect_privilege_result(true));
         let mut holder = FakeStreamHolder::new();
 
-        let result = subject.go (&vec!["--dump-config".to_string()], &mut holder.streams());
+        let result = subject.go(&vec!["--dump-config".to_string()], &mut holder.streams());
 
-        assert_eq! (result, 1);
-        assert_eq! (&holder.stderr.get_string(),
-"Configuration error\n\
+        assert_eq!(result, 1);
+        assert_eq!(
+            &holder.stderr.get_string(),
+            "Configuration error\n\
 parm1 - msg1\n\
 parm2 - msg2\n"
         )

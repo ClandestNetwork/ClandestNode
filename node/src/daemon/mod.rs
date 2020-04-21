@@ -14,16 +14,20 @@ use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
+use itertools::Itertools;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, SETUP_ERROR};
+use masq_lib::messages::{
+    FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
+    UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
+    NODE_NOT_RUNNING_ERROR, SETUP_ERROR,
+};
+use masq_lib::shared_schema::ConfiguratorError::Requireds;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessagePath, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use masq_lib::shared_schema::ConfiguratorError::Requireds;
-use itertools::Itertools;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -159,21 +163,26 @@ impl Daemon {
                 Ok(setup) => setup,
                 Err(e) => {
                     let error_msg = match e {
-                        Requireds(requireds) => requireds.into_iter()
+                        Requireds(requireds) => requireds
+                            .into_iter()
                             .map(|required| format!("{} - {}", required.parameter, required.reason))
-                            .join ("\n"),
+                            .join("\n"),
                     };
                     let msg = NodeToUiMessage {
                         target: ClientId(client_id),
                         body: MessageBody {
                             opcode: "setup".to_string(),
                             path: MessagePath::Conversation(context_id),
-                            payload: Err((SETUP_ERROR, error_msg))
-                        }
+                            payload: Err((SETUP_ERROR, error_msg)),
+                        },
                     };
-                    self.ui_gateway_sub.as_ref().expect("UiGateway is unbound").try_send(msg).expect("UiGateway is dead");
-                    return
-                },
+                    self.ui_gateway_sub
+                        .as_ref()
+                        .expect("UiGateway is unbound")
+                        .try_send(msg)
+                        .expect("UiGateway is dead");
+                    return;
+                }
             };
             false
         };
@@ -344,14 +353,19 @@ mod tests {
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use masq_lib::messages::UiSetupResponseValueStatus::Set;
-    use masq_lib::messages::{UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupRequestValue, UiSetupResponse, UiSetupResponseValue, UiSetupResponseValueStatus, UiShutdownRequest, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, SETUP_ERROR};
+    use masq_lib::messages::{
+        UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupRequestValue, UiSetupResponse,
+        UiSetupResponseValue, UiSetupResponseValueStatus, UiShutdownRequest, UiStartOrder,
+        UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
+        SETUP_ERROR,
+    };
     use masq_lib::shared_schema::ConfiguratorError;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::ui_gateway::MessageTarget;
     use std::cell::RefCell;
     use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
-    use masq_lib::ui_gateway::MessageTarget;
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<HashMap<String, String>>>>,
@@ -668,19 +682,21 @@ mod tests {
     #[test]
     fn handle_setup_handles_configuration_error() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
-        let mut subject = Daemon::new (Box::new(LauncherMock::new()));
-        subject.setup_reporter = Box::new (SetupReporterMock::new()
-            .get_modified_setup_result (Err(ConfiguratorError::required("parameter", "message"))));
+        let mut subject = Daemon::new(Box::new(LauncherMock::new()));
+        subject.setup_reporter =
+            Box::new(SetupReporterMock::new().get_modified_setup_result(Err(
+                ConfiguratorError::required("parameter", "message"),
+            )));
         let system = System::new("test");
         subject.ui_gateway_sub = Some(ui_gateway.start().recipient());
 
-        subject.handle_setup (47, 74, UiSetupRequest::new(vec![]));
+        subject.handle_setup(47, 74, UiSetupRequest::new(vec![]));
 
         System::current().stop();
         system.run();
         let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
         let message: &NodeToUiMessage = ui_gateway_recording.get_record(0);
-        assert_eq! (
+        assert_eq!(
             *message,
             NodeToUiMessage {
                 target: MessageTarget::ClientId(47),

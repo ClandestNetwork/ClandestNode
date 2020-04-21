@@ -69,16 +69,10 @@ impl SetupReporter for SetupReporterReal {
             ]))?;
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-        let combined_setup = Self::combine_clusters(vec![
-            &default_setup,
-            &existing_setup,
-            &incoming_setup,
-        ]);
-        let configured_setup = Self::calculate_configured_setup(
-            combined_setup,
-            &data_directory,
-            &chain_name,
-        )?;
+        let combined_setup =
+            Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
+        let configured_setup =
+            Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name)?;
 
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
@@ -112,14 +106,15 @@ impl SetupReporter for SetupReporterReal {
     }
 }
 
-#[allow (dead_code)]
+#[allow(dead_code)]
 fn eprintln_setup(label: &str, cluster: &SetupCluster) {
-    let message = cluster.iter()
+    let message = cluster
+        .iter()
         .map(|(_, v)| (v.name.to_string(), v.value.to_string(), v.status))
-        .sorted_by_key (|(n, _, _)| n.clone())
+        .sorted_by_key(|(n, _, _)| n.clone())
         .map(|(n, v, s)| format!("{:26}{:65}{:?}", n, v, s))
         .join("\n");
-    eprintln! ("{}:\n{}\n", label, message);
+    eprintln!("{}:\n{}\n", label, message);
 }
 
 impl SetupReporterReal {
@@ -1300,32 +1295,32 @@ mod tests {
 
     #[test]
     fn choose_uisrv_chooses_higher_priority_incoming_over_lower_priority_existing() {
-        let existing = UiSetupResponseValue::new ("name", "existing", Configured);
-        let incoming = UiSetupResponseValue::new ("name", "incoming", Set);
+        let existing = UiSetupResponseValue::new("name", "existing", Configured);
+        let incoming = UiSetupResponseValue::new("name", "incoming", Set);
 
         let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
 
-        assert_eq! (result, &incoming);
+        assert_eq!(result, &incoming);
     }
 
     #[test]
     fn choose_uisrv_chooses_higher_priority_existing_over_lower_priority_incoming() {
-        let existing = UiSetupResponseValue::new ("name", "existing", Set);
-        let incoming = UiSetupResponseValue::new ("name", "incoming", Configured);
+        let existing = UiSetupResponseValue::new("name", "existing", Set);
+        let incoming = UiSetupResponseValue::new("name", "incoming", Configured);
 
         let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
 
-        assert_eq! (result, &existing);
+        assert_eq!(result, &existing);
     }
 
     #[test]
     fn choose_uisrv_chooses_incoming_over_existing_for_equal_priority() {
-        let existing = UiSetupResponseValue::new ("name", "existing", Set);
-        let incoming = UiSetupResponseValue::new ("name", "incoming", Set);
+        let existing = UiSetupResponseValue::new("name", "existing", Set);
+        let incoming = UiSetupResponseValue::new("name", "incoming", Set);
 
         let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
 
-        assert_eq! (result, &incoming);
+        assert_eq!(result, &incoming);
     }
 
     #[test]
