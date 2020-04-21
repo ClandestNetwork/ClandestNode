@@ -69,18 +69,29 @@ impl SetupReporter for SetupReporterReal {
             ]))?;
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
+eprintln_setup ("DEFAULT", &default_setup);
+eprintln_setup ("EXISTING", &existing_setup);
+eprintln_setup ("INCOMING", &incoming_setup);
+        let combined_setup = Self::combine_clusters(vec![
+            &default_setup,
+            &existing_setup,
+            &incoming_setup,
+        ]);
+eprintln_setup ("FOR USE WITH calculate_configured_setup", &combined_setup);
         let configured_setup = Self::calculate_configured_setup(
-            Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]),
+            combined_setup,
             &data_directory,
             &chain_name,
         )?;
 
+eprintln_setup ("CONFIGURED", &configured_setup);
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
             &configured_setup,
             &existing_setup,
             &incoming_setup,
         ]);
+eprintln_setup ("FOR USE WITH FINAL RUN THROUGH RETRIEVERS", &combined_setup);
         Ok(value_retrievers()
             .into_iter()
             .map(|retriever| {
@@ -105,6 +116,15 @@ impl SetupReporter for SetupReporterReal {
             })
             .collect::<SetupCluster>())
     }
+}
+
+fn eprintln_setup(label: &str, cluster: &SetupCluster) {
+    let message = cluster.iter()
+        .map(|(_, v)| (v.name.to_string(), v.value.to_string(), v.status))
+        .sorted_by_key (|(n, _, _)| n.clone())
+        .map(|(n, v, s)| format!("{:26}{:65}{:?}", n, v, s))
+        .join("\n");
+    eprintln! ("{}:\n{}\n", label, message);
 }
 
 impl SetupReporterReal {
@@ -144,6 +164,7 @@ impl SetupReporterReal {
     fn calculate_fundamentals(
         combined_setup: SetupCluster,
     ) -> Result<(crate::bootstrapper::RealUser, Option<PathBuf>, String), ConfiguratorError> {
+eprintln! ("Calculating fundamentals");
         let multi_config = Self::make_multi_config(None, true, false)?;
         let real_user = match (
             value_m!(multi_config, "real-user", String),
@@ -185,6 +206,7 @@ impl SetupReporterReal {
     ) -> Result<SetupCluster, ConfiguratorError> {
         let db_password_opt = combined_setup.get("db-password").map(|v| v.value.clone());
         let command_line = Self::make_command_line(combined_setup);
+eprintln! ("Calculating configured setup");
         let multi_config = Self::make_multi_config(Some(command_line), true, true)?;
         let (bootstrapper_config, persistent_config_opt) = Self::run_configuration(
             &multi_config,
@@ -238,7 +260,7 @@ impl SetupReporterReal {
         existing: &'a UiSetupResponseValue,
         incoming: &'a UiSetupResponseValue,
     ) -> &'a UiSetupResponseValue {
-        if incoming.status.value() > existing.status.value() {
+        if incoming.status.value() >= existing.status.value() {
             incoming
         } else {
             existing
@@ -1021,7 +1043,13 @@ mod tests {
             "clandestine-port",
             "config-file",
             "consuming-private-key",
+            "data-directory",
             "db-password",
+            "dns-servers",
+            "earning-wallet",
+            "gas-price",
+            "ip",
+            "neighborhood-mode",
             "neighbors",
             #[cfg(not(target_os = "windows"))]
             "real-user",
@@ -1275,6 +1303,36 @@ mod tests {
             actual_chain,
             &UiSetupResponseValue::new("chain", DEFAULT_CHAIN_NAME, Default)
         );
+    }
+
+    #[test]
+    fn choose_uisrv_chooses_higher_priority_incoming_over_lower_priority_existing() {
+        let existing = UiSetupResponseValue::new ("name", "existing", Configured);
+        let incoming = UiSetupResponseValue::new ("name", "incoming", Set);
+
+        let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
+
+        assert_eq! (result, &incoming);
+    }
+
+    #[test]
+    fn choose_uisrv_chooses_higher_priority_existing_over_lower_priority_incoming() {
+        let existing = UiSetupResponseValue::new ("name", "existing", Set);
+        let incoming = UiSetupResponseValue::new ("name", "incoming", Configured);
+
+        let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
+
+        assert_eq! (result, &existing);
+    }
+
+    #[test]
+    fn choose_uisrv_chooses_incoming_over_existing_for_equal_priority() {
+        let existing = UiSetupResponseValue::new ("name", "existing", Set);
+        let incoming = UiSetupResponseValue::new ("name", "incoming", Set);
+
+        let result = SetupReporterReal::choose_uisrv(&existing, &incoming);
+
+        assert_eq! (result, &incoming);
     }
 
     #[test]
