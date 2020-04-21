@@ -3,7 +3,7 @@
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{value_t, App, SubCommand};
-use masq_lib::messages::{UiSetupRequest, UiSetupRequestValue, UiSetupResponse};
+use masq_lib::messages::{UiSetupRequest, UiSetupRequestValue, UiSetupResponse, SETUP_ERROR};
 use masq_lib::shared_schema::shared_app;
 use masq_lib::utils::index_of_from;
 use std::fmt::Debug;
@@ -50,6 +50,10 @@ impl Command for SetupCommand {
                     writeln!(context.stdout(), "\nNOTE: no changes were made to the setup because the Node is currently running.")
                         .expect ("writeln! failed");
                 }
+                Ok(())
+            }
+            Err(CommandError::Payload(err, msg)) if err == SETUP_ERROR => {
+                writeln!(context.stderr(), "{}", msg).expect ("writeln! failed");
                 Ok(())
             }
             Err(e) => Err(e),
