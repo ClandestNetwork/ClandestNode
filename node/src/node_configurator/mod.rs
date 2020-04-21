@@ -149,7 +149,7 @@ pub fn determine_config_file_path(
     let orientation_vcl = CommandLineVcl::from(orientation_args);
     let multi_config = MultiConfig::try_new(&orientation_schema, vec![Box::new(orientation_vcl)])?;
     let config_file_path =
-        value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted"); // TODO 290b: Check this
+        value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted");
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(&multi_config);
@@ -170,7 +170,7 @@ pub fn create_wallet(
                 &derivation_path_info.mnemonic_seed,
                 &derivation_path_info.db_password,
             )
-            .expect("Failed to set mnemonic seed"); // TODO 290b: Check this
+            .expect("Failed to set mnemonic seed");
         if let Some(consuming_derivation_path) = &derivation_path_info.consuming_derivation_path_opt
         {
             persistent_config.set_consuming_wallet_derivation_path(
@@ -192,7 +192,7 @@ pub fn initialize_database(
                 "Can't initialize database at {:?}: {:?}",
                 data_directory.join(DATABASE_FILE),
                 e
-            ) // TODO 290b: Check this
+            )
         });
     Box::new(PersistentConfigurationReal::from(conn))
 }
@@ -231,18 +231,18 @@ pub fn data_directory_from_context(
             let right_home_dir = real_user
                 .home_dir
                 .as_ref()
-                .expect("No real-user home directory; specify --real-user") // TODO 290b: Check this
+                .expect("No real-user home directory; specify --real-user")
                 .to_string_lossy()
                 .to_string();
             let dirs_wrapper = RealDirsWrapper {};
             let wrong_home_dir = dirs_wrapper
                 .home_dir()
-                .expect("No privileged home directory; specify --data-directory") // TODO 290b: Check this
+                .expect("No privileged home directory; specify --data-directory")
                 .to_string_lossy()
                 .to_string();
             let wrong_local_data_dir = dirs_wrapper
                 .data_dir()
-                .expect("No privileged local data directory; specify --data-directory") // TODO 290b: Check this
+                .expect("No privileged local data directory; specify --data-directory")
                 .to_string_lossy()
                 .to_string();
             let right_local_data_dir =

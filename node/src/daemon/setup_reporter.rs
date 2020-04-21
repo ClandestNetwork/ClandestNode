@@ -69,29 +69,23 @@ impl SetupReporter for SetupReporterReal {
             ]))?;
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-eprintln_setup ("DEFAULT", &default_setup);
-eprintln_setup ("EXISTING", &existing_setup);
-eprintln_setup ("INCOMING", &incoming_setup);
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
             &existing_setup,
             &incoming_setup,
         ]);
-eprintln_setup ("FOR USE WITH calculate_configured_setup", &combined_setup);
         let configured_setup = Self::calculate_configured_setup(
             combined_setup,
             &data_directory,
             &chain_name,
         )?;
 
-eprintln_setup ("CONFIGURED", &configured_setup);
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
             &configured_setup,
             &existing_setup,
             &incoming_setup,
         ]);
-eprintln_setup ("FOR USE WITH FINAL RUN THROUGH RETRIEVERS", &combined_setup);
         Ok(value_retrievers()
             .into_iter()
             .map(|retriever| {
@@ -118,6 +112,7 @@ eprintln_setup ("FOR USE WITH FINAL RUN THROUGH RETRIEVERS", &combined_setup);
     }
 }
 
+#[allow (dead_code)]
 fn eprintln_setup(label: &str, cluster: &SetupCluster) {
     let message = cluster.iter()
         .map(|(_, v)| (v.name.to_string(), v.value.to_string(), v.status))
@@ -164,7 +159,6 @@ impl SetupReporterReal {
     fn calculate_fundamentals(
         combined_setup: SetupCluster,
     ) -> Result<(crate::bootstrapper::RealUser, Option<PathBuf>, String), ConfiguratorError> {
-eprintln! ("Calculating fundamentals");
         let multi_config = Self::make_multi_config(None, true, false)?;
         let real_user = match (
             value_m!(multi_config, "real-user", String),
@@ -206,7 +200,6 @@ eprintln! ("Calculating fundamentals");
     ) -> Result<SetupCluster, ConfiguratorError> {
         let db_password_opt = combined_setup.get("db-password").map(|v| v.value.clone());
         let command_line = Self::make_command_line(combined_setup);
-eprintln! ("Calculating configured setup");
         let multi_config = Self::make_multi_config(Some(command_line), true, true)?;
         let (bootstrapper_config, persistent_config_opt) = Self::run_configuration(
             &multi_config,
