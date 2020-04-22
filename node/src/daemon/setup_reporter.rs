@@ -71,8 +71,13 @@ impl SetupReporter for SetupReporterReal {
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         let combined_setup =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
+        eprintln_setup("DEFAULT", &default_setup);
+        eprintln_setup("EXISTING", &existing_setup);
+        eprintln_setup("INCOMING", &incoming_setup);
+        eprintln_setup("COMBINED (for configuration)", &combined_setup);
         let configured_setup =
             Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name)?;
+        eprintln_setup("CONFIGURED", &configured_setup);
 
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
@@ -80,6 +85,7 @@ impl SetupReporter for SetupReporterReal {
             &existing_setup,
             &incoming_setup,
         ]);
+        eprintln_setup("COMBINED (final)", &combined_setup);
         Ok(value_retrievers()
             .into_iter()
             .map(|retriever| {
@@ -307,6 +313,10 @@ impl SetupReporterReal {
         };
         let mut bootstrapper_config = BootstrapperConfig::new();
         privileged_parse_args(multi_config, &mut bootstrapper_config, &mut streams)?;
+        eprintln!(
+            "After privileged_parse_args, gas price is {:?}",
+            bootstrapper_config.blockchain_bridge_config.gas_price
+        );
         let initializer = DbInitializerReal::new();
         match initializer.initialize(data_directory, chain_id, false) {
             Ok(conn) => {
@@ -317,6 +327,10 @@ impl SetupReporterReal {
                     &mut streams,
                     Some(&persistent_config),
                 )?;
+                eprintln!(
+                    "After unprivileged_parse_args with database, gas price is {:?}",
+                    bootstrapper_config.blockchain_bridge_config.gas_price
+                );
                 Ok((bootstrapper_config, Some(Box::new(persistent_config))))
             }
             Err(_) => {
@@ -326,6 +340,10 @@ impl SetupReporterReal {
                     &mut streams,
                     None,
                 )?;
+                eprintln!(
+                    "After unprivileged_parse_args without database, gas price is {:?}",
+                    bootstrapper_config.blockchain_bridge_config.gas_price
+                );
                 Ok((bootstrapper_config, None))
             }
         }
@@ -417,7 +435,7 @@ impl ValueRetriever for ClandestinePort {
     ) -> Option<(String, UiSetupResponseValueStatus)> {
         persistent_config_opt
             .as_ref()
-            .map(|pc| (pc.clandestine_port().to_string(), Configured))
+            .map(|pc| (pc.clandestine_port().to_string(), Default))
     }
 
     fn is_required(&self, _params: &SetupCluster) -> bool {
@@ -531,13 +549,14 @@ impl ValueRetriever for GasPrice {
 
     fn computed_default(
         &self,
-        _bootstrapper_config: &BootstrapperConfig,
-        persistent_config_opt: &Option<Box<dyn PersistentConfiguration>>,
+        bootstrapper_config: &BootstrapperConfig,
+        _persistent_config_opt: &Option<Box<dyn PersistentConfiguration>>,
         _db_password_opt: &Option<String>,
     ) -> Option<(String, UiSetupResponseValueStatus)> {
-        persistent_config_opt
-            .as_ref()
-            .map(|pc| (pc.gas_price().to_string(), Configured))
+        bootstrapper_config
+            .blockchain_bridge_config
+            .gas_price
+            .map(|gp| (gp.to_string(), Default))
     }
 
     fn is_required(&self, params: &SetupCluster) -> bool {
@@ -786,7 +805,7 @@ mod tests {
         let expected_result = vec![
             ("blockchain-service-url", "", Required),
             ("chain", "mainnet", Default),
-            ("clandestine-port", "1234", Configured),
+            ("clandestine-port", "1234", Default),
             ("config-file", "config.toml", Default),
             ("consuming-private-key", "", Blank),
             ("data-directory", home_dir.to_str().unwrap(), Set),
@@ -797,7 +816,7 @@ mod tests {
                 "0x0000000000000000000000000000000000000000",
                 Configured,
             ),
-            ("gas-price", "1234567890", Configured),
+            ("gas-price", "1234567890", Default),
             ("ip", "4.3.2.1", Set),
             ("log-level", "warn", Default),
             ("neighborhood-mode", "standard", Default),
@@ -1343,7 +1362,7 @@ mod tests {
             &None,
         );
 
-        assert_eq!(result, Some(("1234".to_string(), Configured)))
+        assert_eq!(result, Some(("1234".to_string(), Default)))
     }
 
     #[test]
@@ -1411,16 +1430,13 @@ mod tests {
 
     #[test]
     fn gas_price_computed_default_present() {
-        let persistent_config = PersistentConfigurationMock::new().gas_price_result(57);
+        let mut bootstrapper_config = BootstrapperConfig::new();
+        bootstrapper_config.blockchain_bridge_config.gas_price = Some(57);
         let subject = GasPrice {};
 
-        let result = subject.computed_default(
-            &BootstrapperConfig::new(),
-            &Some(Box::new(persistent_config)),
-            &None,
-        );
+        let result = subject.computed_default(&bootstrapper_config, &None, &None);
 
-        assert_eq!(result, Some(("57".to_string(), Configured)))
+        assert_eq!(result, Some(("57".to_string(), Default)))
     }
 
     #[test]

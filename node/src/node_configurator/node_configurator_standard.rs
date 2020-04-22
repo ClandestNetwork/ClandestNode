@@ -247,8 +247,28 @@ pub mod standard {
         persistent_config_opt: Option<&dyn PersistentConfiguration>,
     ) -> Result<(), ConfiguratorError> {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
-        unprivileged_config.blockchain_bridge_config.gas_price =
-            value_m!(multi_config, "gas-price", u64);
+        let user_specified = multi_config.arg_matches().occurrences_of("gas-price") > 0;
+        unprivileged_config.blockchain_bridge_config.gas_price = if user_specified {
+            let result = value_m!(multi_config, "gas-price", u64);
+            eprintln!("gas price is user-specified at {:?}", result);
+            result
+        } else {
+            match persistent_config_opt {
+                Some(persistent_config) => {
+                    let result = persistent_config.gas_price();
+                    eprintln!(
+                        "gas price is not user specified, but is {} in the database",
+                        result
+                    );
+                    Some(result)
+                }
+                None => {
+                    let result = Some(1);
+                    eprintln! ("gas price is not user specified or present in the database; using default of {:?}", result);
+                    result
+                }
+            }
+        };
         if let Some(persistent_config) = persistent_config_opt {
             get_wallets(
                 streams,
@@ -282,6 +302,7 @@ pub mod standard {
             persistent_config.set_earning_wallet_address(&config.earning_wallet.to_string());
         }
         if let Some(gas_price) = config.blockchain_bridge_config.gas_price {
+            eprintln!("Setting gas price in database: {}", gas_price);
             persistent_config.set_gas_price(gas_price)
         }
         match &config.consuming_wallet {
