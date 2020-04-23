@@ -958,7 +958,7 @@ mod tests {
         let bbconfig = BlockchainBridgeConfig {
             blockchain_service_url: Some("http://λ:8545".to_string()),
             chain_id: DEFAULT_CHAIN_ID,
-            gas_price: None,
+            gas_price: 1,
         };
         let mut config = BootstrapperConfig::new();
         config.blockchain_bridge_config = bbconfig;
@@ -987,7 +987,7 @@ mod tests {
             blockchain_bridge_config: BlockchainBridgeConfig {
                 blockchain_service_url: None,
                 chain_id: DEFAULT_CHAIN_ID,
-                gas_price: None,
+                gas_price: 1,
             },
             port_configurations: HashMap::new(),
             db_password_opt: None,
@@ -1051,7 +1051,7 @@ mod tests {
             blockchain_bridge_config: BlockchainBridgeConfig {
                 blockchain_service_url: None,
                 chain_id: DEFAULT_CHAIN_ID,
-                gas_price: None,
+                gas_price: 1,
             },
             port_configurations: HashMap::new(),
             db_password_opt: None,
@@ -1129,7 +1129,7 @@ mod tests {
             BlockchainBridgeConfig {
                 blockchain_service_url: None,
                 chain_id: DEFAULT_CHAIN_ID,
-                gas_price: None,
+                gas_price: 1,
             }
         );
         assert_eq!(
@@ -1161,7 +1161,7 @@ mod tests {
             blockchain_bridge_config: BlockchainBridgeConfig {
                 blockchain_service_url: None,
                 chain_id: DEFAULT_CHAIN_ID,
-                gas_price: None,
+                gas_price: 1,
             },
             port_configurations: HashMap::new(),
             db_password_opt: None,

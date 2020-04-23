@@ -249,11 +249,11 @@ pub mod standard {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         let user_specified = multi_config.arg_matches().occurrences_of("gas-price") > 0;
         unprivileged_config.blockchain_bridge_config.gas_price = if user_specified {
-            value_m!(multi_config, "gas-price", u64)
+            value_m!(multi_config, "gas-price", u64).expect ("Value disappeared")
         } else {
             match persistent_config_opt {
-                Some(persistent_config) => Some(persistent_config.gas_price()),
-                None => Some(1),
+                Some(persistent_config) => persistent_config.gas_price(),
+                None => 1,
             }
         };
         if let Some(persistent_config) = persistent_config_opt {
@@ -288,10 +288,7 @@ pub mod standard {
         if persistent_config.earning_wallet_address().is_none() {
             persistent_config.set_earning_wallet_address(&config.earning_wallet.to_string());
         }
-        if let Some(gas_price) = config.blockchain_bridge_config.gas_price {
-            eprintln!("Setting gas price in database: {}", gas_price);
-            persistent_config.set_gas_price(gas_price)
-        }
+        persistent_config.set_gas_price(config.blockchain_bridge_config.gas_price);
         match &config.consuming_wallet {
             Some(consuming_wallet)
                 if persistent_config
@@ -702,44 +699,6 @@ pub mod standard {
 
             assert_eq! (result, ConfiguratorError::required("consuming-private-key", "Cannot use --consuming-private-key and --earning-wallet when database contains mnemonic seed"))
         }
-        /*
-        let earning_wallet_opt =
-            standard::get_earning_wallet_from_address(multi_config, persistent_config)?;
-        let mut consuming_wallet_opt =
-            standard::get_consuming_wallet_from_private_key(multi_config, persistent_config)?;
-        if earning_wallet_opt.is_some()
-            && consuming_wallet_opt.is_some()
-            && mnemonic_seed_exists(persistent_config)
-        {
-            panic!("Cannot use --consuming-private-key and earning wallet address when database contains mnemonic seed") // TODO PANIC Drive a ConfiguratorError in here
-        }
-
-        if (earning_wallet_opt.is_none() || consuming_wallet_opt.is_none())
-            && mnemonic_seed_exists(persistent_config)
-        {
-            if let Some(db_password) =
-                standard::get_db_password(multi_config, streams, config, persistent_config)
-            {
-                if consuming_wallet_opt.is_none() {
-                    consuming_wallet_opt = standard::get_consuming_wallet_opt_from_derivation_path(
-                        persistent_config,
-                        &db_password,
-                    )?;
-                } else if persistent_config
-                    .consuming_wallet_derivation_path()
-                    .is_some()
-                {
-                    panic!("Cannot use --consuming-private-key when database contains mnemonic seed and consuming wallet derivation path") // TODO PANIC Drive a ConfiguratorError in here
-                }
-            }
-        }
-        config.consuming_wallet = consuming_wallet_opt;
-        config.earning_wallet = match earning_wallet_opt {
-            Some(earning_wallet) => earning_wallet,
-            None => DEFAULT_EARNING_WALLET.clone(),
-        };
-        Ok(())
-        */
 
         #[test]
         fn get_wallets_handles_consuming_private_key_with_mnemonic_seed_and_consuming_wallet_derivation_path(
@@ -2374,19 +2333,15 @@ mod tests {
         let mut subject = NodeConfiguratorStandardUnprivileged::new(&BootstrapperConfig::new());
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
-        let expected_gas_price = "57";
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--gas-price", expected_gas_price);
+            .param("--gas-price", "57");
 
         let config = subject
             .configure(&args.into(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
-        assert_eq!(
-            config.blockchain_bridge_config.gas_price,
-            u64::from_str_radix(expected_gas_price, 10).ok()
-        );
+        assert_eq!( config.blockchain_bridge_config.gas_price, 57);
     }
 
     #[test]
@@ -2404,7 +2359,7 @@ mod tests {
             .configure(&args.into(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
-        assert_eq!(config.blockchain_bridge_config.gas_price, Some(1));
+        assert_eq!(config.blockchain_bridge_config.gas_price, 1);
     }
 
     #[test]
@@ -2438,7 +2393,7 @@ mod tests {
         let consuming_public_key_bytes = consuming_public_key.bytes();
         config.earning_wallet = Wallet::new(earning_address);
         config.consuming_wallet = Some(Wallet::from(keypair));
-        config.blockchain_bridge_config.gas_price = Some(gas_price);
+        config.blockchain_bridge_config.gas_price = gas_price;
         let set_clandestine_port_params_arc = Arc::new(Mutex::new(vec![]));
         let set_earning_wallet_address_params_arc = Arc::new(Mutex::new(vec![]));
         let set_consuming_public_key_params_arc = Arc::new(Mutex::new(vec![]));

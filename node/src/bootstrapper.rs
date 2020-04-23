@@ -306,7 +306,7 @@ impl BootstrapperConfig {
             blockchain_bridge_config: BlockchainBridgeConfig {
                 blockchain_service_url: None,
                 chain_id: 3u8, /*DEFAULT_CHAIN_ID*/
-                gas_price: None,
+                gas_price: 1,
             },
             port_configurations: HashMap::new(),
             data_directory: PathBuf::new(),
@@ -988,7 +988,7 @@ mod tests {
             .unwrap();
 
         let config = subject.config;
-        assert_eq!(Some(11u64), config.blockchain_bridge_config.gas_price);
+        assert_eq!(config.blockchain_bridge_config.gas_price, 11);
     }
 
     #[test]

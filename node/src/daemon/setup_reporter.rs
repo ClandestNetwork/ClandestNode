@@ -553,10 +553,7 @@ impl ValueRetriever for GasPrice {
         _persistent_config_opt: &Option<Box<dyn PersistentConfiguration>>,
         _db_password_opt: &Option<String>,
     ) -> Option<(String, UiSetupResponseValueStatus)> {
-        bootstrapper_config
-            .blockchain_bridge_config
-            .gas_price
-            .map(|gp| (gp.to_string(), Default))
+        Some ((bootstrapper_config.blockchain_bridge_config.gas_price.to_string(), Default))
     }
 
     fn is_required(&self, params: &SetupCluster) -> bool {
@@ -1431,7 +1428,7 @@ mod tests {
     #[test]
     fn gas_price_computed_default_present() {
         let mut bootstrapper_config = BootstrapperConfig::new();
-        bootstrapper_config.blockchain_bridge_config.gas_price = Some(57);
+        bootstrapper_config.blockchain_bridge_config.gas_price = 57;
         let subject = GasPrice {};
 
         let result = subject.computed_default(&bootstrapper_config, &None, &None);
