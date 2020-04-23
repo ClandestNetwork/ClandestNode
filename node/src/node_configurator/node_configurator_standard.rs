@@ -249,7 +249,7 @@ pub mod standard {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         let user_specified = multi_config.arg_matches().occurrences_of("gas-price") > 0;
         unprivileged_config.blockchain_bridge_config.gas_price = if user_specified {
-            value_m!(multi_config, "gas-price", u64).expect ("Value disappeared")
+            value_m!(multi_config, "gas-price", u64).expect("Value disappeared")
         } else {
             match persistent_config_opt {
                 Some(persistent_config) => persistent_config.gas_price(),
@@ -2341,7 +2341,7 @@ mod tests {
             .configure(&args.into(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
-        assert_eq!( config.blockchain_bridge_config.gas_price, 57);
+        assert_eq!(config.blockchain_bridge_config.gas_price, 57);
     }
 
     #[test]

@@ -447,7 +447,7 @@ impl ParamError {
 
 #[derive(Debug, PartialEq)]
 pub struct ConfiguratorError {
-    pub param_errors: Vec<ParamError>
+    pub param_errors: Vec<ParamError>,
 }
 
 impl ConfiguratorError {
@@ -456,7 +456,9 @@ impl ConfiguratorError {
     }
 
     pub fn required(parameter: &str, reason: &str) -> Self {
-        ConfiguratorError {param_errors: vec![ParamError::new(parameter, reason)]}
+        ConfiguratorError {
+            param_errors: vec![ParamError::new(parameter, reason)],
+        }
     }
 
     pub fn another_required(mut self, parameter: &str, reason: &str) -> Self {

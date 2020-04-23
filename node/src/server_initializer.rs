@@ -126,7 +126,10 @@ impl ServerInitializer {
             (Ok(_), Err(e)) => Err(e),
             (Err(e), Ok(_)) => Err(e),
             (Err(e1), Err(e2)) => Err(ConfiguratorError::new(
-                e1.param_errors.into_iter().chain(e2.param_errors.into_iter()).collect(),
+                e1.param_errors
+                    .into_iter()
+                    .chain(e2.param_errors.into_iter())
+                    .collect(),
             )),
         }
     }
@@ -566,11 +569,10 @@ pub mod tests {
 
     #[test]
     fn combine_results_combines_failure_and_success() {
-        let initial_failure: Result<String, ConfiguratorError> =
-            Err(ConfiguratorError::new(vec![
-                ParamError::new("param-one", "Reason One"),
-                ParamError::new("param-two", "Reason Two"),
-            ]));
+        let initial_failure: Result<String, ConfiguratorError> = Err(ConfiguratorError::new(vec![
+            ParamError::new("param-one", "Reason One"),
+            ParamError::new("param-two", "Reason Two"),
+        ]));
         let additional_success = Ok(42);
 
         let result = ServerInitializer::combine_results(initial_failure, additional_success);
@@ -586,11 +588,10 @@ pub mod tests {
 
     #[test]
     fn combine_results_combines_failure_and_failure() {
-        let initial_failure: Result<String, ConfiguratorError> =
-            Err(ConfiguratorError::new(vec![
-                ParamError::new("param-one", "Reason One"),
-                ParamError::new("param-two", "Reason Two"),
-            ]));
+        let initial_failure: Result<String, ConfiguratorError> = Err(ConfiguratorError::new(vec![
+            ParamError::new("param-one", "Reason One"),
+            ParamError::new("param-two", "Reason Two"),
+        ]));
         let additional_failure: Result<usize, ConfiguratorError> =
             Err(ConfiguratorError::new(vec![
                 ParamError::new("param-two", "Reason Three"),

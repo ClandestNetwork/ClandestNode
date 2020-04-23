@@ -160,6 +160,10 @@ mod tests {
                     value: "to UI".to_string(),
                     status: Set,
                 }],
+                errors: vec![
+                    ("param1".to_string(), "reason1".to_string()),
+                    ("param2".to_string(), "reason2".to_string()),
+                ],
             }
             .tmb(1234),
         };
@@ -186,6 +190,10 @@ mod tests {
                         value: "to UI".to_string(),
                         status: Set,
                     }],
+                    errors: vec![
+                        ("param1".to_string(), "reason1".to_string()),
+                        ("param2".to_string(), "reason2".to_string()),
+                    ],
                 },
                 1234,
             )
@@ -206,6 +214,10 @@ mod tests {
                     value: "to UI".to_string(),
                     status: Set,
                 }],
+                errors: vec![
+                    ("param1".to_string(), "reason1".to_string()),
+                    ("param2".to_string(), "reason2".to_string()),
+                ]
             }
         );
         assert_eq!(

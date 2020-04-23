@@ -19,14 +19,13 @@ use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiMessageError, UiRedirect, UiSetupRequest, UiSetupResponse,
     UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
-    NODE_NOT_RUNNING_ERROR, SETUP_ERROR,
+    NODE_NOT_RUNNING_ERROR,
 };
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessagePath, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use itertools::Itertools;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -150,46 +149,41 @@ impl Daemon {
     }
 
     fn handle_setup(&mut self, client_id: u64, context_id: u64, payload: UiSetupRequest) {
-        let running = if self.port_if_node_is_running().is_some() {
-            true
+        let body = if self.port_if_node_is_running().is_some() {
+            UiSetupResponse {
+                running: true,
+                values: self.params.iter().map(|(_, value)| value.clone()).collect(),
+                errors: vec![],
+            }
         } else {
             let incoming_setup = payload.values;
             let existing_setup = self.params.clone();
-            self.params = match self
+            match self
                 .setup_reporter
                 .get_modified_setup(existing_setup, incoming_setup)
             {
-                Ok(setup) => setup,
-                Err(e) => {
-                    let error_msg = e.param_errors
-                        .into_iter()
-                        .map(|param_error| format!("{} - {}", param_error.parameter, param_error.reason))
-                        .join("\n");
-                    let msg = NodeToUiMessage {
-                        target: ClientId(client_id),
-                        body: MessageBody {
-                            opcode: "setup".to_string(),
-                            path: MessagePath::Conversation(context_id),
-                            payload: Err((SETUP_ERROR, error_msg)),
-                        },
-                    };
-                    self.ui_gateway_sub
-                        .as_ref()
-                        .expect("UiGateway is unbound")
-                        .try_send(msg)
-                        .expect("UiGateway is dead");
-                    return;
+                Ok(setup) => {
+                    self.params = setup;
+                    UiSetupResponse {
+                        running: false,
+                        values: self.params.iter().map(|(_, value)| value.clone()).collect(),
+                        errors: vec![],
+                    }
                 }
-            };
-            false
+                Err(errors) => UiSetupResponse {
+                    running: false,
+                    values: self.params.iter().map(|(_, value)| value.clone()).collect(),
+                    errors: errors
+                        .param_errors
+                        .into_iter()
+                        .map(|error| (error.parameter, error.reason))
+                        .collect(),
+                },
+            }
         };
         let msg = NodeToUiMessage {
             target: ClientId(client_id),
-            body: UiSetupResponse {
-                running,
-                values: self.params.iter().map(|(_, value)| value.clone()).collect(),
-            }
-            .tmb(context_id),
+            body: body.tmb(context_id),
         };
         self.ui_gateway_sub
             .as_ref()

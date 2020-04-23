@@ -482,6 +482,7 @@ mod tests {
             UiSetupResponse {
                 running: true,
                 values: vec![UiSetupResponseValue::new("type", "response", Set)],
+                errors: vec![("parameter".to_string(), "reason".to_string())],
             },
         ));
         let stop_handle = server.start();
@@ -512,7 +513,8 @@ mod tests {
             (
                 UiSetupResponse {
                     running: true,
-                    values: vec![UiSetupResponseValue::new("type", "response", Set)]
+                    values: vec![UiSetupResponseValue::new("type", "response", Set)],
+                    errors: vec![("parameter".to_string(), "reason".to_string())],
                 },
                 1
             )
@@ -533,6 +535,7 @@ mod tests {
                         "conversation 2 response",
                         Set,
                     )],
+                    errors: vec![],
                 }
                 .tmb(2),
             })
@@ -545,6 +548,7 @@ mod tests {
                         "conversation 1 response",
                         Set,
                     )],
+                    errors: vec![],
                 }
                 .tmb(1),
             });
@@ -597,7 +601,8 @@ mod tests {
                     "type",
                     "conversation 1 response",
                     Set
-                )]
+                )],
+                errors: vec![],
             }
         );
         assert_eq!(response2_body.path, Conversation(2));
@@ -609,7 +614,8 @@ mod tests {
                     "type",
                     "conversation 2 response",
                     Set
-                )]
+                )],
+                errors: vec![],
             }
         );
     }

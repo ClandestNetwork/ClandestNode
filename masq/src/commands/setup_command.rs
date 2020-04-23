@@ -46,6 +46,13 @@ impl Command for SetupCommand {
                     )
                     .expect("writeln! failed")
                 });
+                if !response.errors.is_empty() {
+                    writeln!(context.stdout(), "\nERRORS:").expect("writeln! failed");
+                    response.errors.into_iter().for_each(|(parameter, reason)| {
+                        writeln!(context.stdout(), "{:26}{}", parameter, reason)
+                            .expect("writeln! failed")
+                    })
+                }
                 if response.running {
                     writeln!(context.stdout(), "\nNOTE: no changes were made to the setup because the Node is currently running.")
                         .expect ("writeln! failed");
@@ -139,6 +146,7 @@ mod tests {
                         UiSetupResponseValue::new("chain", "ropsten", Configured),
                         UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
                     ],
+                    errors: vec![],
                 }
                 .tmb(0),
             }));
@@ -175,7 +183,9 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "NAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Configured\nneighborhood-mode         zero-hop                                                         Set\n");
+"NAME                      VALUE                                                            STATUS\n\
+chain                     ropsten                                                          Configured\n\
+neighborhood-mode         zero-hop                                                         Set\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 
@@ -193,6 +203,7 @@ mod tests {
                         UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Configured),
                         UiSetupResponseValue::new("clandestine-port", "8534", Default),
                     ],
+                    errors: vec![("ip".to_string(), "Nosir, I don't like it.".to_string())],
                 }
                 .tmb(0),
             }));
@@ -232,7 +243,15 @@ mod tests {
             }]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
-            "NAME                      VALUE                                                            STATUS\nchain                     ropsten                                                          Set\nclandestine-port          8534                                                             Default\nneighborhood-mode         zero-hop                                                         Configured\n\nNOTE: no changes were made to the setup because the Node is currently running.\n");
+"NAME                      VALUE                                                            STATUS\n\
+chain                     ropsten                                                          Set\n\
+clandestine-port          8534                                                             Default\n\
+neighborhood-mode         zero-hop                                                         Configured\n\
+\n\
+ERRORS:
+ip                        Nosir, I don't like it.\n\
+\n\
+NOTE: no changes were made to the setup because the Node is currently running.\n");
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use crate::messages::UiMessageError::{DeserializationError, PayloadError, UnexpectedMessage};
+use crate::shared_schema::ConfiguratorError;
 use crate::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use crate::ui_gateway::{MessageBody, MessagePath};
 use serde::de::DeserializeOwned;
@@ -238,22 +239,29 @@ impl UiSetupResponseValue {
 pub struct UiSetupResponse {
     pub running: bool,
     pub values: Vec<UiSetupResponseValue>,
+    pub errors: Vec<(String, String)>,
 }
 conversation_message!(UiSetupResponse, "setup");
 impl UiSetupResponse {
     pub fn new(
         running: bool,
-        triples: Vec<(UiSetupResponseValueStatus, &str, &str)>,
+        triples: Vec<(&str, &str, UiSetupResponseValueStatus)>,
+        errors: ConfiguratorError,
     ) -> UiSetupResponse {
         UiSetupResponse {
             running,
             values: triples
                 .into_iter()
-                .map(|(status, name, value)| UiSetupResponseValue {
+                .map(|(name, value, status)| UiSetupResponseValue {
                     name: name.to_string(),
                     value: value.to_string(),
                     status,
                 })
+                .collect(),
+            errors: errors
+                .param_errors
+                .into_iter()
+                .map(|param_error| (param_error.parameter, param_error.reason))
                 .collect(),
         }
     }

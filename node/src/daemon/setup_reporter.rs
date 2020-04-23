@@ -553,7 +553,13 @@ impl ValueRetriever for GasPrice {
         _persistent_config_opt: &Option<Box<dyn PersistentConfiguration>>,
         _db_password_opt: &Option<String>,
     ) -> Option<(String, UiSetupResponseValueStatus)> {
-        Some ((bootstrapper_config.blockchain_bridge_config.gas_price.to_string(), Default))
+        Some((
+            bootstrapper_config
+                .blockchain_bridge_config
+                .gas_price
+                .to_string(),
+            Default,
+        ))
     }
 
     fn is_required(&self, params: &SetupCluster) -> bool {
