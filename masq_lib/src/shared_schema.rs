@@ -140,7 +140,6 @@ pub fn chain_arg<'a>() -> Arg<'a, 'a> {
         .min_values(0)
         .max_values(1)
         .possible_values(&["dev", "mainnet", "ropsten"])
-        // .default_value(DEFAULT_CHAIN_NAME)
         .help(CHAIN_HELP)
 }
 
@@ -432,7 +431,7 @@ pub mod common_validators {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Required {
     pub parameter: String,
     pub reason: String,

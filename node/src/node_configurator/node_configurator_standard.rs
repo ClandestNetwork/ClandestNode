@@ -119,7 +119,7 @@ pub mod standard {
         data_directory_from_context, determine_config_file_path, mnemonic_seed_exists,
         real_user_data_directory_opt_and_chain_name, request_existing_db_password,
     };
-    use crate::persistent_configuration::PersistentConfiguration;
+    use crate::persistent_configuration::{PersistentConfigError, PersistentConfiguration};
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
     use crate::sub_lib::cryptde_null::CryptDENull;
@@ -132,9 +132,9 @@ pub mod standard {
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
-    use masq_lib::constants::{DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
+    use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
-    use masq_lib::shared_schema::ConfiguratorError;
+    use masq_lib::shared_schema::{ConfiguratorError, Required};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
@@ -249,24 +249,11 @@ pub mod standard {
         unprivileged_config.clandestine_port_opt = value_m!(multi_config, "clandestine-port", u16);
         let user_specified = multi_config.arg_matches().occurrences_of("gas-price") > 0;
         unprivileged_config.blockchain_bridge_config.gas_price = if user_specified {
-            let result = value_m!(multi_config, "gas-price", u64);
-            eprintln!("gas price is user-specified at {:?}", result);
-            result
+            value_m!(multi_config, "gas-price", u64)
         } else {
             match persistent_config_opt {
-                Some(persistent_config) => {
-                    let result = persistent_config.gas_price();
-                    eprintln!(
-                        "gas price is not user specified, but is {} in the database",
-                        result
-                    );
-                    Some(result)
-                }
-                None => {
-                    let result = Some(1);
-                    eprintln! ("gas price is not user specified or present in the database; using default of {:?}", result);
-                    result
-                }
+                Some(persistent_config) => Some(persistent_config.gas_price()),
+                None => Some(1),
             }
         };
         if let Some(persistent_config) = persistent_config_opt {
@@ -275,7 +262,7 @@ pub mod standard {
                 multi_config,
                 persistent_config,
                 unprivileged_config,
-            )
+            )?
         }
         match make_neighborhood_config(
             multi_config,
@@ -330,16 +317,16 @@ pub mod standard {
         multi_config: &MultiConfig,
         persistent_config: &dyn PersistentConfiguration,
         config: &mut BootstrapperConfig,
-    ) {
+    ) -> Result<(), ConfiguratorError> {
         let earning_wallet_opt =
-            standard::get_earning_wallet_from_address(multi_config, persistent_config);
+            standard::get_earning_wallet_from_address(multi_config, persistent_config)?;
         let mut consuming_wallet_opt =
-            standard::get_consuming_wallet_from_private_key(multi_config, persistent_config);
+            standard::get_consuming_wallet_from_private_key(multi_config, persistent_config)?;
         if earning_wallet_opt.is_some()
             && consuming_wallet_opt.is_some()
             && mnemonic_seed_exists(persistent_config)
         {
-            panic!("Cannot use --consuming-private-key and earning wallet address when database contains mnemonic seed")
+            return Err(ConfiguratorError::required("consuming-private-key", "Cannot use --consuming-private-key and --earning-wallet when database contains mnemonic seed"));
         }
 
         if (earning_wallet_opt.is_none() || consuming_wallet_opt.is_none())
@@ -352,12 +339,12 @@ pub mod standard {
                     consuming_wallet_opt = standard::get_consuming_wallet_opt_from_derivation_path(
                         persistent_config,
                         &db_password,
-                    );
+                    )?;
                 } else if persistent_config
                     .consuming_wallet_derivation_path()
                     .is_some()
                 {
-                    panic!("Cannot use --consuming-private-key when database contains mnemonic seed and consuming wallet derivation path")
+                    return Err(ConfiguratorError::required("consuming-private-key", "Cannot use when database contains mnemonic seed and consuming wallet derivation path"));
                 }
             }
         }
@@ -366,6 +353,7 @@ pub mod standard {
             Some(earning_wallet) => earning_wallet,
             None => DEFAULT_EARNING_WALLET.clone(),
         };
+        Ok(())
     }
 
     pub fn make_neighborhood_config(
@@ -375,7 +363,7 @@ pub mod standard {
         unprivileged_config: &mut BootstrapperConfig,
     ) -> Result<NeighborhoodConfig, ConfiguratorError> {
         let neighbor_configs: Vec<NodeDescriptor> = {
-            match convert_ci_configs(multi_config) {
+            match convert_ci_configs(multi_config)? {
                 Some(configs) => configs,
                 None => match persistent_config_opt {
                     Some(persistent_config) => get_past_neighbors(
@@ -394,16 +382,19 @@ pub mod standard {
         }
     }
 
-    pub fn convert_ci_configs(multi_config: &MultiConfig) -> Option<Vec<NodeDescriptor>> {
+    #[allow(clippy::collapsible_if)]
+    pub fn convert_ci_configs(
+        multi_config: &MultiConfig,
+    ) -> Result<Option<Vec<NodeDescriptor>>, ConfiguratorError> {
         match value_m!(multi_config, "neighbors", String) {
-            None => None,
+            None => Ok(None),
             Some(joined_configs) => {
                 let cli_configs: Vec<String> = joined_configs
                     .split(',')
                     .map(|s| s.to_string())
                     .collect_vec();
                 if cli_configs.is_empty() {
-                    None
+                    Ok(None)
                 } else {
                     let dummy_cryptde: Box<dyn CryptDE> = {
                         if value_m!(multi_config, "fake-public-key", String) == None {
@@ -412,17 +403,51 @@ pub mod standard {
                             Box::new(CryptDENull::new(DEFAULT_CHAIN_ID))
                         }
                     };
-                    Some(
-                        cli_configs
-                            .into_iter()
-                            .map(
-                                |s| match NodeDescriptor::from_str(dummy_cryptde.as_ref(), &s) {
-                                    Ok(nd) => nd,
-                                    Err(e) => panic!("Neighbor syntax error. {}", e),
+                    let chain_name = value_m!(multi_config, "chain", String)
+                        .unwrap_or_else(|| DEFAULT_CHAIN_NAME.to_string());
+                    let results = cli_configs
+                        .into_iter()
+                        .map(
+                            |s| match NodeDescriptor::from_str(dummy_cryptde.as_ref(), &s) {
+                                Ok(nd) => if &chain_name == "mainnet" {
+                                    if nd.mainnet {
+                                        Ok(nd)
+                                    }
+                                    else {
+                                        Err(Required::new("neighbors", "Mainnet node descriptors use '@', not ':', as the first delimiter"))
+                                    }
+                                }
+                                else {
+                                    if nd.mainnet {
+                                        Err(Required::new("neighbors", &format!("Mainnet node descriptor uses '@', but chain configured for '{}'", chain_name)))
+                                    }
+                                    else {
+                                        Ok(nd)
+                                    }
                                 },
-                            )
-                            .collect_vec(),
-                    )
+                                Err(e) => Err(Required::new("neighbors", &e)),
+                            },
+                        )
+                        .collect_vec();
+                    let errors = results
+                        .clone()
+                        .into_iter()
+                        .flat_map(|result| match result {
+                            Err(e) => Some(e),
+                            Ok(_) => None,
+                        })
+                        .collect::<Vec<Required>>();
+                    if errors.is_empty() {
+                        Ok(Some(
+                            results
+                                .into_iter()
+                                .filter(|result| result.is_ok())
+                                .map(|result| result.expect("Error materialized"))
+                                .collect::<Vec<NodeDescriptor>>(),
+                        ))
+                    } else {
+                        Err(ConfiguratorError::Requireds(errors))
+                    }
                 }
             }
         }
@@ -519,24 +544,27 @@ pub mod standard {
     fn get_earning_wallet_from_address(
         multi_config: &MultiConfig,
         persistent_config: &dyn PersistentConfiguration,
-    ) -> Option<Wallet> {
+    ) -> Result<Option<Wallet>, ConfiguratorError> {
         let earning_wallet_from_command_line_opt = value_m!(multi_config, "earning-wallet", String);
         let earning_wallet_from_database_opt = persistent_config.earning_wallet_from_address();
         match (
             earning_wallet_from_command_line_opt,
             earning_wallet_from_database_opt,
         ) {
-            (None, None) => None,
-            (Some(address), None) => Some(
+            (None, None) => Ok(None),
+            (Some(address), None) => Ok(Some(
                 Wallet::from_str(&address)
                     .expect("--earning-wallet not properly constrained by clap"),
-            ),
-            (None, Some(wallet)) => Some(wallet),
+            )),
+            (None, Some(wallet)) => Ok(Some(wallet)),
             (Some(address), Some(wallet)) => {
                 if wallet.to_string().to_lowercase() == address.to_lowercase() {
-                    Some(wallet)
+                    Ok(Some(wallet))
                 } else {
-                    panic!("Cannot use --earning-wallet to specify an address ({}) different from that previously set ({})", address, wallet)
+                    Err(ConfiguratorError::required(
+                        "earning-wallet",
+                        &format!("Cannot change to an address ({}) different from that previously set ({})", address.to_lowercase(), wallet.to_string().to_lowercase())
+                    ))
                 }
             }
         }
@@ -545,11 +573,11 @@ pub mod standard {
     fn get_consuming_wallet_opt_from_derivation_path(
         persistent_config: &dyn PersistentConfiguration,
         db_password: &str,
-    ) -> Option<Wallet> {
+    ) -> Result<Option<Wallet>, ConfiguratorError> {
         match persistent_config.consuming_wallet_derivation_path() {
-            None => None,
+            None => Ok(None),
             Some(derivation_path) => match persistent_config.mnemonic_seed(db_password) {
-                Ok(None) => None,
+                Ok(None) => Ok(None),
                 Ok(Some(mnemonic_seed)) => {
                     let keypair =
                         Bip32ECKeyPair::from_raw(mnemonic_seed.as_ref(), &derivation_path)
@@ -559,9 +587,15 @@ pub mod standard {
                             derivation_path
                         )
                             });
-                    Some(Wallet::from(keypair))
+                    Ok(Some(Wallet::from(keypair)))
                 }
-                Err(e) => panic!("{:?}", e),
+                Err(e) => match e {
+                    PersistentConfigError::PasswordError => Err(ConfiguratorError::required(
+                        "db-password",
+                        "Incorrect password for retrieving mnemonic seed",
+                    )),
+                    e => panic!("{:?}", e),
+                },
             },
         }
     }
@@ -569,7 +603,7 @@ pub mod standard {
     fn get_consuming_wallet_from_private_key(
         multi_config: &MultiConfig,
         persistent_config: &dyn PersistentConfiguration,
-    ) -> Option<Wallet> {
+    ) -> Result<Option<Wallet>, ConfiguratorError> {
         match value_m!(multi_config, "consuming-private-key", String) {
             Some(consuming_private_key_string) => {
                 match consuming_private_key_string.from_hex::<Vec<u8>>() {
@@ -581,18 +615,22 @@ pub mod standard {
                                     let proposed_public_key_hex =
                                         keypair.secret().public().bytes().to_hex::<String>();
                                     if proposed_public_key_hex != established_public_key_hex {
-                                        panic!("The specified --consuming-private-key does not denote the same consuming wallet you have used in the past.")
+                                        return Err(ConfiguratorError::required("consuming-private-key", "Not the private key of the consuming wallet you have used in the past"));
                                     }
                                 }
                             }
-                            Some(Wallet::from(keypair))
+                            Ok(Some(Wallet::from(keypair)))
                         }
-                        Err(e) => panic!("Cannot create consuming wallet from private key {}", e),
+                        Err(_) => {
+                            panic!("Internal error: bad clap validation for consuming-private-key")
+                        }
                     },
-                    Err(e) => panic!("Unable to parse private key {}", e),
+                    Err(_) => {
+                        panic!("Internal error: bad clap validation for consuming-private-key")
+                    }
                 }
             }
-            None => None,
+            None => Ok(None),
         }
     }
 
@@ -619,6 +657,257 @@ pub mod standard {
             config.db_password_opt = db_password_opt.clone();
         };
         db_password_opt
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::persistent_configuration::PersistentConfigError;
+        use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
+        use crate::test_utils::ArgsBuilder;
+        use masq_lib::multi_config::VirtualCommandLine;
+        use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+
+        #[test]
+        fn get_wallets_handles_consuming_private_key_and_earning_wallet_address_when_database_contains_mnemonic_seed(
+        ) {
+            let mut holder = FakeStreamHolder::new();
+            let args = ArgsBuilder::new()
+                .param(
+                    "--consuming-private-key",
+                    "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF",
+                )
+                .param(
+                    "--earning-wallet",
+                    "0x0123456789012345678901234567890123456789",
+                )
+                .param("--db-password", "booga");
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+            let persistent_config = PersistentConfigurationMock::new()
+                .earning_wallet_from_address_result(None)
+                .consuming_wallet_public_key_result(None)
+                .mnemonic_seed_result(Ok(Some(PlainData::new(b"mnemonic seed"))));
+            let mut bootstrapper_config = BootstrapperConfig::new();
+
+            let result = standard::get_wallets(
+                &mut holder.streams(),
+                &multi_config,
+                &persistent_config,
+                &mut bootstrapper_config,
+            )
+            .err()
+            .unwrap();
+
+            assert_eq! (result, ConfiguratorError::required("consuming-private-key", "Cannot use --consuming-private-key and --earning-wallet when database contains mnemonic seed"))
+        }
+        /*
+        let earning_wallet_opt =
+            standard::get_earning_wallet_from_address(multi_config, persistent_config)?;
+        let mut consuming_wallet_opt =
+            standard::get_consuming_wallet_from_private_key(multi_config, persistent_config)?;
+        if earning_wallet_opt.is_some()
+            && consuming_wallet_opt.is_some()
+            && mnemonic_seed_exists(persistent_config)
+        {
+            panic!("Cannot use --consuming-private-key and earning wallet address when database contains mnemonic seed") // TODO PANIC Drive a ConfiguratorError in here
+        }
+
+        if (earning_wallet_opt.is_none() || consuming_wallet_opt.is_none())
+            && mnemonic_seed_exists(persistent_config)
+        {
+            if let Some(db_password) =
+                standard::get_db_password(multi_config, streams, config, persistent_config)
+            {
+                if consuming_wallet_opt.is_none() {
+                    consuming_wallet_opt = standard::get_consuming_wallet_opt_from_derivation_path(
+                        persistent_config,
+                        &db_password,
+                    )?;
+                } else if persistent_config
+                    .consuming_wallet_derivation_path()
+                    .is_some()
+                {
+                    panic!("Cannot use --consuming-private-key when database contains mnemonic seed and consuming wallet derivation path") // TODO PANIC Drive a ConfiguratorError in here
+                }
+            }
+        }
+        config.consuming_wallet = consuming_wallet_opt;
+        config.earning_wallet = match earning_wallet_opt {
+            Some(earning_wallet) => earning_wallet,
+            None => DEFAULT_EARNING_WALLET.clone(),
+        };
+        Ok(())
+        */
+
+        #[test]
+        fn get_wallets_handles_consuming_private_key_with_mnemonic_seed_and_consuming_wallet_derivation_path(
+        ) {
+            let mut holder = FakeStreamHolder::new();
+            let args = ArgsBuilder::new()
+                .param(
+                    "--consuming-private-key",
+                    "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF",
+                )
+                .param("--db-password", "booga");
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+            let persistent_config = PersistentConfigurationMock::new()
+                .earning_wallet_from_address_result (None)
+                .mnemonic_seed_result (Ok(Some(PlainData::new(b"mnemonic seed"))))
+                .consuming_wallet_derivation_path_result(Some("path".to_string()))
+                .consuming_wallet_public_key_result(Some("c2a4c3969a1acfd0a67f8881a894f0db3b36f7f1dde0b053b988bf7cff325f6c3129d83b9d6eeb205e3274193b033f106bea8bbc7bdd5f85589070effccbf55e".to_string()));
+            let mut bootstrapper_config = BootstrapperConfig::new();
+
+            let result = standard::get_wallets(
+                &mut holder.streams(),
+                &multi_config,
+                &persistent_config,
+                &mut bootstrapper_config,
+            )
+            .err()
+            .unwrap();
+
+            assert_eq! (result, ConfiguratorError::required("consuming-private-key", "Cannot use when database contains mnemonic seed and consuming wallet derivation path"))
+        }
+
+        #[test]
+        fn convert_ci_configs_handles_bad_syntax() {
+            let args = ArgsBuilder::new().param("--neighbors", "booga");
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+
+            let result = standard::convert_ci_configs(&multi_config).err().unwrap();
+
+            assert_eq!(
+                result,
+                ConfiguratorError::required(
+                    "neighbors",
+                    "Should be <public key>[@ | :]<node address>, not 'booga'"
+                )
+            )
+        }
+
+        #[test]
+        fn convert_ci_configs_handles_blockchain_mismatch_on_mainnet() {
+            let args = ArgsBuilder::new()
+                .param(
+                    "--neighbors",
+                    "abJ5XvhVbmVyGejkYUkmftF09pmGZGKg/PzRNnWQxFw:12.23.34.45:5678",
+                )
+                .param("--chain", "mainnet");
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+
+            let result = standard::convert_ci_configs(&multi_config).err().unwrap();
+
+            assert_eq!(
+                result,
+                ConfiguratorError::required(
+                    "neighbors",
+                    "Mainnet node descriptors use '@', not ':', as the first delimiter"
+                )
+            )
+        }
+
+        #[test]
+        fn convert_ci_configs_handles_blockchain_mismatch_off_mainnet() {
+            let args = ArgsBuilder::new()
+                .param(
+                    "--neighbors",
+                    "abJ5XvhVbmVyGejkYUkmftF09pmGZGKg/PzRNnWQxFw@12.23.34.45:5678",
+                )
+                .param("--chain", "ropsten");
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+
+            let result = standard::convert_ci_configs(&multi_config).err().unwrap();
+
+            assert_eq!(
+                result,
+                ConfiguratorError::required(
+                    "neighbors",
+                    "Mainnet node descriptor uses '@', but chain configured for 'ropsten'"
+                )
+            )
+        }
+
+        #[test]
+        fn get_earning_wallet_from_address_handles_attempted_wallet_change() {
+            let args = ArgsBuilder::new().param(
+                "--earning-wallet",
+                "0x0123456789012345678901234567890123456789",
+            );
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+            let persistent_config = PersistentConfigurationMock::new()
+                .earning_wallet_from_address_result(Some(Wallet::new(
+                    "0x9876543210987654321098765432109876543210",
+                )));
+
+            let result =
+                standard::get_earning_wallet_from_address(&multi_config, &persistent_config)
+                    .err()
+                    .unwrap();
+
+            assert_eq! (result, ConfiguratorError::required("earning-wallet", "Cannot change to an address (0x0123456789012345678901234567890123456789) different from that previously set (0x9876543210987654321098765432109876543210)"))
+        }
+
+        #[test]
+        fn get_consuming_wallet_opt_from_derivation_path_handles_bad_password() {
+            let persistent_config = PersistentConfigurationMock::new()
+                .consuming_wallet_derivation_path_result(Some("m/44'/60'/1'/2/3".to_string()))
+                .mnemonic_seed_result(Err(PersistentConfigError::PasswordError));
+
+            let result = standard::get_consuming_wallet_opt_from_derivation_path(
+                &persistent_config,
+                "bad password",
+            )
+            .err()
+            .unwrap();
+
+            assert_eq!(
+                result,
+                ConfiguratorError::required(
+                    "db-password",
+                    "Incorrect password for retrieving mnemonic seed"
+                )
+            )
+        }
+
+        #[test]
+        fn get_consuming_wallet_from_private_key_handles_mismatches() {
+            let args = ArgsBuilder::new().param(
+                "--consuming-private-key",
+                "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF",
+            );
+            let vcls: Vec<Box<dyn VirtualCommandLine>> =
+                vec![Box::new(CommandLineVcl::new(args.into()))];
+            let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+            let persistent_config = PersistentConfigurationMock::new()
+                .consuming_wallet_public_key_result(Some(
+                    "0123456789012345678901234567890123456789".to_string(),
+                ));
+
+            let result =
+                standard::get_consuming_wallet_from_private_key(&multi_config, &persistent_config)
+                    .err()
+                    .unwrap();
+
+            assert_eq!(
+                result,
+                ConfiguratorError::required(
+                    "consuming-private-key",
+                    "Not the private key of the consuming wallet you have used in the past"
+                )
+            )
+        }
     }
 }
 
@@ -1520,7 +1809,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
 
         assert_eq!(config.consuming_wallet, None);
         assert_eq!(config.earning_wallet, DEFAULT_EARNING_WALLET.clone());
@@ -1556,7 +1846,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1584,7 +1875,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1609,7 +1901,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             config.earning_wallet,
@@ -1646,7 +1939,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1674,7 +1968,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
 
         let keypair = Bip32ECKeyPair::from_raw_secret(
             &consuming_private_key_hex.from_hex::<Vec<u8>>().unwrap(),
@@ -1717,7 +2012,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1741,7 +2037,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
 
         let mnemonic_seed = make_mnemonic_seed(mnemonic_seed_prefix);
         let expected_consuming_wallet = Wallet::from(
@@ -1775,7 +2072,8 @@ mod tests {
             &multi_config,
             &persistent_config,
             &mut config,
-        );
+        )
+        .unwrap();
 
         assert_eq!(config.consuming_wallet, None);
         assert_eq!(
@@ -1807,7 +2105,8 @@ mod tests {
             stderr: &mut ByteArrayWriter::new(),
         };
 
-        standard::get_wallets(&mut streams, &multi_config, &persistent_config, &mut config);
+        standard::get_wallets(&mut streams, &multi_config, &persistent_config, &mut config)
+            .unwrap();
 
         let captured_output = stdout_writer.get_string();
         assert_eq!(
@@ -2091,10 +2390,10 @@ mod tests {
     }
 
     #[test]
-    fn unprivileged_configuration_does_not_set_gas_price_when_not_provided() {
+    fn unprivileged_configuration_sets_default_gas_price_when_not_provided() {
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
-            "unprivileged_configuration_does_not_set_gas_price_when_not_provided",
+            "unprivileged_configuration_sets_default_gas_price_when_not_provided",
         );
         let mut subject = NodeConfiguratorStandardUnprivileged::new(&BootstrapperConfig::new());
         subject.privileged_config = BootstrapperConfig::new();
@@ -2105,7 +2404,7 @@ mod tests {
             .configure(&args.into(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
-        assert_eq!(config.blockchain_bridge_config.gas_price, None);
+        assert_eq!(config.blockchain_bridge_config.gas_price, Some(1));
     }
 
     #[test]
