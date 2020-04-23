@@ -67,18 +67,14 @@ impl RunModes {
             Ok(exit_code) => exit_code,
             Err(e) => {
                 writeln!(streams.stderr, "Configuration error").expect("writeln! error");
-                match e {
-                    ConfiguratorError::Requireds(requireds) => {
-                        requireds.into_iter().for_each(|required| {
-                            writeln!(
-                                streams.stderr,
-                                "{} - {}",
-                                required.parameter, required.reason
-                            )
-                            .expect("writeln! error")
-                        })
-                    }
-                }
+                e.param_errors.into_iter().for_each(|required| {
+                    writeln!(
+                        streams.stderr,
+                        "{} - {}",
+                        required.parameter, required.reason
+                    )
+                    .expect("writeln! error")
+                });
                 1
             }
         }

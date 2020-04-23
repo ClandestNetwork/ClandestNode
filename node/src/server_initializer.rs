@@ -18,7 +18,6 @@ use futures::try_ready;
 use masq_lib::command::Command;
 use masq_lib::command::StdStreams;
 use masq_lib::shared_schema::ConfiguratorError;
-use masq_lib::shared_schema::ConfiguratorError::Requireds;
 use std::any::Any;
 use std::fmt::Debug;
 use std::panic::{Location, PanicInfo};
@@ -80,16 +79,14 @@ impl Command for ServerInitializer {
                 1
             };
         if let Some(err) = result.err() {
-            match err {
-                Requireds(requireds) => requireds.into_iter().for_each(|required| {
-                    writeln!(
-                        streams.stderr,
-                        "Problem with parameter {}: {}",
-                        required.parameter, required.reason
-                    )
-                    .expect("writeln! failed")
-                }),
-            }
+            err.param_errors.into_iter().for_each(|param_error| {
+                writeln!(
+                    streams.stderr,
+                    "Problem with parameter {}: {}",
+                    param_error.parameter, param_error.reason
+                )
+                .expect("writeln! failed")
+            });
             1
         } else {
             exit_code
@@ -128,8 +125,8 @@ impl ServerInitializer {
             (Ok(_), Ok(_)) => Ok(()),
             (Ok(_), Err(e)) => Err(e),
             (Err(e), Ok(_)) => Err(e),
-            (Err(Requireds(vec1)), Err(Requireds(vec2))) => Err(Requireds(
-                vec1.into_iter().chain(vec2.into_iter()).collect(),
+            (Err(e1), Err(e2)) => Err(ConfiguratorError::new(
+                e1.param_errors.into_iter().chain(e2.param_errors.into_iter()).collect(),
             )),
         }
     }
@@ -400,7 +397,7 @@ pub mod tests {
     use crate::server_initializer::test_utils::PrivilegeDropperMock;
     use crate::test_utils::logging::{init_test_logging, TestLogHandler};
     use masq_lib::crash_point::CrashPoint;
-    use masq_lib::shared_schema::{ConfiguratorError, Required};
+    use masq_lib::shared_schema::{ConfiguratorError, ParamError};
     use masq_lib::test_utils::fake_stream_holder::{
         ByteArrayReader, ByteArrayWriter, FakeStreamHolder,
     };
@@ -551,18 +548,18 @@ pub mod tests {
     fn combine_results_combines_success_and_failure() {
         let initial_success = Ok("success");
         let additional_failure: Result<usize, ConfiguratorError> =
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
             ]));
 
         let result = ServerInitializer::combine_results(initial_success, additional_failure);
 
         assert_eq!(
             result,
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
             ]))
         );
     }
@@ -570,9 +567,9 @@ pub mod tests {
     #[test]
     fn combine_results_combines_failure_and_success() {
         let initial_failure: Result<String, ConfiguratorError> =
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
             ]));
         let additional_success = Ok(42);
 
@@ -580,9 +577,9 @@ pub mod tests {
 
         assert_eq!(
             result,
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
             ]))
         );
     }
@@ -590,25 +587,25 @@ pub mod tests {
     #[test]
     fn combine_results_combines_failure_and_failure() {
         let initial_failure: Result<String, ConfiguratorError> =
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
             ]));
         let additional_failure: Result<usize, ConfiguratorError> =
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-two", "Reason Three"),
-                Required::new("param-three", "Reason Four"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-two", "Reason Three"),
+                ParamError::new("param-three", "Reason Four"),
             ]));
 
         let result = ServerInitializer::combine_results(initial_failure, additional_failure);
 
         assert_eq!(
             result,
-            Err(ConfiguratorError::Requireds(vec![
-                Required::new("param-one", "Reason One"),
-                Required::new("param-two", "Reason Two"),
-                Required::new("param-two", "Reason Three"),
-                Required::new("param-three", "Reason Four"),
+            Err(ConfiguratorError::new(vec![
+                ParamError::new("param-one", "Reason One"),
+                ParamError::new("param-two", "Reason Two"),
+                ParamError::new("param-two", "Reason Three"),
+                ParamError::new("param-three", "Reason Four"),
             ]))
         );
     }

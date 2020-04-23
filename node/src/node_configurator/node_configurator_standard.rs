@@ -134,7 +134,7 @@ pub mod standard {
     use itertools::Itertools;
     use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
-    use masq_lib::shared_schema::{ConfiguratorError, Required};
+    use masq_lib::shared_schema::{ConfiguratorError, ParamError};
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
@@ -411,18 +411,18 @@ pub mod standard {
                                         Ok(nd)
                                     }
                                     else {
-                                        Err(Required::new("neighbors", "Mainnet node descriptors use '@', not ':', as the first delimiter"))
+                                        Err(ParamError::new("neighbors", "Mainnet node descriptors use '@', not ':', as the first delimiter"))
                                     }
                                 }
                                 else {
                                     if nd.mainnet {
-                                        Err(Required::new("neighbors", &format!("Mainnet node descriptor uses '@', but chain configured for '{}'", chain_name)))
+                                        Err(ParamError::new("neighbors", &format!("Mainnet node descriptor uses '@', but chain configured for '{}'", chain_name)))
                                     }
                                     else {
                                         Ok(nd)
                                     }
                                 },
-                                Err(e) => Err(Required::new("neighbors", &e)),
+                                Err(e) => Err(ParamError::new("neighbors", &e)),
                             },
                         )
                         .collect_vec();
@@ -433,7 +433,7 @@ pub mod standard {
                             Err(e) => Some(e),
                             Ok(_) => None,
                         })
-                        .collect::<Vec<Required>>();
+                        .collect::<Vec<ParamError>>();
                     if errors.is_empty() {
                         Ok(Some(
                             results
@@ -443,7 +443,7 @@ pub mod standard {
                                 .collect::<Vec<NodeDescriptor>>(),
                         ))
                     } else {
-                        Err(ConfiguratorError::Requireds(errors))
+                        Err(ConfiguratorError::new(errors))
                     }
                 }
             }

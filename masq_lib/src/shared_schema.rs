@@ -2,7 +2,6 @@ use crate::constants::{
     DEFAULT_GAS_PRICE, DEFAULT_UI_PORT, HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT,
 };
 use crate::crash_point::CrashPoint;
-use crate::shared_schema::ConfiguratorError::Requireds;
 use clap::{App, Arg};
 use lazy_static::lazy_static;
 
@@ -432,12 +431,12 @@ pub mod common_validators {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Required {
+pub struct ParamError {
     pub parameter: String,
     pub reason: String,
 }
 
-impl Required {
+impl ParamError {
     pub fn new(parameter: &str, reason: &str) -> Self {
         Self {
             parameter: parameter.to_string(),
@@ -447,22 +446,22 @@ impl Required {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ConfiguratorError {
-    Requireds(Vec<Required>),
+pub struct ConfiguratorError {
+    pub param_errors: Vec<ParamError>
 }
 
 impl ConfiguratorError {
-    pub fn required(parameter: &str, reason: &str) -> Self {
-        ConfiguratorError::Requireds(vec![Required::new(parameter, reason)])
+    pub fn new(param_errors: Vec<ParamError>) -> Self {
+        Self { param_errors }
     }
 
-    pub fn another_required(self, parameter: &str, reason: &str) -> Self {
-        match self {
-            Requireds(mut requireds) => {
-                requireds.push(Required::new(parameter, reason));
-                ConfiguratorError::Requireds(requireds)
-            }
-        }
+    pub fn required(parameter: &str, reason: &str) -> Self {
+        ConfiguratorError {param_errors: vec![ParamError::new(parameter, reason)]}
+    }
+
+    pub fn another_required(mut self, parameter: &str, reason: &str) -> Self {
+        self.param_errors.push(ParamError::new(parameter, reason));
+        self
     }
 }
 

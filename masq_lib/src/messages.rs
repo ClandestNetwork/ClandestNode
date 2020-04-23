@@ -202,7 +202,7 @@ pub enum UiSetupResponseValueStatus {
 }
 
 impl UiSetupResponseValueStatus {
-    pub fn value(self) -> u8 {
+    pub fn priority(self) -> u8 {
         match self {
             UiSetupResponseValueStatus::Blank => 0,
             UiSetupResponseValueStatus::Required => 0,

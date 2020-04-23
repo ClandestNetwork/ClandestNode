@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::shared_schema::{ConfiguratorError, Required};
+use crate::shared_schema::{ConfiguratorError, ParamError};
 #[allow(unused_imports)]
 use clap::{value_t, values_t};
 use clap::{App, ArgMatches};
@@ -120,18 +120,18 @@ impl<'a> MultiConfig<'a> {
                 None => e.message.to_string(),
             };
             let required_value_regex = Regex::new("--(.*?) ").expect("Bad regex");
-            let mut requireds: Vec<Required> = vec![];
+            let mut requireds: Vec<ParamError> = vec![];
             while let Some(captures) = required_value_regex.captures(&remaining_message) {
-                requireds.push(Required::new(
+                requireds.push(ParamError::new(
                     &captures[1],
-                    "Required parameter not provided",
+                    "ParamError parameter not provided",
                 ));
                 match remaining_message.find(&captures[1]) {
                     Some(idx) => remaining_message = remaining_message[idx..].to_string(),
                     None => remaining_message = "".to_string(),
                 }
             }
-            return ConfiguratorError::Requireds(requireds);
+            return ConfiguratorError::new(requireds);
         }
         ConfiguratorError::required("<unknown>", &format!("Unfamiliar message: {}", e.message))
     }
@@ -756,8 +756,8 @@ pub(crate) mod tests {
         let result = MultiConfig::try_new(&schema, vcls).err().unwrap();
 
         let expected =
-            ConfiguratorError::required("another-arg", "Required parameter not provided")
-                .another_required("numeric-arg", "Required parameter not provided");
+            ConfiguratorError::required("another-arg", "ParamError parameter not provided")
+                .another_required("numeric-arg", "ParamError parameter not provided");
         assert_eq!(result, expected);
     }
 

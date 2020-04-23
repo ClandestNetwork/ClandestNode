@@ -14,7 +14,6 @@ use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
-use itertools::Itertools;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
@@ -22,12 +21,12 @@ use masq_lib::messages::{
     UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR,
     NODE_NOT_RUNNING_ERROR, SETUP_ERROR,
 };
-use masq_lib::shared_schema::ConfiguratorError::Requireds;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessagePath, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
+use itertools::Itertools;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -162,12 +161,10 @@ impl Daemon {
             {
                 Ok(setup) => setup,
                 Err(e) => {
-                    let error_msg = match e {
-                        Requireds(requireds) => requireds
-                            .into_iter()
-                            .map(|required| format!("{} - {}", required.parameter, required.reason))
-                            .join("\n"),
-                    };
+                    let error_msg = e.param_errors
+                        .into_iter()
+                        .map(|param_error| format!("{} - {}", param_error.parameter, param_error.reason))
+                        .join("\n");
                     let msg = NodeToUiMessage {
                         target: ClientId(client_id),
                         body: MessageBody {

@@ -24,7 +24,7 @@ impl Display for TrafficConversionError {
             NotJsonObjectError(s) => {
                 write!(f, "Root was not a JSON object:\n------\n{}\n------\n", s)
             }
-            MissingFieldError(field) => write!(f, "Required field was missing: {}", field),
+            MissingFieldError(field) => write!(f, "ParamError field was missing: {}", field),
             FieldTypeError(field, wanted, got) => write!(
                 f,
                 "Field {} should have been of type {}, but was '{}' instead",
@@ -600,7 +600,7 @@ mod tests {
         );
         assert_eq!(
             MissingFieldError(a.clone()).to_string(),
-            "Required field was missing: a".to_string()
+            "ParamError field was missing: a".to_string()
         );
         assert_eq!(
             FieldTypeError(a, b, c).to_string(),
@@ -613,12 +613,12 @@ mod tests {
         let error = MissingFieldError("booga".to_string());
         assert_eq!(
             Critical(error.clone()).to_string(),
-            "Critical error unmarshalling unidentified message: Required field was missing: booga"
+            "Critical error unmarshalling unidentified message: ParamError field was missing: booga"
                 .to_string()
         );
         assert_eq!(
             NonCritical("whomp".to_string(), None, error).to_string(),
-            "Error unmarshalling 'whomp' message: Required field was missing: booga".to_string()
+            "Error unmarshalling 'whomp' message: ParamError field was missing: booga".to_string()
         );
     }
 }

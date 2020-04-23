@@ -254,7 +254,7 @@ impl SetupReporterReal {
         existing: &'a UiSetupResponseValue,
         incoming: &'a UiSetupResponseValue,
     ) -> &'a UiSetupResponseValue {
-        if incoming.status.value() >= existing.status.value() {
+        if incoming.status.priority() >= existing.status.priority() {
             incoming
         } else {
             existing
