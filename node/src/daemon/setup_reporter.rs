@@ -708,6 +708,7 @@ fn value_retrievers() -> Vec<Box<dyn ValueRetriever>> {
         Box::new(LogLevel {}),
         Box::new(NeighborhoodMode {}),
         Box::new(Neighbors {}),
+        #[cfg(not(target_os = "windows"))]
         Box::new(RealUser {}),
     ]
 }
