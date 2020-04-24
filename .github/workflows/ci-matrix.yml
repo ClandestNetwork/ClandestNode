@@ -26,6 +26,7 @@ jobs:
         run: |
           rustup show
           rustup update stable
+          rustup component add rustfmt
           ./ci/all.sh
           ./ci/multinode_integration_test.sh
         shell: bash
