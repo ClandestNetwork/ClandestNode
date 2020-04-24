@@ -360,10 +360,6 @@ impl ConfigFileVcl {
                         file_path, e
                     )
                 } else {
-                    println!(
-                        "No configuration file was found at {} - skipping",
-                        file_path.display()
-                    );
                     return ConfigFileVcl { vcl_args: vec![] };
                 }
             }

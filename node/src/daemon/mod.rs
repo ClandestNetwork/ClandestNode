@@ -170,9 +170,9 @@ impl Daemon {
                         errors: vec![],
                     }
                 }
-                Err(errors) => UiSetupResponse {
+                Err((lame_cluster, errors)) => UiSetupResponse {
                     running: false,
-                    values: self.params.iter().map(|(_, value)| value.clone()).collect(),
+                    values: lame_cluster.iter().map(|(_, value)| value.clone()).collect(),
                     errors: errors
                         .param_errors
                         .into_iter()
@@ -348,7 +348,6 @@ mod tests {
         UiFinancialsRequest, UiRedirect, UiSetupRequest, UiSetupRequestValue, UiSetupResponse,
         UiSetupResponseValue, UiSetupResponseValueStatus, UiShutdownRequest, UiStartOrder,
         UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
-        SETUP_ERROR,
     };
     use masq_lib::shared_schema::ConfiguratorError;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
@@ -391,7 +390,7 @@ mod tests {
 
     struct SetupReporterMock {
         get_modified_setup_params: Arc<Mutex<Vec<(SetupCluster, Vec<UiSetupRequestValue>)>>>,
-        get_modified_setup_results: RefCell<Vec<Result<SetupCluster, ConfiguratorError>>>,
+        get_modified_setup_results: RefCell<Vec<Result<SetupCluster, (SetupCluster, ConfiguratorError)>>>,
     }
 
     impl SetupReporter for SetupReporterMock {
@@ -399,7 +398,7 @@ mod tests {
             &self,
             existing_setup: SetupCluster,
             incoming_setup: Vec<UiSetupRequestValue>,
-        ) -> Result<SetupCluster, ConfiguratorError> {
+        ) -> Result<SetupCluster, (SetupCluster, ConfiguratorError)> {
             self.get_modified_setup_params
                 .lock()
                 .unwrap()
@@ -426,7 +425,7 @@ mod tests {
 
         fn get_modified_setup_result(
             self,
-            result: Result<SetupCluster, ConfiguratorError>,
+            result: Result<SetupCluster, (SetupCluster, ConfiguratorError)>,
         ) -> Self {
             self.get_modified_setup_results.borrow_mut().push(result);
             self
@@ -673,11 +672,15 @@ mod tests {
     #[test]
     fn handle_setup_handles_configuration_error() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let lame_setup = vec![("name".to_string(), UiSetupResponseValue::new("name", "value", Configured))]
+            .into_iter()
+            .collect::<SetupCluster>();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.setup_reporter =
-            Box::new(SetupReporterMock::new().get_modified_setup_result(Err(
+            Box::new(SetupReporterMock::new().get_modified_setup_result(Err((
+                lame_setup,
                 ConfiguratorError::required("parameter", "message"),
-            )));
+            ))));
         let system = System::new("test");
         subject.ui_gateway_sub = Some(ui_gateway.start().recipient());
 
@@ -691,11 +694,11 @@ mod tests {
             *message,
             NodeToUiMessage {
                 target: MessageTarget::ClientId(47),
-                body: MessageBody {
-                    opcode: "setup".to_string(),
-                    path: MessagePath::Conversation(74),
-                    payload: Err((SETUP_ERROR, "parameter - message".to_string()))
-                }
+                body: UiSetupResponse {
+                    running: false,
+                    values: vec![UiSetupResponseValue::new("name", "value", Configured)],
+                    errors: vec![("parameter".to_string(), "message".to_string())]
+                }.tmb(74),
             }
         )
     }

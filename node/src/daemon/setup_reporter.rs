@@ -33,7 +33,7 @@ pub trait SetupReporter {
         &self,
         existing_setup: SetupCluster,
         incoming_setup: Vec<UiSetupRequestValue>,
-    ) -> Result<SetupCluster, ConfiguratorError>;
+    ) -> Result<SetupCluster, (SetupCluster, ConfiguratorError)>;
 }
 
 pub struct SetupReporterReal {}
@@ -43,7 +43,7 @@ impl SetupReporter for SetupReporterReal {
         &self,
         mut existing_setup: SetupCluster,
         incoming_setup: Vec<UiSetupRequestValue>,
-    ) -> Result<SetupCluster, ConfiguratorError> {
+    ) -> Result<SetupCluster, (SetupCluster, ConfiguratorError)> {
         let default_setup = Self::get_default_params();
         incoming_setup
             .iter()
@@ -61,23 +61,31 @@ impl SetupReporter for SetupReporterReal {
                 )
             })
             .collect::<SetupCluster>();
+        let combined_setup = Self::combine_clusters(vec![
+            &default_setup,
+            &existing_setup,
+            &incoming_setup,
+        ]);
+        let mut error_so_far = ConfiguratorError::new(vec![]);
         let (real_user, data_directory_opt, chain_name) =
-            Self::calculate_fundamentals(Self::combine_clusters(vec![
-                &default_setup,
-                &existing_setup,
-                &incoming_setup,
-            ]))?;
+            match Self::calculate_fundamentals(combined_setup) {
+                Ok (triple) => triple,
+                Err (error) => {
+                    error_so_far.extend(error);
+                    (crate::bootstrapper::RealUser::null().populate(), None, DEFAULT_CHAIN_NAME.to_string())
+                }
+            };
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         let combined_setup =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
-        eprintln_setup("DEFAULT", &default_setup);
-        eprintln_setup("EXISTING", &existing_setup);
-        eprintln_setup("INCOMING", &incoming_setup);
-        eprintln_setup("COMBINED (for configuration)", &combined_setup);
-        let configured_setup =
-            Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name)?;
-        eprintln_setup("CONFIGURED", &configured_setup);
+        let configured_setup = match Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name) {
+            Ok (setup) => setup,
+            Err(error) => {
+                error_so_far.extend(error);
+                HashMap::new()
+            }
+        };
 
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
@@ -85,8 +93,7 @@ impl SetupReporter for SetupReporterReal {
             &existing_setup,
             &incoming_setup,
         ]);
-        eprintln_setup("COMBINED (final)", &combined_setup);
-        Ok(value_retrievers()
+        let final_setup = value_retrievers()
             .into_iter()
             .map(|retriever| {
                 let make_blank_or_required = || {
@@ -108,7 +115,13 @@ impl SetupReporter for SetupReporterReal {
                     None => make_blank_or_required(),
                 }
             })
-            .collect::<SetupCluster>())
+            .collect::<SetupCluster>();
+        if error_so_far.param_errors.is_empty() {
+            Ok (final_setup)
+        }
+        else {
+            Err ((final_setup, error_so_far))
+        }
     }
 }
 
@@ -313,10 +326,6 @@ impl SetupReporterReal {
         };
         let mut bootstrapper_config = BootstrapperConfig::new();
         privileged_parse_args(multi_config, &mut bootstrapper_config, &mut streams)?;
-        eprintln!(
-            "After privileged_parse_args, gas price is {:?}",
-            bootstrapper_config.blockchain_bridge_config.gas_price
-        );
         let initializer = DbInitializerReal::new();
         match initializer.initialize(data_directory, chain_id, false) {
             Ok(conn) => {
@@ -327,10 +336,6 @@ impl SetupReporterReal {
                     &mut streams,
                     Some(&persistent_config),
                 )?;
-                eprintln!(
-                    "After unprivileged_parse_args with database, gas price is {:?}",
-                    bootstrapper_config.blockchain_bridge_config.gas_price
-                );
                 Ok((bootstrapper_config, Some(Box::new(persistent_config))))
             }
             Err(_) => {
@@ -340,10 +345,6 @@ impl SetupReporterReal {
                     &mut streams,
                     None,
                 )?;
-                eprintln!(
-                    "After unprivileged_parse_args without database, gas price is {:?}",
-                    bootstrapper_config.blockchain_bridge_config.gas_price
-                );
                 Ok((bootstrapper_config, None))
             }
         }

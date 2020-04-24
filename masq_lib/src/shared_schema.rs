@@ -465,6 +465,10 @@ impl ConfiguratorError {
         self.param_errors.push(ParamError::new(parameter, reason));
         self
     }
+
+    pub fn extend (&mut self, extension: Self) {
+        self.param_errors.extend (extension.param_errors);
+    }
 }
 
 #[cfg(test)]
