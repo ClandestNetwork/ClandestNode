@@ -466,8 +466,8 @@ impl ConfiguratorError {
         self
     }
 
-    pub fn extend (&mut self, extension: Self) {
-        self.param_errors.extend (extension.param_errors);
+    pub fn extend(&mut self, extension: Self) {
+        self.param_errors.extend(extension.param_errors);
     }
 }
 

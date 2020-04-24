@@ -405,12 +405,8 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
     ) -> Result<(), ConfiguratorError> {
         // NOTE: The following line of code is not covered by unit tests
         fdlimit::raise_fd_limit();
-        let unprivileged_config = match NodeConfiguratorStandardUnprivileged::new(&self.config)
-            .configure(&args.to_vec(), streams)
-        {
-            Ok(config) => config,
-            Err(_) => unimplemented!("Test-drive me!"),
-        };
+        let unprivileged_config = NodeConfiguratorStandardUnprivileged::new(&self.config)
+            .configure(&args.to_vec(), streams)?;
         self.config.merge_unprivileged(unprivileged_config);
         self.establish_clandestine_port();
         let (cryptde_ref, _) = Bootstrapper::initialize_cryptdes(

@@ -51,7 +51,7 @@ impl SetupReporter for SetupReporterReal {
             .for_each(|v| {
                 existing_setup.remove(&v.name);
             });
-        let incoming_setup = incoming_setup
+        let mut incoming_setup = incoming_setup
             .into_iter()
             .filter(|v| v.value.is_some())
             .map(|v| {
@@ -61,32 +61,36 @@ impl SetupReporter for SetupReporterReal {
                 )
             })
             .collect::<SetupCluster>();
-        let combined_setup = Self::combine_clusters(vec![
-            &default_setup,
-            &existing_setup,
-            &incoming_setup,
-        ]);
+        let combined_setup =
+            Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
         let mut error_so_far = ConfiguratorError::new(vec![]);
         let (real_user, data_directory_opt, chain_name) =
             match Self::calculate_fundamentals(combined_setup) {
-                Ok (triple) => triple,
-                Err (error) => {
+                Ok(triple) => triple,
+                Err(error) => {
                     error_so_far.extend(error);
-                    (crate::bootstrapper::RealUser::null().populate(), None, DEFAULT_CHAIN_NAME.to_string())
+                    (
+                        crate::bootstrapper::RealUser::null().populate(),
+                        None,
+                        DEFAULT_CHAIN_NAME.to_string(),
+                    )
                 }
             };
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
         let combined_setup =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
-        let configured_setup = match Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name) {
-            Ok (setup) => setup,
-            Err(error) => {
-                error_so_far.extend(error);
-                HashMap::new()
-            }
-        };
-
+        let configured_setup =
+            match Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name) {
+                Ok(setup) => setup,
+                Err(error) => {
+                    error_so_far.extend(error);
+                    HashMap::new()
+                }
+            };
+        error_so_far.param_errors.iter().for_each(|param_error| {
+            let _ = incoming_setup.remove(&param_error.parameter);
+        });
         let combined_setup = Self::combine_clusters(vec![
             &default_setup,
             &configured_setup,
@@ -117,10 +121,9 @@ impl SetupReporter for SetupReporterReal {
             })
             .collect::<SetupCluster>();
         if error_so_far.param_errors.is_empty() {
-            Ok (final_setup)
-        }
-        else {
-            Err ((final_setup, error_so_far))
+            Ok(final_setup)
+        } else {
+            Err((final_setup, error_so_far))
         }
     }
 }

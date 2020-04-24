@@ -172,7 +172,10 @@ impl Daemon {
                 }
                 Err((lame_cluster, errors)) => UiSetupResponse {
                     running: false,
-                    values: lame_cluster.iter().map(|(_, value)| value.clone()).collect(),
+                    values: lame_cluster
+                        .iter()
+                        .map(|(_, value)| value.clone())
+                        .collect(),
                     errors: errors
                         .param_errors
                         .into_iter()
@@ -390,7 +393,8 @@ mod tests {
 
     struct SetupReporterMock {
         get_modified_setup_params: Arc<Mutex<Vec<(SetupCluster, Vec<UiSetupRequestValue>)>>>,
-        get_modified_setup_results: RefCell<Vec<Result<SetupCluster, (SetupCluster, ConfiguratorError)>>>,
+        get_modified_setup_results:
+            RefCell<Vec<Result<SetupCluster, (SetupCluster, ConfiguratorError)>>>,
     }
 
     impl SetupReporter for SetupReporterMock {
@@ -672,9 +676,12 @@ mod tests {
     #[test]
     fn handle_setup_handles_configuration_error() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
-        let lame_setup = vec![("name".to_string(), UiSetupResponseValue::new("name", "value", Configured))]
-            .into_iter()
-            .collect::<SetupCluster>();
+        let lame_setup = vec![(
+            "name".to_string(),
+            UiSetupResponseValue::new("name", "value", Configured),
+        )]
+        .into_iter()
+        .collect::<SetupCluster>();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.setup_reporter =
             Box::new(SetupReporterMock::new().get_modified_setup_result(Err((
@@ -698,7 +705,8 @@ mod tests {
                     running: false,
                     values: vec![UiSetupResponseValue::new("name", "value", Configured)],
                     errors: vec![("parameter".to_string(), "message".to_string())]
-                }.tmb(74),
+                }
+                .tmb(74),
             }
         )
     }
