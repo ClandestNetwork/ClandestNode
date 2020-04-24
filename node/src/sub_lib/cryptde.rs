@@ -2,7 +2,6 @@
 use crate::sub_lib::route::RouteError;
 use ethsign_crypto::Keccak256;
 use rustc_hex::ToHex;
-use serde;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
