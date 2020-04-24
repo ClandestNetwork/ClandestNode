@@ -25,7 +25,6 @@ use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig,
 use masq_lib::shared_schema::{
     chain_arg, config_file_arg, data_directory_arg, real_user_arg, ConfiguratorError,
 };
-use rpassword;
 use rpassword::read_password_with_reader;
 use rustc_hex::FromHex;
 use std::fmt::Debug;
