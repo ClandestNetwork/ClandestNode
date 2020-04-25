@@ -1,111 +1,15 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use crate::websockets_client::ClientError::{
-    ConnectionDropped, Deserialization, MessageType, NoServer, PacketType,
-};
-use masq_lib::messages::NODE_UI_PROTOCOL;
+use crate::communications::client_handle::ClientHandle;
+use crate::communications::node_connection::ClientError;
+use crate::communications::node_connection::ClientError::MessageType;
+use masq_lib::ui_gateway::MessageBody;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
-use masq_lib::ui_gateway::{MessageBody, MessagePath};
-use masq_lib::ui_traffic_converter::{UiTrafficConverter, UnmarshalError};
-use masq_lib::utils::localhost;
-use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
-use websocket::result::WebSocketResult;
-use websocket::sync::Client;
-use websocket::{ClientBuilder, OwnedMessage};
-
-pub const BROADCAST_CONTEXT_ID: u64 = 0;
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ClientError {
-    NoServer(u16, String),
-    ConnectionDropped(String),
-    FallbackFailed(String),
-    PacketType(String),
-    Deserialization(UnmarshalError),
-    MessageType(String, MessagePath),
-}
-
-pub struct NodeConnectionInner {
-    daemon_ui_port: u16,
-    active_ui_port: u16,
-    next_context_id: u64,
-    client: Client<TcpStream>,
-}
-
-pub struct NodeConnection {
-    inner_arc: Arc<Mutex<NodeConnectionInner>>,
-}
-
-impl Drop for NodeConnection {
-    fn drop(&mut self) {
-        if let Ok(mut guard) = self.inner_arc.lock() {
-            let _ = guard.client.send_message(&OwnedMessage::Close(None));
-        }
-    }
-}
-
-impl NodeConnection {
-    pub fn new(daemon_ui_port: u16, active_ui_port: u16) -> Result<NodeConnection, ClientError> {
-        let client = match make_client(active_ui_port) {
-            Err(e) => return Err(NoServer(active_ui_port, format!("{:?}", e))),
-            Ok(c) => c,
-        };
-        let inner_arc = Arc::new(Mutex::new(NodeConnectionInner {
-            daemon_ui_port,
-            active_ui_port,
-            client,
-            next_context_id: BROADCAST_CONTEXT_ID + 1,
-        }));
-        Ok(NodeConnection { inner_arc })
-    }
-
-    pub fn daemon_ui_port(&self) -> u16 {
-        self.inner_arc
-            .lock()
-            .expect("NodeConnection is poisoned")
-            .daemon_ui_port
-    }
-
-    pub fn active_ui_port(&self) -> u16 {
-        self.inner_arc
-            .lock()
-            .expect("NodeConnection is poisoned")
-            .active_ui_port
-    }
-
-    pub fn start_conversation(&self) -> NodeConversation {
-        let inner_arc = self.inner_arc.clone();
-        let context_id = {
-            let mut inner = inner_arc.lock().expect("NodeConnection is poisoned");
-            let context_id = inner.next_context_id;
-            inner.next_context_id += 1;
-            context_id
-        };
-        NodeConversation {
-            context_id,
-            inner_arc,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn establish_broadcast_receiver<F>(&self, _receiver: F) -> Result<(), String>
-    where
-        F: Fn() -> MessageBody,
-    {
-        unimplemented!();
-    }
-}
-
-fn make_client(port: u16) -> WebSocketResult<Client<TcpStream>> {
-    let builder =
-        ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
-    builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure()
-}
 
 pub struct NodeConversation {
     context_id: u64,
-    inner_arc: Arc<Mutex<NodeConnectionInner>>,
+    client_handle_arc: Arc<Mutex<ClientHandle>>,
 }
 
 impl Drop for NodeConversation {
@@ -115,6 +19,13 @@ impl Drop for NodeConversation {
 }
 
 impl NodeConversation {
+    pub fn new(context_id: u64, client_handle_arc: &Arc<Mutex<ClientHandle>>) -> Self {
+        Self {
+            context_id,
+            client_handle_arc: client_handle_arc.clone(),
+        }
+    }
+
     pub fn context_id(&self) -> u64 {
         self.context_id
     }
@@ -127,146 +38,47 @@ impl NodeConversation {
         unimplemented!();
     }
 
-    // Warning: both the client_id and the context_id are completely ignored by this method.
-    pub fn transact(&mut self, outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
-        self.transact_n(outgoing_msg)
-    }
-
-    pub fn close(&mut self) {
-        // Nothing yet
-    }
-
-    fn send(&mut self, outgoing_msg: MessageBody) -> Result<(), ClientError> {
-        let outgoing_msg_json = UiTrafficConverter::new_marshal(outgoing_msg);
-        self.send_string(outgoing_msg_json)
-    }
-
-    fn send_string(&mut self, string: String) -> Result<(), ClientError> {
-        let result = {
-            let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
-            client.send_message(&OwnedMessage::Text(string))
-        };
-        if let Err(e) = result {
-            match self.fall_back() {
-                Ok(_) => Err(ConnectionDropped(format!("{:?}", e))),
-                Err(e) => Err(e),
-            }
-        } else {
-            Ok(())
-        }
-    }
-
-    fn receive(&mut self) -> Result<MessageBody, ClientError> {
-        let incoming_msg = {
-            let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
-            client.recv_message()
-        };
-        let incoming_msg_json = match incoming_msg {
-            Ok(OwnedMessage::Text(json)) => json,
-            Ok(x) => return Err(PacketType(format!("{:?}", x))),
-            Err(e) => {
-                return match self.fall_back() {
-                    Ok(_) => Err(ClientError::ConnectionDropped(format!("{:?}", e))),
-                    Err(e) => Err(e),
-                }
-            }
-        };
-        match UiTrafficConverter::new_unmarshal(&incoming_msg_json) {
-            Ok(m) => Ok(m),
-            Err(e) => Err(Deserialization(e)),
-        }
-    }
-
-    fn fall_back(&self) -> Result<(), ClientError> {
-        let mut inner = self.inner_arc.lock().expect("Connection poisoned");
-        match make_client(inner.daemon_ui_port) {
-            Ok(client) => inner.client = client,
-            Err(e) => {
-                return Err(ClientError::FallbackFailed(format!(
-                    "Both Node and Daemon have terminated: {:?}",
-                    e
-                )))
-            }
-        }
-        Ok(())
-    }
-
-    fn transact_n(&mut self, mut outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
+    // Warning: the context_id is completely ignored by this method.
+    pub fn transact(&self, mut outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
         if outgoing_msg.path == FireAndForget {
             return Err(MessageType(outgoing_msg.opcode, outgoing_msg.path));
         } else {
             outgoing_msg.path = Conversation(self.context_id());
         }
-        if let Err(e) = self.send(outgoing_msg) {
+        let mut client_handle = self.client_handle_arc.lock().expect("Connection poisoned");
+        if let Err(e) = client_handle.send(outgoing_msg) {
             return Err(e); // Don't know how to drive this line
         }
-        self.receive()
+        client_handle.receive()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::communications::node_connection::ClientError::{
+        ConnectionDropped, Deserialization, PacketType,
+    };
+    use crate::communications::node_connection::NodeConnection;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use crate::websockets_client::ClientError::NoServer;
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::UiSetupResponseValueStatus::Set;
     use masq_lib::messages::{FromMessageBody, UiShutdownRequest};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiUnmarshalError};
     use masq_lib::messages::{UiSetupRequestValue, UiSetupResponseValue};
+    use masq_lib::ui_gateway::MessagePath;
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_traffic_converter::TrafficConversionError::JsonSyntaxError;
     use masq_lib::ui_traffic_converter::UnmarshalError::Critical;
     use masq_lib::utils::find_free_port;
 
     #[test]
-    fn connection_works_when_no_server_exists() {
-        let port = find_free_port();
-
-        let error = NodeConnection::new(0, port).err().unwrap();
-
-        match error {
-            NoServer(p, _) if p == port => (),
-            x => panic!("Expected NoServer; got {:?} instead", x),
-        }
-    }
-
-    #[test]
-    fn connection_works_when_protocol_doesnt_match() {
-        let port = find_free_port();
-        let mut server = MockWebSocketsServer::new(port);
-        server.protocol = "Booga".to_string();
-        server.start();
-
-        let error = NodeConnection::new(0, port).err().unwrap();
-
-        match error {
-            NoServer(p, _) if p == port => (),
-            x => panic!("Expected NoServer; got {:?} instead", x),
-        }
-    }
-
-    #[test]
-    fn dropping_connection_sends_a_close() {
-        let port = find_free_port();
-        let server = MockWebSocketsServer::new(port);
-        let stop_handle = server.start();
-
-        {
-            let _ = NodeConnection::new(0, port).unwrap();
-        }
-
-        let results = stop_handle.stop();
-        assert_eq!(results, vec![Err("Close(None)".to_string())])
-    }
-
-    #[test]
     fn cant_transact_with_a_one_way_message() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port);
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject = connection.start_conversation();
 
         let result = subject.transact(
             UiUnmarshalError {
@@ -291,8 +103,8 @@ mod tests {
         let daemon_port = find_free_port();
         let daemon_server = MockWebSocketsServer::new(daemon_port);
         let daemon_handle = daemon_server.start();
-        let connection = NodeConnection::new(daemon_port, node_port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(daemon_port, node_port).unwrap();
+        let subject = connection.start_conversation();
 
         let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
@@ -310,8 +122,8 @@ mod tests {
         let node_server = MockWebSocketsServer::new(node_port).queue_string("disconnect"); // magic value that causes disconnection
         let node_handle = node_server.start();
         let daemon_port = find_free_port();
-        let connection = NodeConnection::new(daemon_port, node_port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(daemon_port, node_port).unwrap();
+        let subject = connection.start_conversation();
 
         let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
@@ -330,9 +142,9 @@ mod tests {
         let daemon_port = find_free_port();
         let daemon_server = MockWebSocketsServer::new(daemon_port);
         let daemon_stop_handle = daemon_server.start();
-        let connection = NodeConnection::new(daemon_port, node_port).unwrap();
+        let mut connection = NodeConnection::new(daemon_port, node_port).unwrap();
         node_stop_handle.kill();
-        let mut subject = connection.start_conversation();
+        let subject = connection.start_conversation();
 
         let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
@@ -349,9 +161,9 @@ mod tests {
         let node_server = MockWebSocketsServer::new(node_port);
         let node_stop_handle = node_server.start();
         let daemon_port = find_free_port();
-        let connection = NodeConnection::new(daemon_port, node_port).unwrap();
+        let mut connection = NodeConnection::new(daemon_port, node_port).unwrap();
         node_stop_handle.kill();
-        let mut subject = connection.start_conversation();
+        let subject = connection.start_conversation();
 
         let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
@@ -369,17 +181,13 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect"); // magic value that causes disconnection
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject = connection.start_conversation();
         stop_handle.stop();
 
-        let result = subject.receive();
+        let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
-        if let Err(error) = result {
-            assert_eq!(error, PacketType("Close(None)".to_string()));
-        } else {
-            assert!(false, "Expected Close(None); got {:?}", result);
-        }
+        assert_eq!(error, PacketType("Close(None)".to_string()));
     }
 
     #[test]
@@ -387,8 +195,8 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("} -- bad syntax -- {");
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject = connection.start_conversation();
 
         let result = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 
@@ -410,8 +218,8 @@ mod tests {
             payload: Err((101, "booga".to_string())),
         });
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject = connection.start_conversation();
 
         let result = subject
             .transact(UiSetupRequest { values: vec![] }.tmb(1))
@@ -433,8 +241,8 @@ mod tests {
             .tmb(1),
         );
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject = connection.start_conversation();
 
         let response_body = subject
             .transact(
@@ -497,9 +305,9 @@ mod tests {
                 .tmb(1),
             );
         let stop_handle = server.start();
-        let connection = NodeConnection::new(0, port).unwrap();
-        let mut subject1 = connection.start_conversation();
-        let mut subject2 = connection.start_conversation();
+        let mut connection = NodeConnection::new(0, port).unwrap();
+        let subject1 = connection.start_conversation();
+        let subject2 = connection.start_conversation();
 
         let response1_body = subject1
             .transact(
