@@ -3,10 +3,9 @@
 use crate::websockets_client::ClientError::{
     ConnectionDropped, Deserialization, MessageType, NoServer, PacketType,
 };
-use masq_lib::messages::{ToMessageBody, NODE_UI_PROTOCOL};
+use masq_lib::messages::NODE_UI_PROTOCOL;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
-use masq_lib::ui_gateway::MessageTarget::ClientId;
-use masq_lib::ui_gateway::{MessagePath, NodeFromUiMessage, NodeToUiMessage};
+use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::{UiTrafficConverter, UnmarshalError};
 use masq_lib::utils::localhost;
 use std::net::TcpStream;
@@ -92,7 +91,7 @@ impl NodeConnection {
     #[allow(dead_code)]
     pub fn establish_broadcast_receiver<F>(&self, _receiver: F) -> Result<(), String>
     where
-        F: Fn() -> NodeToUiMessage,
+        F: Fn() -> MessageBody,
     {
         unimplemented!();
     }
@@ -123,16 +122,13 @@ impl NodeConversation {
     #[allow(dead_code)]
     pub fn establish_receiver<F>(/*mut*/ self, _receiver: F) -> Result<(), ClientError>
     where
-        F: Fn() -> NodeToUiMessage,
+        F: Fn() -> MessageBody,
     {
         unimplemented!();
     }
 
     // Warning: both the client_id and the context_id are completely ignored by this method.
-    pub fn transact(
-        &mut self,
-        outgoing_msg: NodeFromUiMessage,
-    ) -> Result<NodeToUiMessage, ClientError> {
+    pub fn transact(&mut self, outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
         self.transact_n(outgoing_msg)
     }
 
@@ -140,8 +136,8 @@ impl NodeConversation {
         // Nothing yet
     }
 
-    fn send(&mut self, outgoing_msg: NodeFromUiMessage) -> Result<(), ClientError> {
-        let outgoing_msg_json = UiTrafficConverter::new_marshal_from_ui(outgoing_msg);
+    fn send(&mut self, outgoing_msg: MessageBody) -> Result<(), ClientError> {
+        let outgoing_msg_json = UiTrafficConverter::new_marshal(outgoing_msg);
         self.send_string(outgoing_msg_json)
     }
 
@@ -160,7 +156,7 @@ impl NodeConversation {
         }
     }
 
-    fn receive(&mut self) -> Result<NodeToUiMessage, ClientError> {
+    fn receive(&mut self) -> Result<MessageBody, ClientError> {
         let incoming_msg = {
             let client = &mut self.inner_arc.lock().expect("Connection poisoned").client;
             client.recv_message()
@@ -175,7 +171,7 @@ impl NodeConversation {
                 }
             }
         };
-        match UiTrafficConverter::new_unmarshal_to_ui(&incoming_msg_json, ClientId(0)) {
+        match UiTrafficConverter::new_unmarshal(&incoming_msg_json) {
             Ok(m) => Ok(m),
             Err(e) => Err(Deserialization(e)),
         }
@@ -195,17 +191,11 @@ impl NodeConversation {
         Ok(())
     }
 
-    fn transact_n(
-        &mut self,
-        mut outgoing_msg: NodeFromUiMessage,
-    ) -> Result<NodeToUiMessage, ClientError> {
-        if outgoing_msg.body.path == FireAndForget {
-            return Err(MessageType(
-                outgoing_msg.body.opcode,
-                outgoing_msg.body.path,
-            ));
+    fn transact_n(&mut self, mut outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
+        if outgoing_msg.path == FireAndForget {
+            return Err(MessageType(outgoing_msg.opcode, outgoing_msg.path));
         } else {
-            outgoing_msg.body.path = Conversation(self.context_id());
+            outgoing_msg.path = Conversation(self.context_id());
         }
         if let Err(e) = self.send(outgoing_msg) {
             return Err(e); // Don't know how to drive this line
@@ -214,69 +204,20 @@ impl NodeConversation {
     }
 }
 
-// Warning: this function does not properly set the context_id field.
-#[allow(dead_code)]
-pub fn nfum<T: ToMessageBody>(tmb: T) -> NodeFromUiMessage {
-    NodeFromUiMessage {
-        client_id: 0,
-        body: tmb.tmb(0),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use crate::websockets_client::ClientError::NoServer;
+    use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::UiSetupResponseValueStatus::Set;
     use masq_lib::messages::{FromMessageBody, UiShutdownRequest};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiUnmarshalError};
     use masq_lib::messages::{UiSetupRequestValue, UiSetupResponseValue};
-    use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_traffic_converter::TrafficConversionError::JsonSyntaxError;
     use masq_lib::ui_traffic_converter::UnmarshalError::Critical;
     use masq_lib::utils::find_free_port;
-
-    #[allow(dead_code)]
-    pub fn nftm1<T: ToMessageBody>(tmb: T) -> NodeToUiMessage {
-        assert_eq!(tmb.is_conversational(), false);
-        NodeToUiMessage {
-            target: ClientId(0),
-            body: tmb.tmb(0),
-        }
-    }
-
-    pub fn nftm2<T: ToMessageBody>(context_id: u64, tmb: T) -> NodeToUiMessage {
-        assert_eq!(tmb.is_conversational(), true);
-        NodeToUiMessage {
-            target: ClientId(0),
-            body: tmb.tmb(context_id),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn nftme1(opcode: &str, code: u64, msg: &str) -> NodeToUiMessage {
-        NodeToUiMessage {
-            target: ClientId(0),
-            body: MessageBody {
-                opcode: opcode.to_string(),
-                path: FireAndForget,
-                payload: Err((code, msg.to_string())),
-            },
-        }
-    }
-
-    pub fn nftme2(opcode: &str, context_id: u64, code: u64, msg: &str) -> NodeToUiMessage {
-        NodeToUiMessage {
-            target: ClientId(0),
-            body: MessageBody {
-                opcode: opcode.to_string(),
-                path: Conversation(context_id),
-                payload: Err((code, msg.to_string())),
-            },
-        }
-    }
 
     #[test]
     fn connection_works_when_no_server_exists() {
@@ -327,10 +268,13 @@ mod tests {
         let connection = NodeConnection::new(0, port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiUnmarshalError {
-            message: "".to_string(),
-            bad_data: "".to_string(),
-        }));
+        let result = subject.transact(
+            UiUnmarshalError {
+                message: "".to_string(),
+                bad_data: "".to_string(),
+            }
+            .tmb(1),
+        );
 
         assert_eq!(
             result,
@@ -350,7 +294,7 @@ mod tests {
         let connection = NodeConnection::new(daemon_port, node_port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiShutdownRequest {}));
+        let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
         match result {
             Err(ConnectionDropped(_)) => (),
@@ -369,7 +313,7 @@ mod tests {
         let connection = NodeConnection::new(daemon_port, node_port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let error = subject.transact(nfum(UiShutdownRequest {})).err().unwrap();
+        let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
         match error {
             ClientError::FallbackFailed(_) => (),
@@ -390,7 +334,7 @@ mod tests {
         node_stop_handle.kill();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiShutdownRequest {}));
+        let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
         match result {
             Err(ConnectionDropped(_)) => (),
@@ -409,7 +353,7 @@ mod tests {
         node_stop_handle.kill();
         let mut subject = connection.start_conversation();
 
-        let error = subject.transact(nfum(UiShutdownRequest {})).err().unwrap();
+        let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
         match error {
             ClientError::FallbackFailed(msg) => assert_eq!(
@@ -446,7 +390,7 @@ mod tests {
         let connection = NodeConnection::new(0, port).unwrap();
         let mut subject = connection.start_conversation();
 
-        let result = subject.transact(nfum(UiSetupRequest { values: vec![] }));
+        let result = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 
         stop_handle.stop();
         assert_eq!(
@@ -460,53 +404,55 @@ mod tests {
     #[test]
     fn handles_being_sent_a_payload_error() {
         let port = find_free_port();
-        let server =
-            MockWebSocketsServer::new(port).queue_response(nftme2("setup", 1, 101, "booga"));
+        let server = MockWebSocketsServer::new(port).queue_response(MessageBody {
+            opcode: "setup".to_string(),
+            path: MessagePath::Conversation(101),
+            payload: Err((101, "booga".to_string())),
+        });
         let stop_handle = server.start();
         let connection = NodeConnection::new(0, port).unwrap();
         let mut subject = connection.start_conversation();
 
         let result = subject
-            .transact(nfum(UiSetupRequest { values: vec![] }))
+            .transact(UiSetupRequest { values: vec![] }.tmb(1))
             .unwrap();
 
         stop_handle.stop();
-        assert_eq!(result.body.payload, Err((101, "booga".to_string())));
+        assert_eq!(result.payload, Err((101, "booga".to_string())));
     }
 
     #[test]
     fn single_cycle_conversation_works_as_expected() {
         let port = find_free_port();
-        let server = MockWebSocketsServer::new(port).queue_response(nftm2(
-            1,
+        let server = MockWebSocketsServer::new(port).queue_response(
             UiSetupResponse {
                 running: true,
                 values: vec![UiSetupResponseValue::new("type", "response", Set)],
                 errors: vec![("parameter".to_string(), "reason".to_string())],
-            },
-        ));
+            }
+            .tmb(1),
+        );
         let stop_handle = server.start();
         let connection = NodeConnection::new(0, port).unwrap();
         let mut subject = connection.start_conversation();
 
         let response_body = subject
-            .transact(nfum(UiSetupRequest {
-                values: vec![UiSetupRequestValue::new("type", "request")],
-            }))
-            .unwrap()
-            .body;
+            .transact(
+                UiSetupRequest {
+                    values: vec![UiSetupRequestValue::new("type", "request")],
+                }
+                .tmb(1),
+            )
+            .unwrap();
 
         let response = UiSetupResponse::fmb(response_body).unwrap();
         let requests = stop_handle.stop();
         assert_eq!(
             requests,
-            vec![Ok(NodeFromUiMessage {
-                client_id: 0,
-                body: UiSetupRequest {
-                    values: vec![UiSetupRequestValue::new("type", "request")]
-                }
-                .tmb(1)
-            })]
+            vec![Ok(UiSetupRequest {
+                values: vec![UiSetupRequestValue::new("type", "request")]
+            }
+            .tmb(1))]
         );
         assert_eq!(
             response,
@@ -526,9 +472,8 @@ mod tests {
     fn overlapping_conversations_work_as_expected() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port)
-            .queue_response(NodeToUiMessage {
-                target: ClientId(0),
-                body: UiSetupResponse {
+            .queue_response(
+                UiSetupResponse {
                     running: false,
                     values: vec![UiSetupResponseValue::new(
                         "type",
@@ -538,10 +483,9 @@ mod tests {
                     errors: vec![],
                 }
                 .tmb(2),
-            })
-            .queue_response(NodeToUiMessage {
-                target: ClientId(0),
-                body: UiSetupResponse {
+            )
+            .queue_response(
+                UiSetupResponse {
                     running: true,
                     values: vec![UiSetupResponseValue::new(
                         "type",
@@ -551,24 +495,28 @@ mod tests {
                     errors: vec![],
                 }
                 .tmb(1),
-            });
+            );
         let stop_handle = server.start();
         let connection = NodeConnection::new(0, port).unwrap();
         let mut subject1 = connection.start_conversation();
         let mut subject2 = connection.start_conversation();
 
         let response1_body = subject1
-            .transact(nfum(UiSetupRequest {
-                values: vec![UiSetupRequestValue::new("type", "conversation 1 request")],
-            }))
-            .unwrap()
-            .body;
+            .transact(
+                UiSetupRequest {
+                    values: vec![UiSetupRequestValue::new("type", "conversation 1 request")],
+                }
+                .tmb(1),
+            )
+            .unwrap();
         let response2_body = subject2
-            .transact(nfum(UiSetupRequest {
-                values: vec![UiSetupRequestValue::new("type", "conversation 2 request")],
-            }))
-            .unwrap()
-            .body;
+            .transact(
+                UiSetupRequest {
+                    values: vec![UiSetupRequestValue::new("type", "conversation 2 request")],
+                }
+                .tmb(2),
+            )
+            .unwrap();
 
         assert_eq!(subject1.context_id(), 1);
         assert_eq!(subject2.context_id(), 2);
@@ -576,20 +524,14 @@ mod tests {
         assert_eq!(
             requests,
             vec![
-                Ok(NodeFromUiMessage {
-                    client_id: 0,
-                    body: UiSetupRequest {
-                        values: vec![UiSetupRequestValue::new("type", "conversation 1 request")]
-                    }
-                    .tmb(1)
-                }),
-                Ok(NodeFromUiMessage {
-                    client_id: 0,
-                    body: UiSetupRequest {
-                        values: vec![UiSetupRequestValue::new("type", "conversation 2 request")]
-                    }
-                    .tmb(2)
-                }),
+                Ok(UiSetupRequest {
+                    values: vec![UiSetupRequestValue::new("type", "conversation 1 request")]
+                }
+                .tmb(1)),
+                Ok(UiSetupRequest {
+                    values: vec![UiSetupRequestValue::new("type", "conversation 2 request")]
+                }
+                .tmb(2)),
             ]
         );
         assert_eq!(response1_body.path, Conversation(1));

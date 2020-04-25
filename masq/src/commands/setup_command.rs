@@ -113,8 +113,6 @@ mod tests {
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Default, Set};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
-    use masq_lib::ui_gateway::MessageTarget::ClientId;
-    use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -138,18 +136,15 @@ mod tests {
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
-            .transact_result(Ok(NodeToUiMessage {
-                target: ClientId(0),
-                body: UiSetupResponse {
-                    running: false,
-                    values: vec![
-                        UiSetupResponseValue::new("chain", "ropsten", Configured),
-                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
-                    ],
-                    errors: vec![],
-                }
-                .tmb(0),
-            }));
+            .transact_result(Ok(UiSetupResponse {
+                running: false,
+                values: vec![
+                    UiSetupResponseValue::new("chain", "ropsten", Configured),
+                    UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+                ],
+                errors: vec![],
+            }
+            .tmb(0)));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let factory = CommandFactoryReal::new();
@@ -170,17 +165,14 @@ mod tests {
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![NodeFromUiMessage {
-                client_id: 0,
-                body: UiSetupRequest {
-                    values: vec![
-                        UiSetupRequestValue::new("chain", "ropsten"),
-                        UiSetupRequestValue::clear("log-level"),
-                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
-                    ]
-                }
-                .tmb(0)
-            }]
+            vec![UiSetupRequest {
+                values: vec![
+                    UiSetupRequestValue::new("chain", "ropsten"),
+                    UiSetupRequestValue::clear("log-level"),
+                    UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                ]
+            }
+            .tmb(0)]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                      VALUE                                                            STATUS\n\
@@ -194,19 +186,16 @@ neighborhood-mode         zero-hop                                              
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
-            .transact_result(Ok(NodeToUiMessage {
-                target: ClientId(0),
-                body: UiSetupResponse {
-                    running: true,
-                    values: vec![
-                        UiSetupResponseValue::new("chain", "ropsten", Set),
-                        UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Configured),
-                        UiSetupResponseValue::new("clandestine-port", "8534", Default),
-                    ],
-                    errors: vec![("ip".to_string(), "Nosir, I don't like it.".to_string())],
-                }
-                .tmb(0),
-            }));
+            .transact_result(Ok(UiSetupResponse {
+                running: true,
+                values: vec![
+                    UiSetupResponseValue::new("chain", "ropsten", Set),
+                    UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Configured),
+                    UiSetupResponseValue::new("clandestine-port", "8534", Default),
+                ],
+                errors: vec![("ip".to_string(), "Nosir, I don't like it.".to_string())],
+            }
+            .tmb(0)));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let factory = CommandFactoryReal::new();
@@ -229,18 +218,15 @@ neighborhood-mode         zero-hop                                              
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![NodeFromUiMessage {
-                client_id: 0,
-                body: UiSetupRequest {
-                    values: vec![
-                        UiSetupRequestValue::new("chain", "ropsten"),
-                        UiSetupRequestValue::new("clandestine-port", "8534"),
-                        UiSetupRequestValue::clear("log-level"),
-                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
-                    ]
-                }
-                .tmb(0)
-            }]
+            vec![UiSetupRequest {
+                values: vec![
+                    UiSetupRequestValue::new("chain", "ropsten"),
+                    UiSetupRequestValue::new("clandestine-port", "8534"),
+                    UiSetupRequestValue::clear("log-level"),
+                    UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                ]
+            }
+            .tmb(0)]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                      VALUE                                                            STATUS\n\
