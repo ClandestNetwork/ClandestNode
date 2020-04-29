@@ -61,11 +61,18 @@ impl SetupReporter for SetupReporterReal {
                 )
             })
             .collect::<SetupCluster>();
-        let combined_setup =
+eprintln_setup ("EXISTING SETUP", &existing_setup);
+eprintln_setup ("INCOMING SETUP", &incoming_setup);
+        let mut combined_setup =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
+        match combined_setup.get("data-directory") {
+            None => (),
+            Some (entry) => {if entry.status == Default {let _ = combined_setup.remove("data-directory");}},
+        }
         let mut error_so_far = ConfiguratorError::new(vec![]);
+eprintln_setup ("FIRST COMBINED SETUP", &combined_setup);
         let (real_user, data_directory_opt, chain_name) =
-            match Self::calculate_fundamentals(combined_setup) {
+            match Self::calculate_fundamentals(&combined_setup) {
                 Ok(triple) => triple,
                 Err(error) => {
                     error_so_far.extend(error);
@@ -76,27 +83,28 @@ impl SetupReporter for SetupReporterReal {
                     )
                 }
             };
+eprintln! ("Data directory from calculate_fundamentals: {:?}", data_directory_opt);
+eprintln! ("Chain name from calculate_fundamentals: {}", chain_name);
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-        let combined_setup =
-            Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
+eprintln! ("Calculated data-directory: {:?}", data_directory);
         let configured_setup =
-            match Self::calculate_configured_setup(combined_setup, &data_directory, &chain_name) {
+            match Self::calculate_configured_setup(&combined_setup, &data_directory, &chain_name) {
                 Ok(setup) => setup,
                 Err(error) => {
                     error_so_far.extend(error);
                     HashMap::new()
                 }
             };
+eprintln_setup ("CONFIGURED SETUP", &configured_setup);
         error_so_far.param_errors.iter().for_each(|param_error| {
             let _ = incoming_setup.remove(&param_error.parameter);
         });
         let combined_setup = Self::combine_clusters(vec![
-            &default_setup,
             &configured_setup,
-            &existing_setup,
-            &incoming_setup,
+            &combined_setup,
         ]);
+eprintln_setup ("SECOND COMBINED SETUP", &combined_setup);
         let final_setup = value_retrievers()
             .into_iter()
             .map(|retriever| {
@@ -120,6 +128,7 @@ impl SetupReporter for SetupReporterReal {
                 }
             })
             .collect::<SetupCluster>();
+eprintln_setup("FINAL SETUP", &final_setup);
         if error_so_far.param_errors.is_empty() {
             Ok(final_setup)
         } else {
@@ -174,7 +183,7 @@ impl SetupReporterReal {
     }
 
     fn calculate_fundamentals(
-        combined_setup: SetupCluster,
+        combined_setup: &SetupCluster,
     ) -> Result<(crate::bootstrapper::RealUser, Option<PathBuf>, String), ConfiguratorError> {
         let multi_config = Self::make_multi_config(None, true, false)?;
         let real_user = match (
@@ -187,6 +196,19 @@ impl SetupReporterReal {
             (None, Some(uisrv)) => Self::real_user_from_str(&uisrv.value),
             (None, None) => crate::bootstrapper::RealUser::null().populate(),
         };
+        let mc_cn = value_m!(multi_config, "chain", String);
+        let cs_cn = combined_setup.get("chain");
+eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
+        let chain_name = match (mc_cn, cs_cn) {
+        //     value_m!(multi_config, "chain", String),
+        //     combined_setup.get("chain"),
+        // ) {
+            (Some(chain_str), None) => chain_str,
+            (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
+            (Some(chain_str), Some(_)) => chain_str,
+            (None, Some(uisrv)) => uisrv.value.clone(),
+            (None, None) => DEFAULT_CHAIN_NAME.to_string(),
+        };
         let data_directory_opt = match (
             value_m!(multi_config, "data-directory", String),
             combined_setup.get("data-directory"),
@@ -197,26 +219,16 @@ impl SetupReporterReal {
             (None, Some(uisrv)) => Some(PathBuf::from(&uisrv.value)),
             (None, None) => None,
         };
-        let chain_name = match (
-            value_m!(multi_config, "chain", String),
-            combined_setup.get("chain"),
-        ) {
-            (Some(chain_str), None) => chain_str,
-            (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
-            (Some(chain_str), Some(_)) => chain_str,
-            (None, Some(uisrv)) => uisrv.value.clone(),
-            (None, None) => DEFAULT_CHAIN_NAME.to_string(),
-        };
         Ok((real_user, data_directory_opt, chain_name))
     }
 
     fn calculate_configured_setup(
-        combined_setup: SetupCluster,
+        combined_setup: &SetupCluster,
         data_directory: &PathBuf,
         chain_name: &str,
     ) -> Result<SetupCluster, ConfiguratorError> {
         let db_password_opt = combined_setup.get("db-password").map(|v| v.value.clone());
-        let command_line = Self::make_command_line(combined_setup);
+        let command_line = Self::make_command_line(&combined_setup);
         let multi_config = Self::make_multi_config(Some(command_line), true, true)?;
         let (bootstrapper_config, persistent_config_opt) = Self::run_configuration(
             &multi_config,
@@ -277,12 +289,12 @@ impl SetupReporterReal {
         }
     }
 
-    fn make_command_line(setup: SetupCluster) -> Vec<String> {
+    fn make_command_line(setup: &SetupCluster) -> Vec<String> {
         let accepted_statuses = vec![Set, Configured];
         let mut command_line = setup
             .into_iter()
             .filter(|(_, v)| accepted_statuses.contains(&v.status))
-            .flat_map(|(_, v)| vec![format!("--{}", v.name), v.value])
+            .flat_map(|(_, v)| vec![format!("--{}", v.name), v.value.clone()])
             .collect::<Vec<String>>();
         command_line.insert(0, "program_name".to_string());
         command_line
@@ -562,7 +574,7 @@ impl ValueRetriever for GasPrice {
                 .blockchain_bridge_config
                 .gas_price
                 .to_string(),
-            Default,
+            Configured,
         ))
     }
 
@@ -726,7 +738,7 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use masq_lib::messages::UiSetupResponseValueStatus;
+    use masq_lib::messages::{UiSetupResponseValueStatus};
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Configured, Required, Set};
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
@@ -735,6 +747,7 @@ mod tests {
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+    use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {
@@ -824,7 +837,7 @@ mod tests {
                 "0x0000000000000000000000000000000000000000",
                 Configured,
             ),
-            ("gas-price", "1234567890", Default),
+            ("gas-price", "1234567890", Configured),
             ("ip", "4.3.2.1", Set),
             ("log-level", "warn", Default),
             ("neighborhood-mode", "standard", Default),
@@ -875,7 +888,7 @@ mod tests {
             ("ip", "4.3.2.1"),
             ("log-level", "error"),
             ("neighborhood-mode", "originate-only"),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678"),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga"),
         ].into_iter()
@@ -899,7 +912,7 @@ mod tests {
             ("ip", "4.3.2.1", Set),
             ("log-level", "error", Set),
             ("neighborhood-mode", "originate-only", Set),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Set),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678", Set),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga", Set),
         ].into_iter()
@@ -932,7 +945,7 @@ mod tests {
             ("ip", "4.3.2.1"),
             ("log-level", "error"),
             ("neighborhood-mode", "originate-only"),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678"),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga"),
         ].into_iter()
@@ -958,7 +971,7 @@ mod tests {
             ("ip", "4.3.2.1", Set),
             ("log-level", "error", Set),
             ("neighborhood-mode", "originate-only", Set),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Set),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678", Set),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga", Set),
         ].into_iter()
@@ -991,7 +1004,7 @@ mod tests {
             ("SUB_IP", "4.3.2.1"),
             ("SUB_LOG_LEVEL", "error"),
             ("SUB_NEIGHBORHOOD_MODE", "originate-only"),
-            ("SUB_NEIGHBORS", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            ("SUB_NEIGHBORS", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678"),
             #[cfg(not(target_os = "windows"))]
             ("SUB_REAL_USER", "9999:9999:booga"),
         ].into_iter()
@@ -1015,7 +1028,7 @@ mod tests {
             ("ip", "4.3.2.1", Configured),
             ("log-level", "error", Configured),
             ("neighborhood-mode", "originate-only", Configured),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Configured),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678", Configured),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga", Configured),
         ].into_iter()
@@ -1048,7 +1061,7 @@ mod tests {
             ("SUB_IP", "4.3.2.1"),
             ("SUB_LOG_LEVEL", "error"),
             ("SUB_NEIGHBORHOOD_MODE", "originate-only"),
-            ("SUB_NEIGHBORS", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678"),
+            ("SUB_NEIGHBORS", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678"),
             #[cfg(not(target_os = "windows"))]
             ("SUB_REAL_USER", "9999:9999:booga"),
         ].into_iter()
@@ -1091,7 +1104,7 @@ mod tests {
             ("neighborhood-mode", "consume-only"),
             (
                 "neighbors",
-                "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@9.10.11.12:9101",
+                "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:9.10.11.12:9101",
             ),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "6666:6666:agoob"),
@@ -1126,7 +1139,7 @@ mod tests {
             ("ip", "4.3.2.1", Configured),
             ("log-level", "error", Configured),
             ("neighborhood-mode", "originate-only", Configured),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Configured),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:5.6.7.8:5678", Configured),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "9999:9999:booga", Configured),
         ]
@@ -1143,6 +1156,33 @@ mod tests {
             .sorted_by_key(|(k, _)| k.clone())
             .collect_vec();
         assert_eq!(presentable_result, expected_result);
+    }
+
+    #[test]
+    fn get_modified_setup_data_directory_depends_on_new_chain() {
+        let _guard = EnvironmentGuard::new();
+        let wrapper = RealDirsWrapper{};
+        let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
+        let existing_setup = vec![
+            ("neighborhood-mode", "zero-hop", Set),
+            ("chain", "mainnet", Default),
+            ("data-directory", &data_directory.to_string_lossy().to_string(), Default),
+            ("real-user", &crate::bootstrapper::RealUser::null().populate().to_string(), Default),
+        ].into_iter()
+            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
+            .collect::<SetupCluster> ();
+        let incoming_setup = vec![
+            ("chain", "ropsten"),
+        ].into_iter()
+            .map (|(name, value)| UiSetupRequestValue::new(name, value))
+            .collect_vec();
+        let expected_data_directory = wrapper.data_dir().unwrap().join("MASQ").join("ropsten");
+        let subject = SetupReporterReal::new();
+
+        let result = subject.get_modified_setup(existing_setup, incoming_setup).unwrap();
+
+        let actual_data_directory = PathBuf::from (&result.get ("data-directory").unwrap().value);
+        assert_eq!(actual_data_directory, expected_data_directory);
     }
 
     #[test]
@@ -1163,7 +1203,7 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1197,7 +1237,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1233,7 +1273,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1263,7 +1303,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1291,7 +1331,7 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&setup).unwrap();
 
         assert_eq!(real_user, crate::bootstrapper::RealUser::null().populate());
         assert_eq!(data_directory_opt, None);
@@ -1351,6 +1391,11 @@ mod tests {
     }
 
     #[test]
+    fn config_file_not_specified_and_config_toml_exists() {
+        unimplemented!()
+    }
+
+    #[test]
     fn chain_computed_default() {
         let subject = Chain {};
 
@@ -1385,12 +1430,12 @@ mod tests {
     #[test]
     fn data_directory_computed_default() {
         let real_user = RealUser::null().populate();
-        let expected = data_directory_from_context(&real_user, &None, DEFAULT_CHAIN_NAME)
+        let expected = data_directory_from_context(&real_user, &None, "dev")
             .to_string_lossy()
             .to_string();
         let mut config = BootstrapperConfig::new();
         config.real_user = real_user;
-        config.blockchain_bridge_config.chain_id = chain_id_from_name(DEFAULT_CHAIN_NAME);
+        config.blockchain_bridge_config.chain_id = chain_id_from_name("dev");
 
         let subject = DataDirectory {};
 
@@ -1444,7 +1489,7 @@ mod tests {
 
         let result = subject.computed_default(&bootstrapper_config, &None, &None);
 
-        assert_eq!(result, Some(("57".to_string(), Default)))
+        assert_eq!(result, Some(("57".to_string(), Configured)))
     }
 
     #[test]
@@ -1453,7 +1498,7 @@ mod tests {
 
         let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
-        assert_eq!(result, None)
+        assert_eq!(result, Some(("1".to_string(), Configured)))
     }
 
     #[test]
