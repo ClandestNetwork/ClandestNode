@@ -145,8 +145,8 @@ pub mod standard {
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let (config_file_path, user_specified) = determine_config_file_path(app, args)?;
         let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
-            Ok(cfv) => Box::new (cfv),
-            Err(e) => return Err(ConfiguratorError::required ("config-file", &e.to_string())),
+            Ok(cfv) => Box::new(cfv),
+            Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
         };
         MultiConfig::try_new(
             &app,

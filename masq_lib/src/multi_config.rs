@@ -350,13 +350,13 @@ impl VirtualCommandLine for ConfigFileVcl {
     }
 }
 
-#[derive (Debug)]
+#[derive(Debug)]
 pub enum ConfigFileVclError {
     OpenError(PathBuf, std::io::Error),
     CorruptUtf8(PathBuf),
     Unreadable(PathBuf, std::io::Error),
     CorruptToml(PathBuf, toml::de::Error),
-    InvalidConfig(PathBuf)
+    InvalidConfig(PathBuf),
 }
 
 impl Display for ConfigFileVclError {
@@ -372,11 +372,14 @@ impl Display for ConfigFileVclError {
 }
 
 impl ConfigFileVcl {
-    pub fn new(file_path: &PathBuf, user_specified: bool) -> Result<ConfigFileVcl, ConfigFileVclError> {
+    pub fn new(
+        file_path: &PathBuf,
+        user_specified: bool,
+    ) -> Result<ConfigFileVcl, ConfigFileVclError> {
         let mut file: File = match File::open(file_path) {
             Err(e) => {
                 if user_specified {
-                    return Err(ConfigFileVclError::OpenError(file_path.clone(), e))
+                    return Err(ConfigFileVclError::OpenError(file_path.clone(), e));
                 } else {
                     return Ok(ConfigFileVcl { vcl_args: vec![] });
                 }
@@ -385,7 +388,9 @@ impl ConfigFileVcl {
         };
         let mut contents = String::new();
         match file.read_to_string(&mut contents) {
-            Err(ref e) if e.kind() == ErrorKind::InvalidData => return Err(ConfigFileVclError::CorruptUtf8(file_path.clone())),
+            Err(ref e) if e.kind() == ErrorKind::InvalidData => {
+                return Err(ConfigFileVclError::CorruptUtf8(file_path.clone()))
+            }
             Err(e) => return Err(ConfigFileVclError::Unreadable(file_path.clone(), e)),
             Ok(_) => (),
         };
@@ -405,18 +410,21 @@ impl ConfigFileVcl {
                     v => Ok(v.to_string()),
                 };
                 match value {
-                    Err(e) => Err (e),
+                    Err(e) => Err(e),
                     Ok(s) => {
-                        let v: Box<dyn VclArg> = Box::new (NameValueVclArg::new (&name, &s));
+                        let v: Box<dyn VclArg> = Box::new(NameValueVclArg::new(&name, &s));
                         Ok(v)
                     }
                 }
             })
             .collect();
-        if let Some (_) = vcl_args_and_errs.iter().find(|v| v.is_err()) {
-            return Err(ConfigFileVclError::InvalidConfig(file_path.clone()))
+        if vcl_args_and_errs.iter().any(|v| v.is_err()) {
+            return Err(ConfigFileVclError::InvalidConfig(file_path.clone()));
         }
-        let vcl_args = vcl_args_and_errs.into_iter().map(|result| result.expect("Error appeared")).collect();
+        let vcl_args = vcl_args_and_errs
+            .into_iter()
+            .map(|result| result.expect("Error appeared"))
+            .collect();
 
         Ok(ConfigFileVcl { vcl_args })
     }
@@ -862,7 +870,7 @@ pub(crate) mod tests {
                 .unwrap();
         }
 
-        let subject = ConfigFileVcl::new(&file_path, true);
+        let subject = ConfigFileVcl::new(&file_path, true).unwrap();
 
         assert_eq!(
             vec![
@@ -895,15 +903,14 @@ pub(crate) mod tests {
         let mut file_path = home_dir.clone();
         file_path.push("config.toml");
 
-        let subject = ConfigFileVcl::new(&file_path, false);
+        let subject = ConfigFileVcl::new(&file_path, false).unwrap();
 
         assert_eq!(vec!["".to_string()], subject.args());
         assert!(subject.vcl_args().is_empty());
     }
 
     #[test]
-    #[should_panic(expected = "could not be read: ")]
-    fn config_file_vcl_panics_about_missing_file_when_user_specified() {
+    fn config_file_vcl_complains_about_missing_file_when_user_specified() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
             "config_file_vcl_panics_about_missing_file_when_user_specified",
@@ -911,11 +918,16 @@ pub(crate) mod tests {
         let mut file_path = home_dir.clone();
         file_path.push("config.toml");
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result.to_string().contains("could not be opened: "),
+            true,
+            "{}",
+            result.to_string()
+        )
     }
 
     #[test]
-    #[should_panic(expected = "is corrupted: contains data that cannot be interpreted as UTF-8")]
     fn config_file_vcl_handles_non_utf8_contents() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
@@ -930,13 +942,16 @@ pub(crate) mod tests {
             toml_file.write_all(&mut buf).unwrap();
         }
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result
+                .to_string()
+                .contains("is corrupted: contains data that cannot be interpreted as UTF-8"),
+            true
+        )
     }
 
     #[test]
-    #[should_panic(
-        expected = "has bad TOML syntax: expected a table key, found a right bracket at line 1"
-    )]
     fn config_file_vcl_handles_non_toml_contents() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
@@ -949,11 +964,16 @@ pub(crate) mod tests {
             toml_file.write_all(b"][=blah..[\n").unwrap();
         }
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result.to_string().contains(
+                "has bad TOML syntax: expected a table key, found a right bracket at line 1"
+            ),
+            true
+        )
     }
 
     #[test]
-    #[should_panic(expected = "contains unsupported Datetime or non-scalar configuration values")]
     fn config_file_vcl_handles_datetime_element() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
@@ -966,11 +986,16 @@ pub(crate) mod tests {
             toml_file.write_all(b"datetime = 12:34:56\n").unwrap();
         }
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result
+                .to_string()
+                .contains("contains unsupported Datetime or non-scalar configuration values"),
+            true
+        )
     }
 
     #[test]
-    #[should_panic(expected = "contains unsupported Datetime or non-scalar configuration values")]
     fn config_file_vcl_handles_array_element() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
@@ -983,11 +1008,16 @@ pub(crate) mod tests {
             toml_file.write_all(b"array = [1, 2, 3]\n").unwrap();
         }
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result
+                .to_string()
+                .contains("contains unsupported Datetime or non-scalar configuration values"),
+            true
+        )
     }
 
     #[test]
-    #[should_panic(expected = "contains unsupported Datetime or non-scalar configuration values")]
     fn config_file_vcl_handles_table_element() {
         let home_dir = ensure_node_home_directory_exists(
             "multi_config",
@@ -1000,6 +1030,12 @@ pub(crate) mod tests {
             toml_file.write_all(b"[table]\nooga = \"booga\"").unwrap();
         }
 
-        ConfigFileVcl::new(&file_path, true);
+        let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
+        assert_eq!(
+            result
+                .to_string()
+                .contains("contains unsupported Datetime or non-scalar configuration values"),
+            true
+        )
     }
 }

@@ -61,16 +61,17 @@ impl SetupReporter for SetupReporterReal {
                 )
             })
             .collect::<SetupCluster>();
-eprintln_setup ("EXISTING SETUP", &existing_setup);
-eprintln_setup ("INCOMING SETUP", &incoming_setup);
         let mut combined_setup =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
         match combined_setup.get("data-directory") {
             None => (),
-            Some (entry) => {if entry.status == Default {let _ = combined_setup.remove("data-directory");}},
+            Some(entry) => {
+                if entry.status == Default {
+                    let _ = combined_setup.remove("data-directory");
+                }
+            }
         }
         let mut error_so_far = ConfiguratorError::new(vec![]);
-eprintln_setup ("FIRST COMBINED SETUP", &combined_setup);
         let (real_user, data_directory_opt, chain_name) =
             match Self::calculate_fundamentals(&combined_setup) {
                 Ok(triple) => triple,
@@ -83,11 +84,8 @@ eprintln_setup ("FIRST COMBINED SETUP", &combined_setup);
                     )
                 }
             };
-eprintln! ("Data directory from calculate_fundamentals: {:?}", data_directory_opt);
-eprintln! ("Chain name from calculate_fundamentals: {}", chain_name);
         let data_directory =
             data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
-eprintln! ("Calculated data-directory: {:?}", data_directory);
         let configured_setup =
             match Self::calculate_configured_setup(&combined_setup, &data_directory, &chain_name) {
                 Ok(setup) => setup,
@@ -96,15 +94,10 @@ eprintln! ("Calculated data-directory: {:?}", data_directory);
                     HashMap::new()
                 }
             };
-eprintln_setup ("CONFIGURED SETUP", &configured_setup);
         error_so_far.param_errors.iter().for_each(|param_error| {
             let _ = incoming_setup.remove(&param_error.parameter);
         });
-        let combined_setup = Self::combine_clusters(vec![
-            &configured_setup,
-            &combined_setup,
-        ]);
-eprintln_setup ("SECOND COMBINED SETUP", &combined_setup);
+        let combined_setup = Self::combine_clusters(vec![&configured_setup, &combined_setup]);
         let final_setup = value_retrievers()
             .into_iter()
             .map(|retriever| {
@@ -128,7 +121,6 @@ eprintln_setup ("SECOND COMBINED SETUP", &combined_setup);
                 }
             })
             .collect::<SetupCluster>();
-eprintln_setup("FINAL SETUP", &final_setup);
         if error_so_far.param_errors.is_empty() {
             Ok(final_setup)
         } else {
@@ -198,11 +190,10 @@ impl SetupReporterReal {
         };
         let mc_cn = value_m!(multi_config, "chain", String);
         let cs_cn = combined_setup.get("chain");
-eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
         let chain_name = match (mc_cn, cs_cn) {
-        //     value_m!(multi_config, "chain", String),
-        //     combined_setup.get("chain"),
-        // ) {
+            //     value_m!(multi_config, "chain", String),
+            //     combined_setup.get("chain"),
+            // ) {
             (Some(chain_str), None) => chain_str,
             (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
             (Some(chain_str), Some(_)) => chain_str,
@@ -292,7 +283,7 @@ eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
     fn make_command_line(setup: &SetupCluster) -> Vec<String> {
         let accepted_statuses = vec![Set, Configured];
         let mut command_line = setup
-            .into_iter()
+            .iter()
             .filter(|(_, v)| accepted_statuses.contains(&v.status))
             .flat_map(|(_, v)| vec![format!("--{}", v.name), v.value.clone()])
             .collect::<Vec<String>>();
@@ -320,9 +311,8 @@ eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
             };
             let (config_file_path, user_specified) =
                 determine_config_file_path(&app, &command_line)?;
-eprintln! ("From determine_config_file_path: config_file_path = {:?}; user_specified = {}", config_file_path, user_specified);
-            let config_file_vcl = match ConfigFileVcl::new (&config_file_path, user_specified) {
-                Ok (cfv) => cfv,
+            let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
+                Ok(cfv) => cfv,
                 Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
             };
             vcls.push(Box::new(config_file_vcl));
@@ -356,14 +346,12 @@ eprintln! ("From determine_config_file_path: config_file_path = {:?}; user_speci
                 Ok((bootstrapper_config, Some(Box::new(persistent_config))))
             }
             Err(_) => {
-eprintln! ("In multi_config: {:?}", value_m!(multi_config, "gas-price", String));
                 unprivileged_parse_args(
                     multi_config,
                     &mut bootstrapper_config,
                     &mut streams,
                     None,
                 )?;
-eprintln! ("After unprivileged_parse_args: {}", bootstrapper_config.blockchain_bridge_config.gas_price);
                 Ok((bootstrapper_config, None))
             }
         }
@@ -735,6 +723,7 @@ mod tests {
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::bootstrapper::RealUser;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
+    use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
     use crate::persistent_configuration::{
         PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
     };
@@ -742,18 +731,17 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use masq_lib::messages::{UiSetupResponseValueStatus};
+    use masq_lib::messages::UiSetupResponseValueStatus;
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Configured, Required, Set};
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     #[cfg(not(target_os = "windows"))]
     use std::default::Default;
+    use std::fs::File;
+    use std::io::Write;
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
-    use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
-    use std::fs::File;
-    use std::io::Write;
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {
@@ -1167,27 +1155,42 @@ mod tests {
     #[test]
     fn get_modified_setup_data_directory_depends_on_new_chain() {
         let _guard = EnvironmentGuard::new();
-        let wrapper = RealDirsWrapper{};
+        let wrapper = RealDirsWrapper {};
         let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
         let existing_setup = vec![
             ("neighborhood-mode", "zero-hop", Set),
             ("chain", "mainnet", Default),
-            ("data-directory", &data_directory.to_string_lossy().to_string(), Default),
-            ("real-user", &crate::bootstrapper::RealUser::null().populate().to_string(), Default),
-        ].into_iter()
-            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
-            .collect::<SetupCluster> ();
-        let incoming_setup = vec![
-            ("chain", "ropsten"),
-        ].into_iter()
-            .map (|(name, value)| UiSetupRequestValue::new(name, value))
+            (
+                "data-directory",
+                &data_directory.to_string_lossy().to_string(),
+                Default,
+            ),
+            (
+                "real-user",
+                &crate::bootstrapper::RealUser::null().populate().to_string(),
+                Default,
+            ),
+        ]
+        .into_iter()
+        .map(|(name, value, status)| {
+            (
+                name.to_string(),
+                UiSetupResponseValue::new(name, value, status),
+            )
+        })
+        .collect::<SetupCluster>();
+        let incoming_setup = vec![("chain", "ropsten")]
+            .into_iter()
+            .map(|(name, value)| UiSetupRequestValue::new(name, value))
             .collect_vec();
         let expected_data_directory = wrapper.data_dir().unwrap().join("MASQ").join("ropsten");
         let subject = SetupReporterReal::new();
 
-        let result = subject.get_modified_setup(existing_setup, incoming_setup).unwrap();
+        let result = subject
+            .get_modified_setup(existing_setup, incoming_setup)
+            .unwrap();
 
-        let actual_data_directory = PathBuf::from (&result.get ("data-directory").unwrap().value);
+        let actual_data_directory = PathBuf::from(&result.get("data-directory").unwrap().value);
         assert_eq!(actual_data_directory, expected_data_directory);
     }
 
@@ -1398,107 +1401,210 @@ mod tests {
 
     #[test]
     fn config_file_not_specified_and_nonexistent() {
-        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_not_specified_and_nonexistent");
-        let setup = vec![ // no config-file setting
+        let data_directory = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_not_specified_and_nonexistent",
+        );
+        let setup = vec![
+            // no config-file setting
             UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
-            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+            UiSetupResponseValue::new(
+                "data-directory",
+                &data_directory.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .unwrap();
 
-        assert_eq! (result.get("config-file").unwrap().value, "config.toml".to_string());
-        assert_eq! (result.get("gas-price").unwrap().value, GasPrice{}.computed_default(&BootstrapperConfig::new(), &None, &None).unwrap().0);
+        assert_eq!(
+            result.get("config-file").unwrap().value,
+            "config.toml".to_string()
+        );
+        assert_eq!(
+            result.get("gas-price").unwrap().value,
+            GasPrice {}
+                .computed_default(&BootstrapperConfig::new(), &None, &None)
+                .unwrap()
+                .0
+        );
     }
 
     #[test]
     fn config_file_not_specified_but_exists() {
-        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_not_specified_but_exists");
+        let data_directory = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_not_specified_but_exists",
+        );
         {
             let config_file_path = data_directory.join("config.toml");
             let mut config_file = File::create(config_file_path).unwrap();
             config_file.write_all(b"gas-price = \"10\"\n").unwrap();
         }
-        let setup = vec![ // no config-file setting
+        let setup = vec![
+            // no config-file setting
             UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
-            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+            UiSetupResponseValue::new(
+                "data-directory",
+                &data_directory.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .unwrap();
 
-        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+        assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
 
     #[test]
     fn config_file_has_relative_directory_that_exists_in_data_directory() {
-        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_has_relative_directory_that_exists_in_data_directory");
+        let data_directory = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_has_relative_directory_that_exists_in_data_directory",
+        );
         {
             let config_file_dir = data_directory.join("booga");
-            std::fs::create_dir_all (&config_file_dir).unwrap();
+            std::fs::create_dir_all(&config_file_dir).unwrap();
             let config_file_path = config_file_dir.join("special.toml");
             let mut config_file = File::create(config_file_path).unwrap();
             config_file.write_all(b"gas-price = \"10\"\n").unwrap();
         }
-        let setup = vec![ // no config-file setting
+        let setup = vec![
+            // no config-file setting
             UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
             UiSetupResponseValue::new("config-file", "booga/special.toml", Set),
-            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+            UiSetupResponseValue::new(
+                "data-directory",
+                &data_directory.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .unwrap();
 
-        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+        assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
 
     #[test]
     fn config_file_has_relative_directory_that_does_not_exist_in_data_directory() {
-        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_has_relative_directory_that_does_not_exist_in_data_directory");
-        let setup = vec![ // no config-file setting
+        let data_directory = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_has_relative_directory_that_does_not_exist_in_data_directory",
+        );
+        let setup = vec![
+            // no config-file setting
             UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
             UiSetupResponseValue::new("config-file", "booga/special.toml", Set),
-            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+            UiSetupResponseValue::new(
+                "data-directory",
+                &data_directory.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").err().unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .err()
+                .unwrap();
 
-        assert_eq! (result.param_errors[0].parameter, "config-file");
-        assert_eq! (result.param_errors[0].reason.contains("could not be opened"), true);
+        assert_eq!(result.param_errors[0].parameter, "config-file");
+        assert_eq!(
+            result.param_errors[0]
+                .reason
+                .contains("could not be opened"),
+            true
+        );
     }
 
     #[test]
     fn config_file_has_absolute_path_to_file_that_exists() {
-        let config_file_dir = ensure_node_home_directory_exists("setup_reporter", "config_file_has_absolute_path_to_file_that_exists").canonicalize().unwrap();
+        let config_file_dir = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_has_absolute_path_to_file_that_exists",
+        )
+        .canonicalize()
+        .unwrap();
         let config_file_path = config_file_dir.join("special.toml");
         {
             let mut config_file = File::create(config_file_path.clone()).unwrap();
             config_file.write_all(b"gas-price = \"10\"\n").unwrap();
         }
-        let wrapper = RealDirsWrapper{};
+        let wrapper = RealDirsWrapper {};
         let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
-        let setup = vec![ // no config-file setting
-                          UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
-                          UiSetupResponseValue::new("config-file", &config_file_path.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+        let setup = vec![
+            // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new(
+                "config-file",
+                &config_file_path.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .unwrap();
 
-        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+        assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
 
     #[test]
     fn config_file_has_absolute_path_to_file_that_does_not_exist() {
-        let config_file_dir = ensure_node_home_directory_exists("setup_reporter", "config_file_has_absolute_path_to_file_that_exists").canonicalize().unwrap();
+        let config_file_dir = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "config_file_has_absolute_path_to_file_that_exists",
+        )
+        .canonicalize()
+        .unwrap();
         let config_file_path = config_file_dir.join("nonexistent.toml");
-        let wrapper = RealDirsWrapper{};
+        let wrapper = RealDirsWrapper {};
         let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
-        let setup = vec![ // no config-file setting
-                          UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
-                          UiSetupResponseValue::new("config-file", &config_file_path.to_string_lossy().to_string(), Set),
-        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+        let setup = vec![
+            // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new(
+                "config-file",
+                &config_file_path.to_string_lossy().to_string(),
+                Set,
+            ),
+        ]
+        .into_iter()
+        .map(|uisrv| (uisrv.name.clone(), uisrv))
+        .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").err().unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant")
+                .err()
+                .unwrap();
 
-        assert_eq! (result.param_errors[0].parameter, "config-file");
-        assert_eq! (result.param_errors[0].reason.contains("could not be opened"), true);
+        assert_eq!(result.param_errors[0].parameter, "config-file");
+        assert_eq!(
+            result.param_errors[0]
+                .reason
+                .contains("could not be opened"),
+            true
+        );
     }
 
     #[test]
@@ -1812,12 +1918,5 @@ mod tests {
             crate::daemon::setup_reporter::RealUser {}.is_required(&params),
             false
         );
-    }
-
-    #[test]
-    fn run_me_privileged() {
-        let real_user = RealUser::null().populate();
-        let directory = data_directory_from_context(&real_user, &None, "mainnet");
-        eprintln!("default data directory: {:?}", directory);
     }
 }
