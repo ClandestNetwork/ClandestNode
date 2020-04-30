@@ -7,7 +7,7 @@ use clap::{App, ArgMatches};
 use regex::Regex;
 use serde::export::Formatter;
 use std::collections::HashSet;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::PathBuf;
@@ -350,55 +350,75 @@ impl VirtualCommandLine for ConfigFileVcl {
     }
 }
 
+#[derive (Debug)]
+pub enum ConfigFileVclError {
+    OpenError(PathBuf, std::io::Error),
+    CorruptUtf8(PathBuf),
+    Unreadable(PathBuf, std::io::Error),
+    CorruptToml(PathBuf, toml::de::Error),
+    InvalidConfig(PathBuf)
+}
+
+impl Display for ConfigFileVclError {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigFileVclError::OpenError(path, error) => writeln!(fmt, "Configuration file at {:?} could not be opened: {}", path, error),
+            ConfigFileVclError::CorruptUtf8 (path) => writeln!(fmt, "Configuration file at {:?} is corrupted: contains data that cannot be interpreted as UTF-8", path),
+            ConfigFileVclError::Unreadable(path, error) => writeln!(fmt, "Configuration file at {:?} could not be read: {}", path, error),
+            ConfigFileVclError::CorruptToml (path, error) => writeln!(fmt, "Configuration file at {:?} has bad TOML syntax: {}", path, error),
+            ConfigFileVclError::InvalidConfig (path) => writeln!(fmt, "Configuration file at {:?} contains unsupported Datetime or non-scalar configuration values", path),
+        }
+    }
+}
+
 impl ConfigFileVcl {
-    pub fn new(file_path: &PathBuf, user_specified: bool) -> ConfigFileVcl {
+    pub fn new(file_path: &PathBuf, user_specified: bool) -> Result<ConfigFileVcl, ConfigFileVclError> {
         let mut file: File = match File::open(file_path) {
             Err(e) => {
                 if user_specified {
-                    panic!(
-                        "Configuration file at {:?} could not be read: {}",
-                        file_path, e
-                    )
+                    return Err(ConfigFileVclError::OpenError(file_path.clone(), e))
                 } else {
-                    return ConfigFileVcl { vcl_args: vec![] };
+                    return Ok(ConfigFileVcl { vcl_args: vec![] });
                 }
             }
             Ok(file) => file,
         };
         let mut contents = String::new();
         match file.read_to_string(&mut contents) {
-            Err(ref e) if e.kind() == ErrorKind::InvalidData => panic!("Configuration file at {:?} is corrupted: contains data that cannot be interpreted as UTF-8", file_path),
-            Err(e) => panic!("Configuration file at {:?}: {}", file_path, e),
+            Err(ref e) if e.kind() == ErrorKind::InvalidData => return Err(ConfigFileVclError::CorruptUtf8(file_path.clone())),
+            Err(e) => return Err(ConfigFileVclError::Unreadable(file_path.clone(), e)),
             Ok(_) => (),
         };
         let table: Table = match toml::de::from_str(&contents) {
-            Err(e) => panic!(
-                "Configuration file at {:?} has bad TOML syntax: {}",
-                file_path, e
-            ),
+            Err(e) => return Err(ConfigFileVclError::CorruptToml(file_path.clone(), e)),
             Ok(table) => table,
         };
-        let vcl_args: Vec<Box<dyn VclArg>> = table
+        let vcl_args_and_errs: Vec<Result<Box<dyn VclArg>, ConfigFileVclError>> = table
             .keys()
             .map(|key| {
                 let name = format!("--{}", key);
                 let value = match table.get(key).expect("value disappeared") {
-                    Value::Table(_) => Self::complain_about_data_elements(file_path),
-                    Value::Array(_) => Self::complain_about_data_elements(file_path),
-                    Value::Datetime(_) => Self::complain_about_data_elements(file_path),
-                    Value::String(v) => v.as_str().to_string(),
-                    v => v.to_string(),
+                    Value::Table(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
+                    Value::Array(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
+                    Value::Datetime(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
+                    Value::String(v) => Ok(v.as_str().to_string()),
+                    v => Ok(v.to_string()),
                 };
-                let result: Box<dyn VclArg> = Box::new(NameValueVclArg::new(&name, &value));
-                result
+                match value {
+                    Err(e) => Err (e),
+                    Ok(s) => {
+                        let v: Box<dyn VclArg> = Box::new (NameValueVclArg::new (&name, &s));
+                        Ok(v)
+                    }
+                }
             })
             .collect();
+        if let Some (_) = vcl_args_and_errs.iter().find(|v| v.is_err()) {
+            return Err(ConfigFileVclError::InvalidConfig(file_path.clone()))
+        }
+        let vcl_args = vcl_args_and_errs.into_iter().map(|result| result.expect("Error appeared")).collect();
 
-        ConfigFileVcl { vcl_args }
-    }
-
-    fn complain_about_data_elements(file_path: &PathBuf) -> ! {
-        panic!("Configuration file at {:?} contains unsupported Datetime or non-scalar configuration values", file_path)
+        Ok(ConfigFileVcl { vcl_args })
     }
 }
 

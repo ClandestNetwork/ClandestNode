@@ -144,12 +144,16 @@ pub mod standard {
         args: &Vec<String>,
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let (config_file_path, user_specified) = determine_config_file_path(app, args)?;
+        let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
+            Ok(cfv) => Box::new (cfv),
+            Err(e) => return Err(ConfiguratorError::required ("config-file", &e.to_string())),
+        };
         MultiConfig::try_new(
             &app,
             vec![
                 Box::new(CommandLineVcl::new(args.clone())),
                 Box::new(EnvironmentVcl::new(&app)),
-                Box::new(ConfigFileVcl::new(&config_file_path, user_specified)),
+                config_file_vcl,
             ],
         )
     }
@@ -1343,7 +1347,7 @@ mod tests {
             &app(),
             vec![
                 Box::new(CommandLineVcl::new(args.into())),
-                Box::new(ConfigFileVcl::new(&config_file_path, false)),
+                Box::new(ConfigFileVcl::new(&config_file_path, false).unwrap()),
             ],
         )
         .unwrap();

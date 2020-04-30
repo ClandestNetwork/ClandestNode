@@ -320,10 +320,12 @@ eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
             };
             let (config_file_path, user_specified) =
                 determine_config_file_path(&app, &command_line)?;
-            vcls.push(Box::new(ConfigFileVcl::new(
-                &config_file_path,
-                user_specified,
-            )));
+eprintln! ("From determine_config_file_path: config_file_path = {:?}; user_specified = {}", config_file_path, user_specified);
+            let config_file_vcl = match ConfigFileVcl::new (&config_file_path, user_specified) {
+                Ok (cfv) => cfv,
+                Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
+            };
+            vcls.push(Box::new(config_file_vcl));
         }
         MultiConfig::try_new(&app, vcls)
     }
@@ -354,12 +356,14 @@ eprintln! ("From multi_config: {:?}; from setup: {:?}", mc_cn, cs_cn);
                 Ok((bootstrapper_config, Some(Box::new(persistent_config))))
             }
             Err(_) => {
+eprintln! ("In multi_config: {:?}", value_m!(multi_config, "gas-price", String));
                 unprivileged_parse_args(
                     multi_config,
                     &mut bootstrapper_config,
                     &mut streams,
                     None,
                 )?;
+eprintln! ("After unprivileged_parse_args: {}", bootstrapper_config.blockchain_bridge_config.gas_price);
                 Ok((bootstrapper_config, None))
             }
         }
@@ -748,6 +752,8 @@ mod tests {
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
+    use std::fs::File;
+    use std::io::Write;
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {
@@ -1391,8 +1397,108 @@ mod tests {
     }
 
     #[test]
-    fn config_file_not_specified_and_config_toml_exists() {
-        unimplemented!()
+    fn config_file_not_specified_and_nonexistent() {
+        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_not_specified_and_nonexistent");
+        let setup = vec![ // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+
+        assert_eq! (result.get("config-file").unwrap().value, "config.toml".to_string());
+        assert_eq! (result.get("gas-price").unwrap().value, GasPrice{}.computed_default(&BootstrapperConfig::new(), &None, &None).unwrap().0);
+    }
+
+    #[test]
+    fn config_file_not_specified_but_exists() {
+        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_not_specified_but_exists");
+        {
+            let config_file_path = data_directory.join("config.toml");
+            let mut config_file = File::create(config_file_path).unwrap();
+            config_file.write_all(b"gas-price = \"10\"\n").unwrap();
+        }
+        let setup = vec![ // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+
+        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+    }
+
+    #[test]
+    fn config_file_has_relative_directory_that_exists_in_data_directory() {
+        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_has_relative_directory_that_exists_in_data_directory");
+        {
+            let config_file_dir = data_directory.join("booga");
+            std::fs::create_dir_all (&config_file_dir).unwrap();
+            let config_file_path = config_file_dir.join("special.toml");
+            let mut config_file = File::create(config_file_path).unwrap();
+            config_file.write_all(b"gas-price = \"10\"\n").unwrap();
+        }
+        let setup = vec![ // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new("config-file", "booga/special.toml", Set),
+            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+
+        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+    }
+
+    #[test]
+    fn config_file_has_relative_directory_that_does_not_exist_in_data_directory() {
+        let data_directory = ensure_node_home_directory_exists("setup_reporter", "config_file_has_relative_directory_that_does_not_exist_in_data_directory");
+        let setup = vec![ // no config-file setting
+            UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+            UiSetupResponseValue::new("config-file", "booga/special.toml", Set),
+            UiSetupResponseValue::new("data-directory", &data_directory.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").err().unwrap();
+
+        assert_eq! (result.param_errors[0].parameter, "config-file");
+        assert_eq! (result.param_errors[0].reason.contains("could not be opened"), true);
+    }
+
+    #[test]
+    fn config_file_has_absolute_path_to_file_that_exists() {
+        let config_file_dir = ensure_node_home_directory_exists("setup_reporter", "config_file_has_absolute_path_to_file_that_exists").canonicalize().unwrap();
+        let config_file_path = config_file_dir.join("special.toml");
+        {
+            let mut config_file = File::create(config_file_path.clone()).unwrap();
+            config_file.write_all(b"gas-price = \"10\"\n").unwrap();
+        }
+        let wrapper = RealDirsWrapper{};
+        let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
+        let setup = vec![ // no config-file setting
+                          UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+                          UiSetupResponseValue::new("config-file", &config_file_path.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").unwrap();
+
+        assert_eq! (result.get("gas-price").unwrap().value, "10".to_string());
+    }
+
+    #[test]
+    fn config_file_has_absolute_path_to_file_that_does_not_exist() {
+        let config_file_dir = ensure_node_home_directory_exists("setup_reporter", "config_file_has_absolute_path_to_file_that_exists").canonicalize().unwrap();
+        let config_file_path = config_file_dir.join("nonexistent.toml");
+        let wrapper = RealDirsWrapper{};
+        let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
+        let setup = vec![ // no config-file setting
+                          UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
+                          UiSetupResponseValue::new("config-file", &config_file_path.to_string_lossy().to_string(), Set),
+        ].into_iter().map(|uisrv| (uisrv.name.clone(), uisrv)).collect();
+
+        let result = SetupReporterReal::calculate_configured_setup(&setup, &data_directory, "irrelevant").err().unwrap();
+
+        assert_eq! (result.param_errors[0].parameter, "config-file");
+        assert_eq! (result.param_errors[0].reason.contains("could not be opened"), true);
     }
 
     #[test]
