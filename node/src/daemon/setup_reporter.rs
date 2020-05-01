@@ -1036,6 +1036,60 @@ mod tests {
     }
 
     #[test]
+    fn get_modified_setup_database_nonexistent_nothing_set_everything_in_config_file() {
+        let home_dir = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "get_modified_setup_database_nonexistent_nothing_set_everything_in_config_file",
+        );
+        {
+            let mut config_file = File::create(home_dir.join("config.toml")).unwrap();
+            config_file.write_all(b"blockchain-service-url = \"https://example.com\"\n").unwrap();
+            config_file.write_all(b"clandestine-port = \"1234\"\n").unwrap();
+            config_file.write_all(b"consuming-private-key = \"0011223344556677001122334455667700112233445566770011223344556677\"\n").unwrap();
+            config_file.write_all(b"db-password = \"password\"\n").unwrap();
+            config_file.write_all(b"dns-servers = \"8.8.8.8\"\n").unwrap();
+            config_file.write_all(b"earning-wallet = \"0x0123456789012345678901234567890123456789\"\n").unwrap();
+            config_file.write_all(b"gas-price = \"50\"\n").unwrap();
+            config_file.write_all(b"ip = \"4.3.2.1\"\n").unwrap();
+            config_file.write_all(b"log-level = \"error\"\n").unwrap();
+            config_file.write_all(b"neighborhood-mode = \"originate-only\"\n").unwrap();
+            config_file.write_all(b"neighbors = \"MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678\"\n").unwrap();
+        }
+        let params = vec![
+            UiSetupRequestValue::new("data-directory", &home_dir.to_string_lossy().to_string()),
+        ];
+        let subject = SetupReporterReal::new();
+
+        let result = subject.get_modified_setup(HashMap::new(), params).unwrap();
+
+        let expected_result = vec![
+            ("blockchain-service-url", "https://example.com", Configured),
+            ("chain", "mainnet", Default),
+            ("clandestine-port", "1234", Configured),
+            ("config-file", "config.toml", Default),
+            ("consuming-private-key", "0011223344556677001122334455667700112233445566770011223344556677", Configured),
+            ("data-directory", &home_dir.to_string_lossy().to_string(), Set),
+            ("db-password", "password", Configured),
+            ("dns-servers", "8.8.8.8", Configured),
+            ("earning-wallet", "0x0123456789012345678901234567890123456789", Configured),
+            ("gas-price", "50", Configured),
+            ("ip", "4.3.2.1", Configured),
+            ("log-level", "error", Configured),
+            ("neighborhood-mode", "originate-only", Configured),
+            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Configured),
+            #[cfg(not(target_os = "windows"))]
+            ("real-user", &crate::bootstrapper::RealUser::null().populate().to_string(), Default),
+        ].into_iter()
+            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
+            .collect_vec();
+        let presentable_result = result
+            .into_iter()
+            .sorted_by_key(|(k, _)| k.clone())
+            .collect_vec();
+        assert_eq!(presentable_result, expected_result);
+    }
+
+    #[test]
     fn get_modified_setup_database_nonexistent_all_but_requireds_cleared() {
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists(
@@ -1350,12 +1404,17 @@ mod tests {
     #[test]
     fn blanking_a_parameter_with_a_default_produces_that_default() {
         let _guard = EnvironmentGuard::new();
+        let home_dir = ensure_node_home_directory_exists(
+            "setup_reporter",
+            "blanking_a_parameter_with_a_default_produces_that_default",
+        );
         let subject = SetupReporterReal::new();
 
         let result = subject
             .get_modified_setup(
                 HashMap::new(),
                 vec![
+                    UiSetupRequestValue::new("data-directory", &home_dir.to_string_lossy().to_string()),
                     UiSetupRequestValue::new("ip", "1.2.3.4"),
                     UiSetupRequestValue::clear("chain"),
                 ],
@@ -1574,7 +1633,8 @@ mod tests {
         let config_file_dir = ensure_node_home_directory_exists(
             "setup_reporter",
             "config_file_has_absolute_path_to_file_that_exists",
-        )
+        );
+        let config_file_dir = config_file_dir
         .canonicalize()
         .unwrap();
         let config_file_path = config_file_dir.join("nonexistent.toml");
