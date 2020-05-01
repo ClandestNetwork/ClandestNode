@@ -1043,21 +1043,34 @@ mod tests {
         );
         {
             let mut config_file = File::create(home_dir.join("config.toml")).unwrap();
-            config_file.write_all(b"blockchain-service-url = \"https://example.com\"\n").unwrap();
-            config_file.write_all(b"clandestine-port = \"1234\"\n").unwrap();
+            config_file
+                .write_all(b"blockchain-service-url = \"https://example.com\"\n")
+                .unwrap();
+            config_file
+                .write_all(b"clandestine-port = \"1234\"\n")
+                .unwrap();
             config_file.write_all(b"consuming-private-key = \"0011223344556677001122334455667700112233445566770011223344556677\"\n").unwrap();
-            config_file.write_all(b"db-password = \"password\"\n").unwrap();
-            config_file.write_all(b"dns-servers = \"8.8.8.8\"\n").unwrap();
-            config_file.write_all(b"earning-wallet = \"0x0123456789012345678901234567890123456789\"\n").unwrap();
+            config_file
+                .write_all(b"db-password = \"password\"\n")
+                .unwrap();
+            config_file
+                .write_all(b"dns-servers = \"8.8.8.8\"\n")
+                .unwrap();
+            config_file
+                .write_all(b"earning-wallet = \"0x0123456789012345678901234567890123456789\"\n")
+                .unwrap();
             config_file.write_all(b"gas-price = \"50\"\n").unwrap();
             config_file.write_all(b"ip = \"4.3.2.1\"\n").unwrap();
             config_file.write_all(b"log-level = \"error\"\n").unwrap();
-            config_file.write_all(b"neighborhood-mode = \"originate-only\"\n").unwrap();
+            config_file
+                .write_all(b"neighborhood-mode = \"originate-only\"\n")
+                .unwrap();
             config_file.write_all(b"neighbors = \"MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678\"\n").unwrap();
         }
-        let params = vec![
-            UiSetupRequestValue::new("data-directory", &home_dir.to_string_lossy().to_string()),
-        ];
+        let params = vec![UiSetupRequestValue::new(
+            "data-directory",
+            &home_dir.to_string_lossy().to_string(),
+        )];
         let subject = SetupReporterReal::new();
 
         let result = subject.get_modified_setup(HashMap::new(), params).unwrap();
@@ -1414,7 +1427,10 @@ mod tests {
             .get_modified_setup(
                 HashMap::new(),
                 vec![
-                    UiSetupRequestValue::new("data-directory", &home_dir.to_string_lossy().to_string()),
+                    UiSetupRequestValue::new(
+                        "data-directory",
+                        &home_dir.to_string_lossy().to_string(),
+                    ),
                     UiSetupRequestValue::new("ip", "1.2.3.4"),
                     UiSetupRequestValue::clear("chain"),
                 ],
@@ -1634,9 +1650,7 @@ mod tests {
             "setup_reporter",
             "config_file_has_absolute_path_to_file_that_exists",
         );
-        let config_file_dir = config_file_dir
-        .canonicalize()
-        .unwrap();
+        let config_file_dir = config_file_dir.canonicalize().unwrap();
         let config_file_path = config_file_dir.join("nonexistent.toml");
         let wrapper = RealDirsWrapper {};
         let data_directory = wrapper.data_dir().unwrap().join("MASQ").join("mainnet");
