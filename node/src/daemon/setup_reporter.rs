@@ -566,7 +566,7 @@ impl ValueRetriever for GasPrice {
                 .blockchain_bridge_config
                 .gas_price
                 .to_string(),
-            Configured,
+            Default,
         ))
     }
 
@@ -831,7 +831,7 @@ mod tests {
                 "0x0000000000000000000000000000000000000000",
                 Configured,
             ),
-            ("gas-price", "1234567890", Configured),
+            ("gas-price", "1234567890", Default),
             ("ip", "4.3.2.1", Set),
             ("log-level", "warn", Default),
             ("neighborhood-mode", "standard", Default),
@@ -1648,7 +1648,7 @@ mod tests {
     fn config_file_has_absolute_path_to_file_that_does_not_exist() {
         let config_file_dir = ensure_node_home_directory_exists(
             "setup_reporter",
-            "config_file_has_absolute_path_to_file_that_exists",
+            "config_file_has_absolute_path_to_file_that_does_not_exist",
         );
         let config_file_dir = config_file_dir.canonicalize().unwrap();
         let config_file_path = config_file_dir.join("nonexistent.toml");
@@ -1775,7 +1775,7 @@ mod tests {
 
         let result = subject.computed_default(&bootstrapper_config, &None, &None);
 
-        assert_eq!(result, Some(("57".to_string(), Configured)))
+        assert_eq!(result, Some(("57".to_string(), Default)))
     }
 
     #[test]
@@ -1784,7 +1784,7 @@ mod tests {
 
         let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
-        assert_eq!(result, Some(("1".to_string(), Configured)))
+        assert_eq!(result, Some(("1".to_string(), Default)))
     }
 
     #[test]
