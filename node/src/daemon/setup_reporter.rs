@@ -1143,7 +1143,6 @@ mod tests {
             .data_dir_result(Some(data_root.clone())));
         let params = vec![
             UiSetupRequestValue::new("chain", "mainnet"),
-            UiSetupRequestValue::new("neighborhood-mode", "zero-hop"), // TODO: Should work without this
         ];
         let existing_setup = subject.get_modified_setup(HashMap::new(), params).unwrap();
         let params = vec![UiSetupRequestValue::new("chain", "ropsten")];
