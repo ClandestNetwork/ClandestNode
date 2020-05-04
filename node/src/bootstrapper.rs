@@ -1691,7 +1691,8 @@ mod tests {
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
 
-        let result = from_configurator.populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
+        let result = from_configurator
+            .populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
         assert_eq!(
             result,
@@ -1726,7 +1727,8 @@ mod tests {
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
 
-        let result = from_configurator.populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
+        let result = from_configurator
+            .populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
         assert_eq!(
             result,
