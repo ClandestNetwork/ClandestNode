@@ -111,12 +111,10 @@ pub struct MockDirsWrapper {
 
 impl DirsWrapper for MockDirsWrapper {
     fn data_dir(&self) -> Option<PathBuf> {
-eprintln! ("Mock is returning data_dir: {:?}", self.data_dir_result);
         self.data_dir_result.clone()
     }
 
     fn home_dir(&self) -> Option<PathBuf> {
-eprintln! ("Mock is returning home_dir: {:?}", self.home_dir_result);
         self.home_dir_result.clone()
     }
 

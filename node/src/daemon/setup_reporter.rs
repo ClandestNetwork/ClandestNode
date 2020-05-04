@@ -26,7 +26,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-const CONSOLE_DIAGNOSTICS: bool = true;
+// TODO: Probably can take this out once GH-290 makes it in
+const CONSOLE_DIAGNOSTICS: bool = false;
 
 pub type SetupCluster = HashMap<String, UiSetupResponseValue>;
 
@@ -325,7 +326,6 @@ impl SetupReporterReal {
             };
             let (config_file_path, user_specified) =
                 determine_config_file_path(dirs_wrapper, &app, &command_line)?;
-eprintln! ("*** Config file path *** {:?}", config_file_path);
             let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
                 Ok(cfv) => cfv,
                 Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
