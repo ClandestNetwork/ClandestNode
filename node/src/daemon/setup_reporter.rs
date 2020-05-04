@@ -105,7 +105,7 @@ impl SetupReporter for SetupReporterReal {
         error_so_far.param_errors.iter().for_each(|param_error| {
             let _ = incoming_setup.remove(&param_error.parameter);
         });
-        let combined_setup = Self::combine_clusters(vec![&configured_setup, &all_but_configured]);
+        let combined_setup = Self::combine_clusters(vec![&all_but_configured, &configured_setup]);
         eprintln_setup("CONFIGURED", &configured_setup);
         eprintln_setup("COMBINED", &combined_setup);
         let final_setup = value_retrievers(self.dirs_wrapper.as_ref())
@@ -1085,7 +1085,7 @@ mod tests {
             "switching_config_files_changes_setup",
         );
         let data_root = home_dir.join("data_root");
-        let mainnet_dir = data_root.join("mainnet");
+        let mainnet_dir = data_root.join("MASQ").join("mainnet");
         {
             std::fs::create_dir_all(mainnet_dir.clone()).unwrap();
             let mut config_file = File::create(mainnet_dir.join("config.toml")).unwrap();
@@ -1111,7 +1111,7 @@ mod tests {
                 .write_all(b"neighborhood-mode = \"zero-hop\"\n")
                 .unwrap();
         }
-        let ropsten_dir = data_root.join("ropsten");
+        let ropsten_dir = data_root.join("MASQ").join("ropsten");
         {
             std::fs::create_dir_all(ropsten_dir.clone()).unwrap();
             let mut config_file = File::create(ropsten_dir.join("config.toml")).unwrap();
@@ -1156,7 +1156,7 @@ mod tests {
             ("clandestine-port", "8877", Configured),
             ("config-file", "config.toml", Default),
             ("consuming-private-key", "FFEEDDCCBBAA99887766554433221100FFEEDDCCBBAA99887766554433221100", Configured),
-            ("data-directory", &home_dir.to_string_lossy().to_string(), Default),
+            ("data-directory", &ropsten_dir.to_string_lossy().to_string(), Default),
             ("db-password", "ropsten", Configured),
             ("dns-servers", "8.7.6.5", Configured),
             ("earning-wallet", "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Configured),
