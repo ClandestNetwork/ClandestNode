@@ -1,14 +1,14 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::bootstrapper::BootstrapperConfig;
-use crate::node_configurator::RealDirsWrapper;
-use crate::node_configurator::{app_head, initialize_database, DirsWrapper, NodeConfigurator};
+use crate::node_configurator::{app_head, initialize_database, NodeConfigurator, DirsWrapper};
 use clap::App;
 use indoc::indoc;
 use masq_lib::command::StdStreams;
 use masq_lib::crash_point::CrashPoint;
 use masq_lib::shared_schema::{shared_app, ui_port_arg};
 use masq_lib::shared_schema::{ConfiguratorError, UI_PORT_HELP};
+use crate::node_configurator::RealDirsWrapper;
 
 pub struct NodeConfiguratorStandardPrivileged {
     dirs_wrapper: Box<dyn DirsWrapper>,
@@ -21,16 +21,10 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged
         streams: &mut StdStreams,
     ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
-        let multi_config =
-            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
+        let multi_config = standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
         let mut bootstrapper_config = BootstrapperConfig::new();
         standard::establish_port_configurations(&mut bootstrapper_config);
-        standard::privileged_parse_args(
-            self.dirs_wrapper.as_ref(),
-            &multi_config,
-            &mut bootstrapper_config,
-            streams,
-        )?;
+        standard::privileged_parse_args(self.dirs_wrapper.as_ref(), &multi_config, &mut bootstrapper_config, streams)?;
         Ok(bootstrapper_config)
     }
 }
@@ -43,9 +37,7 @@ impl Default for NodeConfiguratorStandardPrivileged {
 
 impl NodeConfiguratorStandardPrivileged {
     pub fn new() -> Self {
-        Self {
-            dirs_wrapper: Box::new(RealDirsWrapper {}),
-        }
+        Self {dirs_wrapper: Box::new(RealDirsWrapper{})}
     }
 }
 
@@ -66,8 +58,7 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
             self.privileged_config.blockchain_bridge_config.chain_id,
         );
         let mut unprivileged_config = BootstrapperConfig::new();
-        let multi_config =
-            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
+        let multi_config = standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
         standard::unprivileged_parse_args(
             &multi_config,
             &mut unprivileged_config,
@@ -82,7 +73,7 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
 impl NodeConfiguratorStandardUnprivileged {
     pub fn new(privileged_config: &BootstrapperConfig) -> Self {
         Self {
-            dirs_wrapper: Box::new(RealDirsWrapper {}),
+            dirs_wrapper: Box::new(RealDirsWrapper{}),
             privileged_config: privileged_config.clone(),
         }
     }
@@ -134,10 +125,7 @@ pub mod standard {
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::bootstrapper::PortConfiguration;
     use crate::http_request_start_finder::HttpRequestDiscriminatorFactory;
-    use crate::node_configurator::{
-        data_directory_from_context, determine_config_file_path, mnemonic_seed_exists,
-        real_user_data_directory_opt_and_chain_name, request_existing_db_password, DirsWrapper,
-    };
+    use crate::node_configurator::{data_directory_from_context, determine_config_file_path, mnemonic_seed_exists, real_user_data_directory_opt_and_chain_name, request_existing_db_password, DirsWrapper};
     use crate::persistent_configuration::{PersistentConfigError, PersistentConfiguration};
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
@@ -163,8 +151,7 @@ pub mod standard {
         app: &'a App,
         args: &Vec<String>,
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
-        let (config_file_path, user_specified) =
-            determine_config_file_path(dirs_wrapper, app, args)?;
+        let (config_file_path, user_specified) = determine_config_file_path(dirs_wrapper, app, args)?;
         let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
             Ok(cfv) => Box::new(cfv),
             Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
@@ -211,8 +198,7 @@ pub mod standard {
 
         let (real_user, data_directory_opt, chain_name) =
             real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
-        let directory =
-            data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
+        let directory = data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
         privileged_config.real_user = real_user;
         privileged_config.data_directory = directory;
         privileged_config.blockchain_bridge_config.chain_id = chain_id_from_name(&chain_name);
@@ -907,7 +893,6 @@ mod tests {
     use crate::bootstrapper::RealUser;
     use crate::config_dao::{ConfigDao, ConfigDaoReal};
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
-    use crate::node_configurator::RealDirsWrapper;
     use crate::persistent_configuration::{PersistentConfigError, PersistentConfigurationReal};
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
@@ -938,6 +923,7 @@ mod tests {
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+    use crate::node_configurator::RealDirsWrapper;
 
     fn make_default_cli_params() -> ArgsBuilder {
         ArgsBuilder::new().param("--ip", "1.2.3.4")
@@ -1377,7 +1363,7 @@ mod tests {
         .unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
@@ -1446,7 +1432,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -1662,7 +1648,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -1680,10 +1666,7 @@ mod tests {
         assert_eq!(config.crash_point, CrashPoint::None);
         assert_eq!(config.ui_gateway_config.ui_port, DEFAULT_UI_PORT);
         assert!(config.main_cryptde_null_opt.is_none());
-        assert_eq!(
-            config.real_user,
-            RealUser::null().populate(&RealDirsWrapper {})
-        );
+        assert_eq!(config.real_user, RealUser::null().populate(&RealDirsWrapper{}));
     }
 
     #[test]
@@ -1698,7 +1681,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -2240,7 +2223,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -2258,7 +2241,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
-            &RealDirsWrapper {},
+            &RealDirsWrapper{},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),

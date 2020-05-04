@@ -4,10 +4,7 @@ use crate::blockchain::blockchain_interface::chain_id_from_name;
 use crate::bootstrapper::RealUser;
 use crate::config_dao::{ConfigDao, ConfigDaoReal};
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal, DATABASE_FILE};
-use crate::node_configurator::RealDirsWrapper;
-use crate::node_configurator::{
-    app_head, data_directory_from_context, real_user_data_directory_opt_and_chain_name, DirsWrapper,
-};
+use crate::node_configurator::{app_head, data_directory_from_context, real_user_data_directory_opt_and_chain_name, DirsWrapper};
 use crate::privilege_drop::{PrivilegeDropper, PrivilegeDropperReal};
 use clap::Arg;
 use heck::MixedCase;
@@ -17,12 +14,13 @@ use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg, Conf
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::path::PathBuf;
+use crate::node_configurator::RealDirsWrapper;
 
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";
 
 pub fn dump_config(args: &Vec<String>, streams: &mut StdStreams) -> Result<i32, ConfiguratorError> {
-    let (real_user, data_directory, chain_id) = distill_args(&RealDirsWrapper {}, args)?;
+    let (real_user, data_directory, chain_id) = distill_args(&RealDirsWrapper{}, args)?;
     PrivilegeDropperReal::new().drop_privileges(&real_user);
     let config_dao = make_config_dao(&data_directory, chain_id);
     let configuration = config_dao
@@ -70,10 +68,7 @@ fn make_config_dao(data_directory: &PathBuf, chain_id: u8) -> ConfigDaoReal {
     ConfigDaoReal::new(conn)
 }
 
-fn distill_args(
-    dirs_wrapper: &dyn DirsWrapper,
-    args: &Vec<String>,
-) -> Result<(RealUser, PathBuf, u8), ConfiguratorError> {
+fn distill_args(dirs_wrapper: &dyn DirsWrapper, args: &Vec<String>) -> Result<(RealUser, PathBuf, u8), ConfiguratorError> {
     let app = app_head()
         .arg(
             Arg::with_name("dump-config")
@@ -92,8 +87,7 @@ fn distill_args(
     let multi_config = MultiConfig::try_new(&app, vcls)?;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
-    let directory =
-        data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
+    let directory = data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
     Ok((real_user, directory, chain_id_from_name(&chain_name)))
 }
 

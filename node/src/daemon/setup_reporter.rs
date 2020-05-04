@@ -6,9 +6,7 @@ use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
 use crate::node_configurator::node_configurator_standard::standard::{
     privileged_parse_args, unprivileged_parse_args,
 };
-use crate::node_configurator::{
-    app_head, data_directory_from_context, determine_config_file_path, DirsWrapper, RealDirsWrapper,
-};
+use crate::node_configurator::{app_head, data_directory_from_context, determine_config_file_path, DirsWrapper, RealDirsWrapper};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
 use crate::sub_lib::neighborhood::NodeDescriptor;
@@ -28,8 +26,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-// TODO: Probably can take this out once GH-290 makes it in
-const CONSOLE_DIAGNOSTICS: bool = false;
+const CONSOLE_DIAGNOSTICS: bool = true;
 
 pub type SetupCluster = HashMap<String, UiSetupResponseValue>;
 
@@ -42,7 +39,7 @@ pub trait SetupReporter {
 }
 
 pub struct SetupReporterReal {
-    dirs_wrapper: Box<dyn DirsWrapper>,
+    dirs_wrapper: Box<dyn DirsWrapper>
 }
 
 impl SetupReporter for SetupReporterReal {
@@ -95,28 +92,20 @@ impl SetupReporter for SetupReporterReal {
                     )
                 }
             };
-        let data_directory = data_directory_from_context(
-            self.dirs_wrapper.as_ref(),
-            &real_user,
-            &data_directory_opt,
-            &chain_name,
-        );
-        let configured_setup = match Self::calculate_configured_setup(
-            self.dirs_wrapper.as_ref(),
-            &all_but_configured,
-            &data_directory,
-            &chain_name,
-        ) {
-            Ok(setup) => setup,
-            Err(error) => {
-                error_so_far.extend(error);
-                HashMap::new()
-            }
-        };
+        let data_directory =
+            data_directory_from_context(self.dirs_wrapper.as_ref(), &real_user, &data_directory_opt, &chain_name);
+        let configured_setup =
+            match Self::calculate_configured_setup(self.dirs_wrapper.as_ref(), &all_but_configured, &data_directory, &chain_name) {
+                Ok(setup) => setup,
+                Err(error) => {
+                    error_so_far.extend(error);
+                    HashMap::new()
+                }
+            };
         error_so_far.param_errors.iter().for_each(|param_error| {
             let _ = incoming_setup.remove(&param_error.parameter);
         });
-        let combined_setup = Self::combine_clusters(vec![&all_but_configured, &configured_setup]);
+        let combined_setup = Self::combine_clusters(vec![&configured_setup, &all_but_configured]);
         eprintln_setup("CONFIGURED", &configured_setup);
         eprintln_setup("COMBINED", &combined_setup);
         let final_setup = value_retrievers(self.dirs_wrapper.as_ref())
@@ -153,9 +142,7 @@ impl SetupReporter for SetupReporterReal {
 
 #[allow(dead_code)]
 fn eprintln_setup(label: &str, cluster: &SetupCluster) {
-    if !CONSOLE_DIAGNOSTICS {
-        return;
-    }
+    if !CONSOLE_DIAGNOSTICS {return;}
     let message = cluster
         .iter()
         .map(|(_, v)| (v.name.to_string(), v.value.to_string(), v.status))
@@ -168,7 +155,7 @@ fn eprintln_setup(label: &str, cluster: &SetupCluster) {
 impl SetupReporterReal {
     pub fn new() -> Self {
         Self {
-            dirs_wrapper: Box::new(RealDirsWrapper {}),
+            dirs_wrapper: Box::new (RealDirsWrapper{}),
         }
     }
 
@@ -217,9 +204,9 @@ impl SetupReporterReal {
             (None, None) => crate::bootstrapper::RealUser::null().populate(dirs_wrapper),
         };
         let chain_name = match (
-            value_m!(multi_config, "chain", String),
-            combined_setup.get("chain"),
-        ) {
+                value_m!(multi_config, "chain", String),
+                combined_setup.get("chain"),
+            ) {
             (Some(chain_str), None) => chain_str,
             (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
             (Some(chain_str), Some(_)) => chain_str,
@@ -338,6 +325,7 @@ impl SetupReporterReal {
             };
             let (config_file_path, user_specified) =
                 determine_config_file_path(dirs_wrapper, &app, &command_line)?;
+eprintln! ("*** Config file path *** {:?}", config_file_path);
             let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
                 Ok(cfv) => cfv,
                 Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
@@ -360,12 +348,7 @@ impl SetupReporterReal {
             stderr: &mut ByteArrayWriter::new(),
         };
         let mut bootstrapper_config = BootstrapperConfig::new();
-        privileged_parse_args(
-            dirs_wrapper,
-            multi_config,
-            &mut bootstrapper_config,
-            &mut streams,
-        )?;
+        privileged_parse_args(dirs_wrapper, multi_config, &mut bootstrapper_config, &mut streams)?;
         let initializer = DbInitializerReal::new();
         match initializer.initialize(data_directory, chain_id, false) {
             Ok(conn) => {
@@ -516,14 +499,9 @@ impl ValueRetriever for DataDirectory {
         let chain_name = chain_name_from_id(bootstrapper_config.blockchain_bridge_config.chain_id);
         let data_directory_opt = None;
         Some((
-            data_directory_from_context(
-                self.dirs_wrapper.as_ref(),
-                &real_user,
-                &data_directory_opt,
-                chain_name,
-            )
-            .to_string_lossy()
-            .to_string(),
+            data_directory_from_context(self.dirs_wrapper.as_ref(), &real_user, &data_directory_opt, chain_name)
+                .to_string_lossy()
+                .to_string(),
             Default,
         ))
     }
@@ -534,14 +512,12 @@ impl ValueRetriever for DataDirectory {
 }
 impl std::default::Default for DataDirectory {
     fn default() -> Self {
-        Self::new(&RealDirsWrapper {})
+        Self::new (&RealDirsWrapper{})
     }
 }
 impl DataDirectory {
     pub fn new(dirs_wrapper: &dyn DirsWrapper) -> Self {
-        Self {
-            dirs_wrapper: dirs_wrapper.dup(),
-        }
+        Self {dirs_wrapper: dirs_wrapper.dup()}
     }
 }
 
@@ -721,7 +697,6 @@ impl ValueRetriever for Neighbors {
 }
 
 struct RealUser {
-    #[allow(dead_code)]
     dirs_wrapper: Box<dyn DirsWrapper>,
 }
 impl ValueRetriever for RealUser {
@@ -752,11 +727,11 @@ impl ValueRetriever for RealUser {
 }
 impl std::default::Default for RealUser {
     fn default() -> Self {
-        Self::new(&RealDirsWrapper {})
+        Self::new(&RealDirsWrapper{})
     }
 }
 impl RealUser {
-    pub fn new(dirs_wrapper: &dyn DirsWrapper) -> Self {
+    pub fn new (dirs_wrapper: &dyn DirsWrapper) -> Self {
         Self {
             dirs_wrapper: dirs_wrapper.dup(),
         }
@@ -791,7 +766,6 @@ mod tests {
     use crate::bootstrapper::RealUser;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
     use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
-    use crate::node_test_utils::MockDirsWrapper;
     use crate::persistent_configuration::{
         PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
     };
@@ -810,6 +784,7 @@ mod tests {
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+    use crate::node_test_utils::MockDirsWrapper;
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {
@@ -911,9 +886,7 @@ mod tests {
             #[cfg(not(target_os = "windows"))]
             (
                 "real-user",
-                &RealUser::default()
-                    .populate(&RealDirsWrapper {})
-                    .to_string(),
+                &RealUser::default().populate(&RealDirsWrapper{}).to_string(),
                 Default,
             ),
         ]
@@ -1112,7 +1085,7 @@ mod tests {
             "switching_config_files_changes_setup",
         );
         let data_root = home_dir.join("data_root");
-        let mainnet_dir = data_root.join("MASQ").join("mainnet");
+        let mainnet_dir = data_root.join("mainnet");
         {
             std::fs::create_dir_all(mainnet_dir.clone()).unwrap();
             let mut config_file = File::create(mainnet_dir.join("config.toml")).unwrap();
@@ -1138,7 +1111,7 @@ mod tests {
                 .write_all(b"neighborhood-mode = \"zero-hop\"\n")
                 .unwrap();
         }
-        let ropsten_dir = data_root.join("MASQ").join("ropsten");
+        let ropsten_dir = data_root.join("ropsten");
         {
             std::fs::create_dir_all(ropsten_dir.clone()).unwrap();
             let mut config_file = File::create(ropsten_dir.join("config.toml")).unwrap();
@@ -1165,65 +1138,38 @@ mod tests {
                 .unwrap();
         }
         let mut subject = SetupReporterReal::new();
-        subject.dirs_wrapper = Box::new(
-            MockDirsWrapper::new()
-                .home_dir_result(Some(home_dir.clone()))
-                .data_dir_result(Some(data_root.clone())),
-        );
-        let params = vec![UiSetupRequestValue::new("chain", "mainnet")];
+        subject.dirs_wrapper = Box::new(MockDirsWrapper::new()
+            .home_dir_result(Some(home_dir.clone()))
+            .data_dir_result(Some(data_root.clone())));
+        let params = vec![
+            UiSetupRequestValue::new("chain", "mainnet"),
+            UiSetupRequestValue::new("neighborhood-mode", "zero-hop"), // TODO: Should work without this
+        ];
         let existing_setup = subject.get_modified_setup(HashMap::new(), params).unwrap();
         let params = vec![UiSetupRequestValue::new("chain", "ropsten")];
 
         let result = subject.get_modified_setup(existing_setup, params).unwrap();
 
         let expected_result = vec![
-            (
-                "blockchain-service-url",
-                "https://www.ropsten.com",
-                Configured,
-            ),
+            ("blockchain-service-url", "https://www.ropsten.com", Configured),
             ("chain", "ropsten", Set),
             ("clandestine-port", "8877", Configured),
             ("config-file", "config.toml", Default),
-            (
-                "consuming-private-key",
-                "FFEEDDCCBBAA99887766554433221100FFEEDDCCBBAA99887766554433221100",
-                Configured,
-            ),
-            (
-                "data-directory",
-                &ropsten_dir.to_string_lossy().to_string(),
-                Default,
-            ),
+            ("consuming-private-key", "FFEEDDCCBBAA99887766554433221100FFEEDDCCBBAA99887766554433221100", Configured),
+            ("data-directory", &home_dir.to_string_lossy().to_string(), Default),
             ("db-password", "ropsten", Configured),
             ("dns-servers", "8.7.6.5", Configured),
-            (
-                "earning-wallet",
-                "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                Configured,
-            ),
+            ("earning-wallet", "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Configured),
             ("gas-price", "88", Configured),
             ("ip", "", Blank),
             ("log-level", "debug", Configured),
             ("neighborhood-mode", "zero-hop", Configured),
             ("neighbors", "", Blank),
             #[cfg(not(target_os = "windows"))]
-            (
-                "real-user",
-                &crate::bootstrapper::RealUser::null()
-                    .populate(subject.dirs_wrapper.as_ref())
-                    .to_string(),
-                Default,
-            ),
-        ]
-        .into_iter()
-        .map(|(name, value, status)| {
-            (
-                name.to_string(),
-                UiSetupResponseValue::new(name, value, status),
-            )
-        })
-        .collect_vec();
+            ("real-user", &crate::bootstrapper::RealUser::null().populate(subject.dirs_wrapper.as_ref()).to_string(), Default),
+        ].into_iter()
+            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
+            .collect_vec();
         let presentable_result = result
             .into_iter()
             .sorted_by_key(|(k, _)| k.clone())
@@ -1431,9 +1377,7 @@ mod tests {
             ),
             (
                 "real-user",
-                &crate::bootstrapper::RealUser::null()
-                    .populate(&RealDirsWrapper {})
-                    .to_string(),
+                &crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper{}).to_string(),
                 Default,
             ),
         ]
@@ -1478,7 +1422,7 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper{}, &setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1512,7 +1456,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper{}, &setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1548,7 +1492,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper{}, &setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1578,7 +1522,7 @@ mod tests {
         .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper{}, &setup).unwrap();
 
         assert_eq!(
             real_user,
@@ -1606,12 +1550,9 @@ mod tests {
             .collect::<SetupCluster>();
 
         let (real_user, data_directory_opt, chain_name) =
-            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
+            SetupReporterReal::calculate_fundamentals(&RealDirsWrapper{}, &setup).unwrap();
 
-        assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper {})
-        );
+        assert_eq!(real_user, crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper{}));
         assert_eq!(data_directory_opt, None);
         assert_eq!(chain_name, "mainnet".to_string());
     }
@@ -1695,13 +1636,9 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper {},
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper{}, &setup, &data_directory, "irrelevant")
+                .unwrap();
 
         assert_eq!(
             result.get("config-file").unwrap().value,
@@ -1740,13 +1677,9 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper {},
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper{}, &setup, &data_directory, "irrelevant")
+                .unwrap();
 
         assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
@@ -1778,13 +1711,9 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper {},
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper{}, &setup, &data_directory, "irrelevant")
+                .unwrap();
 
         assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
@@ -1809,14 +1738,10 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper,
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .err()
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper, &setup, &data_directory, "irrelevant")
+                .err()
+                .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
         assert_eq!(
@@ -1855,13 +1780,9 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper {},
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper{}, &setup, &data_directory, "irrelevant")
+                .unwrap();
 
         assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
@@ -1889,14 +1810,10 @@ mod tests {
         .map(|uisrv| (uisrv.name.clone(), uisrv))
         .collect();
 
-        let result = SetupReporterReal::calculate_configured_setup(
-            &RealDirsWrapper {},
-            &setup,
-            &data_directory,
-            "irrelevant",
-        )
-        .err()
-        .unwrap();
+        let result =
+            SetupReporterReal::calculate_configured_setup(&RealDirsWrapper{}, &setup, &data_directory, "irrelevant")
+                .err()
+                .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
         assert_eq!(
@@ -1941,8 +1858,8 @@ mod tests {
 
     #[test]
     fn data_directory_computed_default() {
-        let real_user = RealUser::null().populate(&RealDirsWrapper {});
-        let expected = data_directory_from_context(&RealDirsWrapper {}, &real_user, &None, "dev")
+        let real_user = RealUser::null().populate(&RealDirsWrapper{});
+        let expected = data_directory_from_context(&RealDirsWrapper{}, &real_user, &None, "dev")
             .to_string_lossy()
             .to_string();
         let mut config = BootstrapperConfig::new();
@@ -2113,19 +2030,14 @@ mod tests {
 
         assert_eq!(
             result,
-            Some((
-                RealUser::default()
-                    .populate(&RealDirsWrapper {})
-                    .to_string(),
-                Default
-            ))
+            Some((RealUser::default().populate(&RealDirsWrapper{}).to_string(), Default))
         );
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn real_user_computed_default() {
-        let subject = crate::daemon::setup_reporter::RealUser::default();
+        let subject = crate::daemon::setup_reporter::RealUser {};
 
         let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
