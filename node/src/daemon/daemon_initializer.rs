@@ -261,7 +261,7 @@ mod tests {
         let addr_factory = RecipientsFactoryMock::new().make_result(recipients);
         let rerunner = RerunnerMock::new();
         let mut subject = DaemonInitializer::new(
-            &RealDirsWrapper{},
+            &RealDirsWrapper {},
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),
@@ -290,7 +290,7 @@ mod tests {
         let rerun_parameters_arc = Arc::new(Mutex::new(vec![]));
         let rerunner = RerunnerMock::new().rerun_parameters(&rerun_parameters_arc);
         let mut subject = DaemonInitializer::new(
-            &RealDirsWrapper{},
+            &RealDirsWrapper {},
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),

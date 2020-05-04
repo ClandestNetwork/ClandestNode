@@ -119,7 +119,7 @@ impl DirsWrapper for MockDirsWrapper {
     }
 
     fn dup(&self) -> Box<dyn DirsWrapper> {
-        Box::new (Self {
+        Box::new(Self {
             data_dir_result: self.data_dir_result.clone(),
             home_dir_result: self.home_dir_result.clone(),
         })

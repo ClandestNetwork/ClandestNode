@@ -18,6 +18,7 @@ use crate::sub_lib::wallet::Wallet;
 use crate::sub_lib::wallet::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use bip39::Language;
 use clap::{crate_description, crate_version, value_t, App, AppSettings, Arg};
+use dirs::{data_local_dir, home_dir};
 use masq_lib::command::StdStreams;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;
 use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig, VclArg};
@@ -152,7 +153,8 @@ pub fn determine_config_file_path(
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
-    let directory = data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
+    let directory =
+        data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
     Ok((directory.join(config_file_path), user_specified))
 }
 
@@ -269,7 +271,12 @@ pub fn prepare_initialization_mode<'a>(
 
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
-    let directory = data_directory_from_context(&RealDirsWrapper{}, &real_user, &data_directory_opt, &chain_name);
+    let directory = data_directory_from_context(
+        &RealDirsWrapper {},
+        &real_user,
+        &data_directory_opt,
+        &chain_name,
+    );
     let persistent_config_box = initialize_database(&directory, chain_id_from_name(&chain_name));
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
         exit(1, "Cannot re-initialize Node: already initialized")
@@ -545,14 +552,14 @@ pub struct RealDirsWrapper;
 
 impl DirsWrapper for RealDirsWrapper {
     fn data_dir(&self) -> Option<PathBuf> {
-        panic! ("Shouldn't call this");
-        // data_local_dir()
+        data_local_dir()
     }
     fn home_dir(&self) -> Option<PathBuf> {
-        panic! ("Shouldn't call this");
-        // home_dir()
+        home_dir()
     }
-    fn dup(&self) -> Box<dyn DirsWrapper> {Box::new (RealDirsWrapper{})}
+    fn dup(&self) -> Box<dyn DirsWrapper> {
+        Box::new(RealDirsWrapper {})
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -928,7 +935,7 @@ mod tests {
             .param("--data-directory", data_dir.to_str().unwrap())
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
 
-        let result = prepare_initialization_mode(&RealDirsWrapper{}, &app, &args.into())
+        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, &args.into())
             .err()
             .unwrap();
 
@@ -954,8 +961,13 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         let (real_user, data_directory_opt, chain_name) =
-            real_user_data_directory_opt_and_chain_name(&RealDirsWrapper{}, &multi_config);
-        let directory = data_directory_from_context(&RealDirsWrapper{}, &real_user, &data_directory_opt, &chain_name);
+            real_user_data_directory_opt_and_chain_name(&RealDirsWrapper {}, &multi_config);
+        let directory = data_directory_from_context(
+            &RealDirsWrapper {},
+            &real_user,
+            &data_directory_opt,
+            &chain_name,
+        );
 
         let expected_root = RealDirsWrapper {}.data_dir().unwrap();
         let expected_directory = expected_root.join("MASQ").join(DEFAULT_CHAIN_NAME);
@@ -971,8 +983,12 @@ mod tests {
             .param("--data-directory", "data-dir")
             .param("--config-file", "booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&RealDirsWrapper{}, &determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &RealDirsWrapper {},
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             &format!("{}", config_file_path.parent().unwrap().display()),
@@ -989,8 +1005,12 @@ mod tests {
         std::env::set_var("SUB_DATA_DIRECTORY", "data_dir");
         std::env::set_var("SUB_CONFIG_FILE", "booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&RealDirsWrapper{}, &determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &RealDirsWrapper {},
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             "data_dir",
@@ -1008,8 +1028,12 @@ mod tests {
             .param("--data-directory", "data-dir")
             .param("--config-file", "/tmp/booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&RealDirsWrapper{}, &determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &RealDirsWrapper {},
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             "/tmp/booga.toml",
@@ -1026,8 +1050,12 @@ mod tests {
             .param("--data-directory", "data-dir")
             .param("--config-file", r"\tmp\booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&Box::new(RealDirsWrapper{}), &determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &Box::new(RealDirsWrapper {}),
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             r"\tmp\booga.toml",
