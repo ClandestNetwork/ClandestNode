@@ -102,6 +102,7 @@ impl RerunnerReal {
 
 impl DaemonInitializer {
     pub fn new(
+        dirs_wrapper: &dyn DirsWrapper,
         config: InitializationConfig,
         channel_factory: Box<dyn ChannelFactory>,
         recipients_factory: Box<dyn RecipientsFactory>,
@@ -112,7 +113,7 @@ impl DaemonInitializer {
                 .data_dir()
                 .expect("No data directory")
                 .join("MASQ"),
-            &RealUser::null().populate(),
+            &RealUser::null().populate(dirs_wrapper),
             LevelFilter::Trace,
             Some("daemon"),
         );
@@ -260,6 +261,7 @@ mod tests {
         let addr_factory = RecipientsFactoryMock::new().make_result(recipients);
         let rerunner = RerunnerMock::new();
         let mut subject = DaemonInitializer::new(
+            &RealDirsWrapper{},
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),
@@ -288,6 +290,7 @@ mod tests {
         let rerun_parameters_arc = Arc::new(Mutex::new(vec![]));
         let rerunner = RerunnerMock::new().rerun_parameters(&rerun_parameters_arc);
         let mut subject = DaemonInitializer::new(
+            &RealDirsWrapper{},
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),
