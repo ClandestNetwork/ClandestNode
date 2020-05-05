@@ -721,6 +721,7 @@ impl ValueRetriever for Neighbors {
 }
 
 struct RealUser {
+    #[allow(dead_code)]
     dirs_wrapper: Box<dyn DirsWrapper>,
 }
 impl ValueRetriever for RealUser {
