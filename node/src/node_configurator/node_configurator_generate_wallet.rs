@@ -6,8 +6,8 @@ use crate::node_configurator::{
     app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg,
     flushed_write, language_arg, mnemonic_passphrase_arg, mnemonic_seed_exists,
     prepare_initialization_mode, request_password_with_confirmation, request_password_with_retry,
-    update_db_password, Either, NodeConfigurator, WalletCreationConfig, WalletCreationConfigMaker,
-    DB_PASSWORD_HELP, EARNING_WALLET_HELP,
+    update_db_password, DirsWrapper, Either, NodeConfigurator, RealDirsWrapper,
+    WalletCreationConfig, WalletCreationConfigMaker, DB_PASSWORD_HELP, EARNING_WALLET_HELP,
 };
 use crate::persistent_configuration::PersistentConfiguration;
 use crate::sub_lib::cryptde::PlainData;
@@ -24,6 +24,7 @@ use std::str::FromStr;
 use unindent::unindent;
 
 pub struct NodeConfiguratorGenerateWallet {
+    dirs_wrapper: Box<dyn DirsWrapper>,
     app: App<'static, 'static>,
     mnemonic_factory: Box<dyn MnemonicFactory>,
 }
@@ -34,7 +35,8 @@ impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorGenerateWallet {
         args: &Vec<String>,
         streams: &mut StdStreams<'_>,
     ) -> Result<WalletCreationConfig, ConfiguratorError> {
-        let (multi_config, persistent_config_box) = prepare_initialization_mode(&self.app, args)?;
+        let (multi_config, persistent_config_box) =
+            prepare_initialization_mode(self.dirs_wrapper.as_ref(), &self.app, args)?;
         let persistent_config = persistent_config_box.as_ref();
 
         let config = self.parse_args(&multi_config, streams, persistent_config);
@@ -130,6 +132,7 @@ impl Default for NodeConfiguratorGenerateWallet {
 impl NodeConfiguratorGenerateWallet {
     pub fn new() -> Self {
         Self {
+            dirs_wrapper: Box::new(RealDirsWrapper {}),
             app: app_head()
                 .after_help(HELP_TEXT)
                 .arg(

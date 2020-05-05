@@ -6,6 +6,7 @@ use crate::bootstrapper::{BootstrapperConfig, RealUser};
 use crate::entry_dns::dns_socket_server::DnsSocketServer;
 use crate::node_configurator::node_configurator_standard::NodeConfiguratorStandardPrivileged;
 use crate::node_configurator::NodeConfigurator;
+use crate::node_configurator::RealDirsWrapper;
 use crate::sub_lib;
 use crate::sub_lib::socket_server::SocketServer;
 use backtrace::Backtrace;
@@ -38,10 +39,10 @@ impl Command for ServerInitializer {
         let exit_code =
             if args.contains(&"--help".to_string()) || args.contains(&"--version".to_string()) {
                 self.privilege_dropper
-                    .drop_privileges(&RealUser::null().populate());
+                    .drop_privileges(&RealUser::null().populate(&RealDirsWrapper {}));
                 result = Self::combine_results(
                     result,
-                    NodeConfiguratorStandardPrivileged {}.configure(&args.to_vec(), streams),
+                    NodeConfiguratorStandardPrivileged::new().configure(&args.to_vec(), streams),
                 );
                 0
             } else {
@@ -59,7 +60,7 @@ impl Command for ServerInitializer {
                 );
 
                 let config = self.bootstrapper.get_configuration();
-                let real_user = config.real_user.populate();
+                let real_user = config.real_user.populate(&RealDirsWrapper {});
                 self.privilege_dropper
                     .chown(&config.data_directory, &real_user);
                 self.privilege_dropper.drop_privileges(&real_user);

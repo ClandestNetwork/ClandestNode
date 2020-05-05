@@ -1,7 +1,8 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::bootstrapper::BootstrapperConfig;
-use crate::node_configurator::{app_head, initialize_database, NodeConfigurator};
+use crate::node_configurator::RealDirsWrapper;
+use crate::node_configurator::{app_head, initialize_database, DirsWrapper, NodeConfigurator};
 use clap::App;
 use indoc::indoc;
 use masq_lib::command::StdStreams;
@@ -9,8 +10,9 @@ use masq_lib::crash_point::CrashPoint;
 use masq_lib::shared_schema::{shared_app, ui_port_arg};
 use masq_lib::shared_schema::{ConfiguratorError, UI_PORT_HELP};
 
-#[derive(Default)]
-pub struct NodeConfiguratorStandardPrivileged {}
+pub struct NodeConfiguratorStandardPrivileged {
+    dirs_wrapper: Box<dyn DirsWrapper>,
+}
 
 impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged {
     fn configure(
@@ -19,21 +21,36 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged
         streams: &mut StdStreams,
     ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
-        let multi_config = standard::make_service_mode_multi_config(&app, args)?;
+        let multi_config =
+            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
         let mut bootstrapper_config = BootstrapperConfig::new();
         standard::establish_port_configurations(&mut bootstrapper_config);
-        standard::privileged_parse_args(&multi_config, &mut bootstrapper_config, streams)?;
+        standard::privileged_parse_args(
+            self.dirs_wrapper.as_ref(),
+            &multi_config,
+            &mut bootstrapper_config,
+            streams,
+        )?;
         Ok(bootstrapper_config)
+    }
+}
+
+impl Default for NodeConfiguratorStandardPrivileged {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl NodeConfiguratorStandardPrivileged {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            dirs_wrapper: Box::new(RealDirsWrapper {}),
+        }
     }
 }
 
 pub struct NodeConfiguratorStandardUnprivileged {
+    dirs_wrapper: Box<dyn DirsWrapper>,
     privileged_config: BootstrapperConfig,
 }
 
@@ -49,7 +66,8 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
             self.privileged_config.blockchain_bridge_config.chain_id,
         );
         let mut unprivileged_config = BootstrapperConfig::new();
-        let multi_config = standard::make_service_mode_multi_config(&app, args)?;
+        let multi_config =
+            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args)?;
         standard::unprivileged_parse_args(
             &multi_config,
             &mut unprivileged_config,
@@ -64,6 +82,7 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
 impl NodeConfiguratorStandardUnprivileged {
     pub fn new(privileged_config: &BootstrapperConfig) -> Self {
         Self {
+            dirs_wrapper: Box::new(RealDirsWrapper {}),
             privileged_config: privileged_config.clone(),
         }
     }
@@ -117,7 +136,7 @@ pub mod standard {
     use crate::http_request_start_finder::HttpRequestDiscriminatorFactory;
     use crate::node_configurator::{
         data_directory_from_context, determine_config_file_path, mnemonic_seed_exists,
-        real_user_data_directory_opt_and_chain_name, request_existing_db_password,
+        real_user_data_directory_opt_and_chain_name, request_existing_db_password, DirsWrapper,
     };
     use crate::persistent_configuration::{PersistentConfigError, PersistentConfiguration};
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
@@ -140,10 +159,12 @@ pub mod standard {
     use std::str::FromStr;
 
     pub fn make_service_mode_multi_config<'a>(
+        dirs_wrapper: &dyn DirsWrapper,
         app: &'a App,
         args: &Vec<String>,
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
-        let (config_file_path, user_specified) = determine_config_file_path(app, args)?;
+        let (config_file_path, user_specified) =
+            determine_config_file_path(dirs_wrapper, app, args)?;
         let config_file_vcl = match ConfigFileVcl::new(&config_file_path, user_specified) {
             Ok(cfv) => Box::new(cfv),
             Err(e) => return Err(ConfiguratorError::required("config-file", &e.to_string())),
@@ -179,6 +200,7 @@ pub mod standard {
     }
 
     pub fn privileged_parse_args(
+        dirs_wrapper: &dyn DirsWrapper,
         multi_config: &MultiConfig,
         privileged_config: &mut BootstrapperConfig,
         _streams: &mut StdStreams<'_>,
@@ -188,8 +210,9 @@ pub mod standard {
             .blockchain_service_url = value_m!(multi_config, "blockchain-service-url", String);
 
         let (real_user, data_directory_opt, chain_name) =
-            real_user_data_directory_opt_and_chain_name(&multi_config);
-        let directory = data_directory_from_context(&real_user, &data_directory_opt, &chain_name);
+            real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
+        let directory =
+            data_directory_from_context(dirs_wrapper, &real_user, &data_directory_opt, &chain_name);
         privileged_config.real_user = real_user;
         privileged_config.data_directory = directory;
         privileged_config.blockchain_bridge_config.chain_id = chain_id_from_name(&chain_name);
@@ -884,6 +907,7 @@ mod tests {
     use crate::bootstrapper::RealUser;
     use crate::config_dao::{ConfigDao, ConfigDaoReal};
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
+    use crate::node_configurator::RealDirsWrapper;
     use crate::persistent_configuration::{PersistentConfigError, PersistentConfigurationReal};
     use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
     use crate::sub_lib::cryptde::{CryptDE, PlainData, PublicKey};
@@ -1294,7 +1318,7 @@ mod tests {
                 .write_all(b"dns-servers = \"111.111.111.111,222.222.222.222\"\n")
                 .unwrap();
         }
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
 
         let configuration = subject
             .configure(
@@ -1353,6 +1377,7 @@ mod tests {
         .unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut bootstrapper_config,
             &mut FakeStreamHolder::new().streams(),
@@ -1421,6 +1446,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -1636,6 +1662,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -1653,7 +1680,10 @@ mod tests {
         assert_eq!(config.crash_point, CrashPoint::None);
         assert_eq!(config.ui_gateway_config.ui_port, DEFAULT_UI_PORT);
         assert!(config.main_cryptde_null_opt.is_none());
-        assert_eq!(config.real_user, RealUser::null().populate());
+        assert_eq!(
+            config.real_user,
+            RealUser::null().populate(&RealDirsWrapper {})
+        );
     }
 
     #[test]
@@ -1668,6 +1698,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -2209,6 +2240,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -2226,6 +2258,7 @@ mod tests {
         let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
 
         standard::privileged_parse_args(
+            &RealDirsWrapper {},
             &multi_config,
             &mut config,
             &mut FakeStreamHolder::new().streams(),
@@ -2238,7 +2271,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "could not be read: ")]
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
 
         subject
@@ -2265,7 +2298,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_multinode() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", "dev");
@@ -2282,7 +2315,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_ropsten() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", "ropsten");
@@ -2299,7 +2332,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
 
         let config = subject
@@ -2314,7 +2347,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_ropsten_network_chain_selection() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
@@ -2368,7 +2401,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_rejects_invalid_gas_price() {
-        let subject = NodeConfiguratorStandardPrivileged {};
+        let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
 
         let result = subject

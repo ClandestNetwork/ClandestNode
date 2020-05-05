@@ -6,7 +6,7 @@ use crate::database::config_dumper;
 use crate::node_configurator::node_configurator_generate_wallet::NodeConfiguratorGenerateWallet;
 use crate::node_configurator::node_configurator_initialization::NodeConfiguratorInitialization;
 use crate::node_configurator::node_configurator_recover_wallet::NodeConfiguratorRecoverWallet;
-use crate::node_configurator::{NodeConfigurator, WalletCreationConfig};
+use crate::node_configurator::{NodeConfigurator, RealDirsWrapper, WalletCreationConfig};
 use crate::privilege_drop::{PrivilegeDropper, PrivilegeDropperReal};
 use crate::server_initializer::ServerInitializer;
 use actix::System;
@@ -211,6 +211,7 @@ impl Runner for RunnerReal {
         let configurator = NodeConfiguratorInitialization {};
         let config = configurator.configure(args, streams)?;
         let mut initializer = DaemonInitializer::new(
+            &RealDirsWrapper {},
             config,
             Box::new(ChannelFactoryReal::new()),
             Box::new(RecipientsFactoryReal::new()),

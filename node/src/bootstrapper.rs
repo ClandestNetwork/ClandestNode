@@ -15,7 +15,7 @@ use crate::listener_handler::ListenerHandlerFactoryReal;
 use crate::node_configurator::node_configurator_standard::{
     NodeConfiguratorStandardPrivileged, NodeConfiguratorStandardUnprivileged,
 };
-use crate::node_configurator::{DirsWrapper, NodeConfigurator, RealDirsWrapper};
+use crate::node_configurator::{DirsWrapper, NodeConfigurator};
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::privilege_drop::{IdWrapper, IdWrapperReal};
 use crate::server_initializer::LoggerInitializerWrapper;
@@ -109,7 +109,6 @@ impl EnvironmentWrapper for EnvironmentWrapperReal {
 pub struct RealUser {
     id_wrapper: Box<dyn IdWrapper>,
     environment_wrapper: Box<dyn EnvironmentWrapper>,
-    dirs_wrapper: Box<dyn DirsWrapper>,
     pub uid: Option<i32>,
     pub gid: Option<i32>,
     pub home_dir: Option<PathBuf>,
@@ -177,7 +176,6 @@ impl RealUser {
         RealUser {
             id_wrapper: Box::new(IdWrapperReal),
             environment_wrapper: Box::new(EnvironmentWrapperReal),
-            dirs_wrapper: Box::new(RealDirsWrapper),
             uid: uid_opt,
             gid: gid_opt,
             home_dir: home_dir_opt,
@@ -188,7 +186,7 @@ impl RealUser {
         RealUser::new(None, None, None)
     }
 
-    pub fn populate(&self) -> RealUser {
+    pub fn populate(&self, dirs_wrapper: &dyn DirsWrapper) -> RealUser {
         let uid = Self::first_present(vec![
             self.uid,
             self.id_from_env("SUDO_UID"),
@@ -201,8 +199,8 @@ impl RealUser {
         ]);
         let home_dir = Self::first_present(vec![
             self.home_dir.clone(),
-            self.sudo_home_from_sudo_user_and_home(),
-            self.dirs_wrapper.home_dir(),
+            self.sudo_home_from_sudo_user_and_home(dirs_wrapper),
+            dirs_wrapper.home_dir(),
         ]);
         RealUser::new(Some(uid), Some(gid), Some(home_dir))
     }
@@ -225,8 +223,8 @@ impl RealUser {
         )
     }
 
-    fn sudo_home_from_sudo_user_and_home(&self) -> Option<PathBuf> {
-        match (self.environment_wrapper.var ("SUDO_USER"), self.dirs_wrapper.home_dir()) {
+    fn sudo_home_from_sudo_user_and_home(&self, dirs_wrapper: &dyn DirsWrapper) -> Option<PathBuf> {
+        match (self.environment_wrapper.var ("SUDO_USER"), dirs_wrapper.home_dir()) {
             (Some (sudo_user), Some (home_dir)) =>
                 match home_dir.parent().map(|px| px.join(PathBuf::from(sudo_user))) {
                     Some (hd) => Some (hd),
@@ -1678,9 +1676,8 @@ mod tests {
         let mut from_configurator = RealUser::new(Some(1), Some(2), Some("three".into()));
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
-        from_configurator.dirs_wrapper = Box::new(MockDirsWrapper::new());
 
-        let result = from_configurator.populate();
+        let result = from_configurator.populate(&MockDirsWrapper::new());
 
         assert_eq!(result, from_configurator);
     }
@@ -1693,10 +1690,9 @@ mod tests {
         let mut from_configurator = RealUser::null();
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
-        from_configurator.dirs_wrapper =
-            Box::new(MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
-        let result = from_configurator.populate();
+        let result = from_configurator
+            .populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
         assert_eq!(
             result,
@@ -1719,10 +1715,8 @@ mod tests {
         let mut from_configurator = RealUser::null();
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
-        from_configurator.dirs_wrapper =
-            Box::new(MockDirsWrapper::new().home_dir_result(Some("/".into())));
 
-        from_configurator.populate();
+        from_configurator.populate(&MockDirsWrapper::new().home_dir_result(Some("/".into())));
     }
 
     #[test]
@@ -1732,10 +1726,9 @@ mod tests {
         let mut from_configurator = RealUser::null();
         from_configurator.id_wrapper = Box::new(id_wrapper);
         from_configurator.environment_wrapper = Box::new(environment_wrapper);
-        from_configurator.dirs_wrapper =
-            Box::new(MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
-        let result = from_configurator.populate();
+        let result = from_configurator
+            .populate(&MockDirsWrapper::new().home_dir_result(Some("/wibble/whop/ooga".into())));
 
         assert_eq!(
             result,
