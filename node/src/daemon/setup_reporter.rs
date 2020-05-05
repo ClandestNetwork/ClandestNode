@@ -2125,7 +2125,7 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn real_user_computed_default() {
-        let subject = crate::daemon::setup_reporter::RealUser {};
+        let subject = crate::daemon::setup_reporter::RealUser::default();
 
         let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
