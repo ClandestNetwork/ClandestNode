@@ -1094,8 +1094,12 @@ mod tests {
             .param("--data-directory", "data-dir")
             .param("--config-file", r"\\TMP\booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &RealDirsWrapper {},
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             r"\\TMP\booga.toml",
@@ -1113,8 +1117,12 @@ mod tests {
             .param("--data-directory", "data-dir")
             .param("--config-file", r"c:tmp\booga.toml");
 
-        let (config_file_path, user_specified) =
-            determine_config_file_path(&determine_config_file_path_app(), &args.into()).unwrap();
+        let (config_file_path, user_specified) = determine_config_file_path(
+            &RealDirsWrapper {},
+            &determine_config_file_path_app(),
+            &args.into(),
+        )
+        .unwrap();
 
         assert_eq!(
             r"c:tmp\booga.toml",
