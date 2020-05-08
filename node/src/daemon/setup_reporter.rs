@@ -52,11 +52,13 @@ impl SetupReporter for SetupReporterReal {
         incoming_setup: Vec<UiSetupRequestValue>,
     ) -> Result<SetupCluster, (SetupCluster, ConfiguratorError)> {
         let default_setup = Self::get_default_params();
+        let mut blanked_out_former_values = HashMap::new();
         incoming_setup
             .iter()
             .filter(|v| v.value.is_none())
             .for_each(|v| {
-                existing_setup.remove(&v.name);
+                let former_value = existing_setup.remove(&v.name).expect ("Value disappeared");
+                blanked_out_former_values.insert (v.name.clone(), former_value);
             });
         let mut incoming_setup = incoming_setup
             .into_iter()
@@ -72,6 +74,7 @@ impl SetupReporter for SetupReporterReal {
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
         eprintln_setup("DEFAULTS", &default_setup);
         eprintln_setup("EXISTING", &existing_setup);
+        eprintln_setup("BLANKED-OUT FORMER VALUES", &blanked_out_former_values);
         eprintln_setup("INCOMING", &incoming_setup);
         eprintln_setup("ALL BUT CONFIGURED", &all_but_configured);
         match all_but_configured.get("data-directory") {
@@ -147,7 +150,7 @@ impl SetupReporter for SetupReporterReal {
         if error_so_far.param_errors.is_empty() {
             Ok(final_setup)
         } else {
-            Err((final_setup, error_so_far))
+            Err((Self::combine_clusters(vec![&final_setup, &blanked_out_former_values]), error_so_far))
         }
     }
 }
@@ -1395,6 +1398,32 @@ mod tests {
 
         let actual_data_directory = PathBuf::from(&result.get("data-directory").unwrap().value);
         assert_eq!(actual_data_directory, expected_data_directory);
+    }
+
+    #[test]
+    fn get_modified_blanking_something_that_shouldnt_be_blanked_fails_properly() {
+        let _guard = EnvironmentGuard::new();
+        let existing_setup = vec![
+            ("neighborhood-mode", "standard", Set),
+            ("ip", "1.2.3.4", Set),
+        ]
+        .into_iter()
+        .map(|(name, value, status)| {
+            (
+                name.to_string(),
+                UiSetupResponseValue::new(name, value, status),
+            )
+        })
+        .collect::<SetupCluster>();
+        let incoming_setup = vec![UiSetupRequestValue::clear("ip")];
+        let subject = SetupReporterReal::new();
+
+        let result = subject
+            .get_modified_setup(existing_setup, incoming_setup)
+            .err()
+            .unwrap();
+
+        assert_eq! (result.0.get("ip").unwrap().clone(), UiSetupResponseValue::new("ip", "1.2.3.4", Set));
     }
 
     #[test]
