@@ -83,18 +83,19 @@ impl SetupReporter for SetupReporterReal {
             }
         }
         let mut error_so_far = ConfiguratorError::new(vec![]);
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             match Self::calculate_fundamentals(self.dirs_wrapper.as_ref(), &all_but_configured) {
                 Ok(triple) => triple,
                 Err(error) => {
                     error_so_far.extend(error);
                     (
-                        crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref()),
+                        None,
                         None,
                         DEFAULT_CHAIN_NAME.to_string(),
                     )
                 }
             };
+        let real_user = real_user_opt.unwrap_or_else (|| crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref()));
         let data_directory = data_directory_from_context(
             self.dirs_wrapper.as_ref(),
             &real_user,
@@ -110,7 +111,7 @@ impl SetupReporter for SetupReporterReal {
             Ok(setup) => setup,
             Err(error) => {
                 error_so_far.extend(error);
-                HashMap::new()
+                all_but_configured.clone()
             }
         };
         error_so_far.param_errors.iter().for_each(|param_error| {
@@ -197,16 +198,19 @@ impl SetupReporterReal {
             .collect()
     }
 
-    fn real_user_from_str(s: &str) -> crate::bootstrapper::RealUser {
-        crate::bootstrapper::RealUser::from_str(s).expect("real-user validator is buggy")
+    fn real_user_from_str(s: &str) -> Option<crate::bootstrapper::RealUser> {
+        match crate::bootstrapper::RealUser::from_str(s) {
+            Ok (ru) => Some (ru),
+            Err (_) => None,
+        }
     }
 
     fn calculate_fundamentals(
         dirs_wrapper: &dyn DirsWrapper,
         combined_setup: &SetupCluster,
-    ) -> Result<(crate::bootstrapper::RealUser, Option<PathBuf>, String), ConfiguratorError> {
+    ) -> Result<(Option<crate::bootstrapper::RealUser>, Option<PathBuf>, String), ConfiguratorError> {
         let multi_config = Self::make_multi_config(dirs_wrapper, None, true, false)?;
-        let real_user = match (
+        let real_user_opt = match (
             value_m!(multi_config, "real-user", String),
             combined_setup.get("real-user"),
         ) {
@@ -214,7 +218,7 @@ impl SetupReporterReal {
             (Some(_), Some(uisrv)) if uisrv.status == Set => Self::real_user_from_str(&uisrv.value),
             (Some(real_user_str), Some(_)) => Self::real_user_from_str(&real_user_str),
             (None, Some(uisrv)) => Self::real_user_from_str(&uisrv.value),
-            (None, None) => crate::bootstrapper::RealUser::null().populate(dirs_wrapper),
+            (None, None) => Some(crate::bootstrapper::RealUser::null().populate(dirs_wrapper)),
         };
         let chain_name = match (
             value_m!(multi_config, "chain", String),
@@ -236,7 +240,7 @@ impl SetupReporterReal {
             (None, Some(uisrv)) => Some(PathBuf::from(&uisrv.value)),
             (None, None) => None,
         };
-        Ok((real_user, data_directory_opt, chain_name))
+        Ok((real_user_opt, data_directory_opt, chain_name))
     }
 
     fn calculate_configured_setup(
@@ -1107,6 +1111,7 @@ mod tests {
 
     #[test]
     fn switching_config_files_changes_setup() {
+        let _ = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "setup_reporter",
             "switching_config_files_changes_setup",
@@ -1224,74 +1229,6 @@ mod tests {
             )
         })
         .collect_vec();
-        let presentable_result = result
-            .into_iter()
-            .sorted_by_key(|(k, _)| k.clone())
-            .collect_vec();
-        assert_eq!(presentable_result, expected_result);
-    }
-
-    // TODO: Remove this test when the one above is finished and replaces it
-    #[test]
-    fn get_modified_setup_database_nonexistent_nothing_set_everything_in_config_file() {
-        let home_dir = ensure_node_home_directory_exists(
-            "setup_reporter",
-            "get_modified_setup_database_nonexistent_nothing_set_everything_in_config_file",
-        );
-        {
-            let mut config_file = File::create(home_dir.join("config.toml")).unwrap();
-            config_file
-                .write_all(b"blockchain-service-url = \"https://example.com\"\n")
-                .unwrap();
-            config_file
-                .write_all(b"clandestine-port = \"1234\"\n")
-                .unwrap();
-            config_file.write_all(b"consuming-private-key = \"0011223344556677001122334455667700112233445566770011223344556677\"\n").unwrap();
-            config_file
-                .write_all(b"db-password = \"password\"\n")
-                .unwrap();
-            config_file
-                .write_all(b"dns-servers = \"8.8.8.8\"\n")
-                .unwrap();
-            config_file
-                .write_all(b"earning-wallet = \"0x0123456789012345678901234567890123456789\"\n")
-                .unwrap();
-            config_file.write_all(b"gas-price = \"50\"\n").unwrap();
-            config_file.write_all(b"ip = \"4.3.2.1\"\n").unwrap();
-            config_file.write_all(b"log-level = \"error\"\n").unwrap();
-            config_file
-                .write_all(b"neighborhood-mode = \"originate-only\"\n")
-                .unwrap();
-            config_file.write_all(b"neighbors = \"MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678\"\n").unwrap();
-        }
-        let params = vec![UiSetupRequestValue::new(
-            "data-directory",
-            &home_dir.to_string_lossy().to_string(),
-        )];
-        let subject = SetupReporterReal::new();
-
-        let result = subject.get_modified_setup(HashMap::new(), params).unwrap();
-
-        let expected_result = vec![
-            ("blockchain-service-url", "https://example.com", Configured),
-            ("chain", "mainnet", Default),
-            ("clandestine-port", "1234", Configured),
-            ("config-file", "config.toml", Default),
-            ("consuming-private-key", "0011223344556677001122334455667700112233445566770011223344556677", Configured),
-            ("data-directory", &home_dir.to_string_lossy().to_string(), Set),
-            ("db-password", "password", Configured),
-            ("dns-servers", "8.8.8.8", Configured),
-            ("earning-wallet", "0x0123456789012345678901234567890123456789", Configured),
-            ("gas-price", "50", Configured),
-            ("ip", "4.3.2.1", Configured),
-            ("log-level", "error", Configured),
-            ("neighborhood-mode", "originate-only", Configured),
-            ("neighbors", "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@1.2.3.4:1234,MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI@5.6.7.8:5678", Configured),
-            #[cfg(not(target_os = "windows"))]
-            ("real-user", &crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper{}).to_string(), Default),
-        ].into_iter()
-            .map (|(name, value, status)| (name.to_string(), UiSetupResponseValue::new(name, value, status)))
-            .collect_vec();
         let presentable_result = result
             .into_iter()
             .sorted_by_key(|(k, _)| k.clone())
@@ -1477,16 +1414,16 @@ mod tests {
             })
             .collect::<SetupCluster>();
 
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
 
         assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::new(
+            real_user_opt,
+            Some(crate::bootstrapper::RealUser::new(
                 Some(9999),
                 Some(9999),
                 Some(PathBuf::from("booga"))
-            )
+            ))
         );
         assert_eq!(data_directory_opt, Some(PathBuf::from("env_dir")));
         assert_eq!(chain_name, "ropsten".to_string());
@@ -1511,16 +1448,16 @@ mod tests {
         .map(|(k, v, s)| (k.to_string(), UiSetupResponseValue::new(k, v, s)))
         .collect::<SetupCluster>();
 
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
 
         assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::new(
+            real_user_opt,
+            Some(crate::bootstrapper::RealUser::new(
                 Some(9999),
                 Some(9999),
                 Some(PathBuf::from("booga"))
-            )
+            ))
         );
         assert_eq!(data_directory_opt, Some(PathBuf::from("env_dir")));
         assert_eq!(chain_name, "ropsten".to_string());
@@ -1547,16 +1484,16 @@ mod tests {
         })
         .collect::<SetupCluster>();
 
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
 
         assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::new(
+            real_user_opt,
+            Some(crate::bootstrapper::RealUser::new(
                 Some(1111),
                 Some(1111),
                 Some(PathBuf::from("agoob"))
-            )
+            ))
         );
         assert_eq!(data_directory_opt, Some(PathBuf::from("setup_dir")));
         assert_eq!(chain_name, "dev".to_string());
@@ -1577,16 +1514,16 @@ mod tests {
         .map(|(k, v, s)| (k.to_string(), UiSetupResponseValue::new(k, v, s)))
         .collect::<SetupCluster>();
 
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
 
         assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::new(
+            real_user_opt,
+            Some(crate::bootstrapper::RealUser::new(
                 Some(1111),
                 Some(1111),
                 Some(PathBuf::from("agoob"))
-            )
+            ))
         );
         assert_eq!(data_directory_opt, Some(PathBuf::from("setup_dir")));
         assert_eq!(chain_name, "dev".to_string());
@@ -1605,12 +1542,12 @@ mod tests {
             })
             .collect::<SetupCluster>();
 
-        let (real_user, data_directory_opt, chain_name) =
+        let (real_user_opt, data_directory_opt, chain_name) =
             SetupReporterReal::calculate_fundamentals(&RealDirsWrapper {}, &setup).unwrap();
 
         assert_eq!(
-            real_user,
-            crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper {})
+            real_user_opt,
+            Some(crate::bootstrapper::RealUser::null().populate(&RealDirsWrapper {}))
         );
         assert_eq!(data_directory_opt, None);
         assert_eq!(chain_name, "mainnet".to_string());

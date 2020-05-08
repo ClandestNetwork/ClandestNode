@@ -170,7 +170,9 @@ impl Daemon {
                         errors: vec![],
                     }
                 }
-                Err((lame_cluster, errors)) => UiSetupResponse {
+                Err((lame_cluster, errors)) => {
+                    self.params = lame_cluster.clone();
+                    UiSetupResponse {
                     running: false,
                     values: lame_cluster
                         .iter()
@@ -181,6 +183,7 @@ impl Daemon {
                         .into_iter()
                         .map(|error| (error.parameter, error.reason))
                         .collect(),
+                    }
                 },
             }
         };
