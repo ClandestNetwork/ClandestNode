@@ -181,7 +181,7 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect"); // magic value that causes disconnection
         let stop_handle = server.start();
-        let mut connection = NodeConnection::new(0, port).unwrap();
+        let mut connection = NodeConnection::new(port, port).unwrap();
         let subject = connection.start_conversation();
         stop_handle.stop();
 

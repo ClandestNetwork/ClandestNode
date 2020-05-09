@@ -15,6 +15,7 @@ use websocket::{ClientBuilder, OwnedMessage};
 
 pub struct ClientHandle {
     daemon_ui_port: u16,
+    active_ui_port: u16,
     client: Client<TcpStream>,
 }
 
@@ -26,6 +27,7 @@ impl ClientHandle {
         };
         Ok(ClientHandle {
             daemon_ui_port,
+            active_ui_port,
             client,
         })
     }
@@ -41,6 +43,10 @@ impl ClientHandle {
                 .send_message(&OwnedMessage::Text(outgoing_msg_json))
         };
         if let Err(e) = result {
+eprintln! ("Send error: {:?}; daemon = {} and active = {}", e, self.daemon_ui_port, self.active_ui_port);
+            if self.daemon_ui_port == self.active_ui_port {
+                return Err (ClientError::PacketType(e.to_string()))
+            }
             match self.fall_back() {
                 Ok(_) => Err(ConnectionDropped(format!("{:?}", e))),
                 Err(e) => Err(e),
@@ -56,6 +62,10 @@ impl ClientHandle {
             Ok(OwnedMessage::Text(json)) => json,
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
             Err(e) => {
+eprintln! ("Receive error: {:?}; daemon = {} and active = {}", e, self.daemon_ui_port, self.active_ui_port);
+                if self.daemon_ui_port == self.active_ui_port {
+                    return Err (ClientError::PacketType(e.to_string()))
+                }
                 return match self.fall_back() {
                     Ok(_) => Err(ClientError::ConnectionDropped(format!("{:?}", e))),
                     Err(e) => Err(e),
@@ -79,8 +89,12 @@ impl ClientHandle {
     }
 
     fn fall_back(&mut self) -> Result<(), ClientError> {
+panic! ("Fallback!");
         match Self::make_client(self.daemon_ui_port) {
-            Ok(client) => self.client = client,
+            Ok(client) => {
+                self.client = client;
+                self.active_ui_port = self.daemon_ui_port
+            },
             Err(e) => {
                 return Err(ClientError::FallbackFailed(format!(
                     "Both Node and Daemon have terminated: {:?}",
