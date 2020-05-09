@@ -16,16 +16,17 @@ lazy_static! {
 }
 
 pub fn app_head() -> App<'static, 'static> {
-    App::new("MASQNode")
+    App::new("masq")
         .global_settings(if cfg!(test) {
             &[AppSettings::ColorNever]
         } else {
             &[AppSettings::ColorAuto, AppSettings::ColoredHelp]
         })
-        .version(crate_version!())
-        //        .author(crate_authors!("\n")) // TODO: Put this back in when clap is compatible with Rust 1.38.0
-        .author("Substratum, MASQ")
-        .about(crate_description!())
+        //.version(crate_version!())
+        //.author(crate_authors!("\n")) // TODO: Put this back in when clap is compatible with Rust 1.38.0
+        .version("1.0.0")
+        .author("MASQ")
+        .about("masq is a command-line user interface to the MASQ Daemon and the MASQ Node")
 }
 
 pub fn app() -> App<'static, 'static> {
