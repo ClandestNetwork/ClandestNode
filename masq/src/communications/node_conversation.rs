@@ -56,9 +56,7 @@ impl NodeConversation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::communications::node_connection::ClientError::{
-        ConnectionDropped, Deserialization, PacketType,
-    };
+    use crate::communications::node_connection::ClientError::{ConnectionDropped, Deserialization};
     use crate::communications::node_connection::NodeConnection;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::ToMessageBody;
@@ -187,7 +185,21 @@ mod tests {
 
         let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
-        assert_eq!(error, PacketType("Close(None)".to_string()));
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert_eq!(error, PacketType("Close(None)".to_string()));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            match error {
+                // ...wondering whether this is right or not...
+                ClientError::FallbackFailed(s) => {
+                    assert_eq!(s.contains("Daemon has terminated:"), true)
+                }
+                x => panic!("Expected ClientError::FallbackFailed; got {:?}", x),
+            }
+        }
     }
 
     #[test]

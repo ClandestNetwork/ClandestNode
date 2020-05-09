@@ -11,8 +11,8 @@ use masq_lib::utils::localhost;
 use std::net::TcpStream;
 use websocket::result::WebSocketResult;
 use websocket::sync::Client;
-use websocket::{ClientBuilder, OwnedMessage};
 use websocket::WebSocketError;
+use websocket::{ClientBuilder, OwnedMessage};
 
 pub struct ClientHandle {
     daemon_ui_port: u16,
@@ -86,13 +86,13 @@ impl ClientHandle {
             return Err(ClientError::FallbackFailed(format!(
                 "Daemon has terminated: {:?}",
                 e
-            )))
+            )));
         }
         match Self::make_client(self.daemon_ui_port) {
             Ok(client) => {
                 self.client = client;
                 self.active_ui_port = self.daemon_ui_port
-            },
+            }
             Err(e) => {
                 return Err(ClientError::FallbackFailed(format!(
                     "Both Node and Daemon have terminated: {:?}",
