@@ -57,6 +57,8 @@ impl NodeConversation {
 mod tests {
     use super::*;
     use crate::communications::node_connection::ClientError::{ConnectionDropped, Deserialization};
+    #[cfg(not(target_os = "windows"))]
+    use crate::communications::node_connection::ClientError::PacketType;
     use crate::communications::node_connection::NodeConnection;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::ToMessageBody;
