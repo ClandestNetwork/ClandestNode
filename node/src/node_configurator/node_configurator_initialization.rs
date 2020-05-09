@@ -45,7 +45,8 @@ pub fn app() -> App<'static, 'static> {
             Arg::with_name("initialization")
                 .long("initialization")
                 .required(true)
-                .takes_value(false),
+                .takes_value(false)
+                .help("Directs MASQ to start the Daemon that controls the Node, rather than the Node itself"),
         )
         .arg(ui_port_arg(&UI_PORT_HELP))
 }

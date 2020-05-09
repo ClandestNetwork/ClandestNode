@@ -46,7 +46,7 @@ impl RunModes {
         let (mode, privilege_required) = self.determine_mode_and_priv_req(args);
         let privilege_as_expected = self.privilege_dropper.expect_privilege(privilege_required);
         let help_or_version = Self::args_contain_help_or_version(args);
-        if !privilege_as_expected {
+        if !help_or_version && !privilege_as_expected {
             write!(
                 streams.stderr,
                 "{}",
@@ -81,7 +81,10 @@ impl RunModes {
     }
 
     fn args_contain_help_or_version(args: &Vec<String>) -> bool {
-        args.contains(&"--help".to_string()) || args.contains(&"--version".to_string())
+        args.contains(&"--help".to_string())
+        || args.contains(&"-h".to_string())
+        || args.contains(&"--version".to_string())
+        || args.contains(&"-V".to_string())
     }
 
     #[cfg(not(target_os = "windows"))]
