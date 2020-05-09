@@ -57,8 +57,10 @@ impl SetupReporter for SetupReporterReal {
             .iter()
             .filter(|v| v.value.is_none())
             .for_each(|v| {
-                match existing_setup.remove (&v.name) {
-                    Some (former_value) => blanked_out_former_values.insert (v.name.clone(), former_value),
+                match existing_setup.remove(&v.name) {
+                    Some(former_value) => {
+                        blanked_out_former_values.insert(v.name.clone(), former_value)
+                    }
                     None => None,
                 };
             });
