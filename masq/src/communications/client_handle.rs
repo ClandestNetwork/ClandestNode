@@ -12,6 +12,7 @@ use std::net::TcpStream;
 use websocket::result::WebSocketResult;
 use websocket::sync::Client;
 use websocket::{ClientBuilder, OwnedMessage};
+use websocket::WebSocketError;
 
 pub struct ClientHandle {
     daemon_ui_port: u16,
@@ -43,11 +44,7 @@ impl ClientHandle {
                 .send_message(&OwnedMessage::Text(outgoing_msg_json))
         };
         if let Err(e) = result {
-eprintln! ("Send error: {:?}; daemon = {} and active = {}", e, self.daemon_ui_port, self.active_ui_port);
-            if self.daemon_ui_port == self.active_ui_port {
-                return Err (ClientError::PacketType(e.to_string()))
-            }
-            match self.fall_back() {
+            match self.fall_back(&e) {
                 Ok(_) => Err(ConnectionDropped(format!("{:?}", e))),
                 Err(e) => Err(e),
             }
@@ -62,11 +59,7 @@ eprintln! ("Send error: {:?}; daemon = {} and active = {}", e, self.daemon_ui_po
             Ok(OwnedMessage::Text(json)) => json,
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
             Err(e) => {
-eprintln! ("Receive error: {:?}; daemon = {} and active = {}", e, self.daemon_ui_port, self.active_ui_port);
-                if self.daemon_ui_port == self.active_ui_port {
-                    return Err (ClientError::PacketType(e.to_string()))
-                }
-                return match self.fall_back() {
+                return match self.fall_back(&e) {
                     Ok(_) => Err(ClientError::ConnectionDropped(format!("{:?}", e))),
                     Err(e) => Err(e),
                 }
@@ -88,8 +81,13 @@ eprintln! ("Receive error: {:?}; daemon = {} and active = {}", e, self.daemon_ui
         builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure()
     }
 
-    fn fall_back(&mut self) -> Result<(), ClientError> {
-panic! ("Fallback!");
+    fn fall_back(&mut self, e: &WebSocketError) -> Result<(), ClientError> {
+        if self.daemon_ui_port == self.active_ui_port {
+            return Err(ClientError::FallbackFailed(format!(
+                "Daemon has terminated: {:?}",
+                e
+            )))
+        }
         match Self::make_client(self.daemon_ui_port) {
             Ok(client) => {
                 self.client = client;
