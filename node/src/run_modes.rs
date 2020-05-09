@@ -82,9 +82,9 @@ impl RunModes {
 
     fn args_contain_help_or_version(args: &Vec<String>) -> bool {
         args.contains(&"--help".to_string())
-        || args.contains(&"-h".to_string())
-        || args.contains(&"--version".to_string())
-        || args.contains(&"-V".to_string())
+            || args.contains(&"-h".to_string())
+            || args.contains(&"--version".to_string())
+            || args.contains(&"-V".to_string())
     }
 
     #[cfg(not(target_os = "windows"))]

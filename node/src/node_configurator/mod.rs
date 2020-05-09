@@ -17,7 +17,7 @@ use crate::sub_lib::cryptde::PlainData;
 use crate::sub_lib::wallet::Wallet;
 use crate::sub_lib::wallet::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use bip39::Language;
-use clap::{crate_description, crate_version, value_t, App, AppSettings, Arg};
+use clap::{crate_description, value_t, App, AppSettings, Arg};
 use dirs::{data_local_dir, home_dir};
 use masq_lib::command::StdStreams;
 use masq_lib::constants::DEFAULT_CHAIN_NAME;

@@ -150,7 +150,7 @@ impl FromStr for RealUser {
         // validator should have ensured that there are exactly three parts,
         // and that the first two are empty or numeric
         if parts.len() < 3 {
-            return Err(())
+            return Err(());
         }
         let real_user = RealUser::new(
             match &parts[0] {
@@ -158,14 +158,14 @@ impl FromStr for RealUser {
                 s => match s.parse() {
                     Ok(uid) => Some(uid),
                     Err(_) => return Err(()),
-                }
+                },
             },
             match &parts[1] {
                 s if s.is_empty() => None,
                 s => match s.parse() {
                     Ok(gid) => Some(gid),
                     Err(_) => return Err(()),
-                }
+                },
             },
             match &parts[2] {
                 s if s.is_empty() => None,
@@ -751,28 +751,28 @@ mod tests {
     fn real_user_from_blank() {
         let result = RealUser::from_str("").err().unwrap();
 
-        assert_eq! (result, ());
+        assert_eq!(result, ());
     }
 
     #[test]
     fn real_user_from_one_colon() {
         let result = RealUser::from_str(":").err().unwrap();
 
-        assert_eq! (result, ());
+        assert_eq!(result, ());
     }
 
     #[test]
     fn real_user_from_nonnumeric_uid() {
         let result = RealUser::from_str("booga:1234:").err().unwrap();
 
-        assert_eq! (result, ());
+        assert_eq!(result, ());
     }
 
     #[test]
     fn real_user_from_nonnumeric_gid() {
         let result = RealUser::from_str("1234:booga:").err().unwrap();
 
-        assert_eq! (result, ());
+        assert_eq!(result, ());
     }
 
     #[test]
