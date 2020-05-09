@@ -174,18 +174,18 @@ impl Daemon {
                     // TODO SPIKE
                     self.params = lame_cluster.clone();
                     UiSetupResponse {
-                    running: false,
-                    values: lame_cluster
-                        .iter()
-                        .map(|(_, value)| value.clone())
-                        .collect(),
-                    errors: errors
-                        .param_errors
-                        .into_iter()
-                        .map(|error| (error.parameter, error.reason))
-                        .collect(),
+                        running: false,
+                        values: lame_cluster
+                            .iter()
+                            .map(|(_, value)| value.clone())
+                            .collect(),
+                        errors: errors
+                            .param_errors
+                            .into_iter()
+                            .map(|error| (error.parameter, error.reason))
+                            .collect(),
                     }
-                },
+                }
             }
         };
         let msg = NodeToUiMessage {

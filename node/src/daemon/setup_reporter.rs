@@ -57,8 +57,8 @@ impl SetupReporter for SetupReporterReal {
             .iter()
             .filter(|v| v.value.is_none())
             .for_each(|v| {
-                let former_value = existing_setup.remove(&v.name).expect ("Value disappeared");
-                blanked_out_former_values.insert (v.name.clone(), former_value);
+                let former_value = existing_setup.remove(&v.name).expect("Value disappeared");
+                blanked_out_former_values.insert(v.name.clone(), former_value);
             });
         let mut incoming_setup = incoming_setup
             .into_iter()
@@ -91,14 +91,12 @@ impl SetupReporter for SetupReporterReal {
                 Ok(triple) => triple,
                 Err(error) => {
                     error_so_far.extend(error);
-                    (
-                        None,
-                        None,
-                        DEFAULT_CHAIN_NAME.to_string(),
-                    )
+                    (None, None, DEFAULT_CHAIN_NAME.to_string())
                 }
             };
-        let real_user = real_user_opt.unwrap_or_else (|| crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref()));
+        let real_user = real_user_opt.unwrap_or_else(|| {
+            crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref())
+        });
         let data_directory = data_directory_from_context(
             self.dirs_wrapper.as_ref(),
             &real_user,
@@ -150,7 +148,10 @@ impl SetupReporter for SetupReporterReal {
         if error_so_far.param_errors.is_empty() {
             Ok(final_setup)
         } else {
-            Err((Self::combine_clusters(vec![&final_setup, &blanked_out_former_values]), error_so_far))
+            Err((
+                Self::combine_clusters(vec![&final_setup, &blanked_out_former_values]),
+                error_so_far,
+            ))
         }
     }
 }
@@ -203,15 +204,22 @@ impl SetupReporterReal {
 
     fn real_user_from_str(s: &str) -> Option<crate::bootstrapper::RealUser> {
         match crate::bootstrapper::RealUser::from_str(s) {
-            Ok (ru) => Some (ru),
-            Err (_) => None,
+            Ok(ru) => Some(ru),
+            Err(_) => None,
         }
     }
 
     fn calculate_fundamentals(
         dirs_wrapper: &dyn DirsWrapper,
         combined_setup: &SetupCluster,
-    ) -> Result<(Option<crate::bootstrapper::RealUser>, Option<PathBuf>, String), ConfiguratorError> {
+    ) -> Result<
+        (
+            Option<crate::bootstrapper::RealUser>,
+            Option<PathBuf>,
+            String,
+        ),
+        ConfiguratorError,
+    > {
         let multi_config = Self::make_multi_config(dirs_wrapper, None, true, false)?;
         let real_user_opt = match (
             value_m!(multi_config, "real-user", String),
@@ -1423,7 +1431,10 @@ mod tests {
             .err()
             .unwrap();
 
-        assert_eq! (result.0.get("ip").unwrap().clone(), UiSetupResponseValue::new("ip", "1.2.3.4", Set));
+        assert_eq!(
+            result.0.get("ip").unwrap().clone(),
+            UiSetupResponseValue::new("ip", "1.2.3.4", Set)
+        );
     }
 
     #[test]

@@ -92,7 +92,12 @@ impl<'a> MultiConfig<'a> {
             .get_matches_from_safe(merged.args().into_iter())
         {
             Ok(matches) => matches,
-            Err(e) if (e.kind == clap::ErrorKind::HelpDisplayed) || (e.kind == clap::ErrorKind::VersionDisplayed) => e.exit(),
+            Err(e)
+                if (e.kind == clap::ErrorKind::HelpDisplayed)
+                    || (e.kind == clap::ErrorKind::VersionDisplayed) =>
+            {
+                e.exit()
+            }
             Err(e) => return Err(Self::make_configurator_error(e)),
         };
         Ok(MultiConfig {
