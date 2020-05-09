@@ -276,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn overlapping_conversations_work_as_expected() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port)
