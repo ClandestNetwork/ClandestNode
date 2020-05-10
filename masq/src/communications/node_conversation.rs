@@ -56,9 +56,9 @@ impl NodeConversation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::communications::node_connection::ClientError::{
-        ConnectionDropped, Deserialization, PacketType,
-    };
+    #[cfg(not(target_os = "windows"))]
+    use crate::communications::node_connection::ClientError::PacketType;
+    use crate::communications::node_connection::ClientError::{ConnectionDropped, Deserialization};
     use crate::communications::node_connection::NodeConnection;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::ToMessageBody;
@@ -181,13 +181,27 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect"); // magic value that causes disconnection
         let stop_handle = server.start();
-        let mut connection = NodeConnection::new(0, port).unwrap();
+        let mut connection = NodeConnection::new(port, port).unwrap();
         let subject = connection.start_conversation();
         stop_handle.stop();
 
         let error = subject.transact(UiShutdownRequest {}.tmb(1)).err().unwrap();
 
-        assert_eq!(error, PacketType("Close(None)".to_string()));
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert_eq!(error, PacketType("Close(None)".to_string()));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            match error {
+                // ...wondering whether this is right or not...
+                ClientError::FallbackFailed(s) => {
+                    assert_eq!(s.contains("Daemon has terminated:"), true)
+                }
+                x => panic!("Expected ClientError::FallbackFailed; got {:?}", x),
+            }
+        }
     }
 
     #[test]

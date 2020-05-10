@@ -57,8 +57,12 @@ impl SetupReporter for SetupReporterReal {
             .iter()
             .filter(|v| v.value.is_none())
             .for_each(|v| {
-                let former_value = existing_setup.remove(&v.name).expect("Value disappeared");
-                blanked_out_former_values.insert(v.name.clone(), former_value);
+                match existing_setup.remove(&v.name) {
+                    Some(former_value) => {
+                        blanked_out_former_values.insert(v.name.clone(), former_value)
+                    }
+                    None => None,
+                };
             });
         let mut incoming_setup = incoming_setup
             .into_iter()

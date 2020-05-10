@@ -11,10 +11,12 @@ use masq_lib::utils::localhost;
 use std::net::TcpStream;
 use websocket::result::WebSocketResult;
 use websocket::sync::Client;
+use websocket::WebSocketError;
 use websocket::{ClientBuilder, OwnedMessage};
 
 pub struct ClientHandle {
     daemon_ui_port: u16,
+    active_ui_port: u16,
     client: Client<TcpStream>,
 }
 
@@ -26,6 +28,7 @@ impl ClientHandle {
         };
         Ok(ClientHandle {
             daemon_ui_port,
+            active_ui_port,
             client,
         })
     }
@@ -41,7 +44,7 @@ impl ClientHandle {
                 .send_message(&OwnedMessage::Text(outgoing_msg_json))
         };
         if let Err(e) = result {
-            match self.fall_back() {
+            match self.fall_back(&e) {
                 Ok(_) => Err(ConnectionDropped(format!("{:?}", e))),
                 Err(e) => Err(e),
             }
@@ -56,7 +59,7 @@ impl ClientHandle {
             Ok(OwnedMessage::Text(json)) => json,
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
             Err(e) => {
-                return match self.fall_back() {
+                return match self.fall_back(&e) {
                     Ok(_) => Err(ClientError::ConnectionDropped(format!("{:?}", e))),
                     Err(e) => Err(e),
                 }
@@ -78,9 +81,18 @@ impl ClientHandle {
         builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure()
     }
 
-    fn fall_back(&mut self) -> Result<(), ClientError> {
+    fn fall_back(&mut self, e: &WebSocketError) -> Result<(), ClientError> {
+        if self.daemon_ui_port == self.active_ui_port {
+            return Err(ClientError::FallbackFailed(format!(
+                "Daemon has terminated: {:?}",
+                e
+            )));
+        }
         match Self::make_client(self.daemon_ui_port) {
-            Ok(client) => self.client = client,
+            Ok(client) => {
+                self.client = client;
+                self.active_ui_port = self.daemon_ui_port
+            }
             Err(e) => {
                 return Err(ClientError::FallbackFailed(format!(
                     "Both Node and Daemon have terminated: {:?}",
