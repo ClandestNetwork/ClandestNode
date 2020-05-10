@@ -74,21 +74,13 @@ impl SetupReporter for SetupReporterReal {
                 )
             })
             .collect::<SetupCluster>();
-        let mut all_but_configured =
+        let all_but_configured =
             Self::combine_clusters(vec![&default_setup, &existing_setup, &incoming_setup]);
         eprintln_setup("DEFAULTS", &default_setup);
         eprintln_setup("EXISTING", &existing_setup);
         eprintln_setup("BLANKED-OUT FORMER VALUES", &blanked_out_former_values);
         eprintln_setup("INCOMING", &incoming_setup);
         eprintln_setup("ALL BUT CONFIGURED", &all_but_configured);
-        match all_but_configured.get("data-directory") {
-            None => (),
-            Some(entry) => {
-                if entry.status == Default {
-                    let _ = all_but_configured.remove("data-directory");
-                }
-            }
-        }
         let mut error_so_far = ConfiguratorError::new(vec![]);
         let (real_user_opt, data_directory_opt, chain_name) =
             match Self::calculate_fundamentals(self.dirs_wrapper.as_ref(), &all_but_configured) {
