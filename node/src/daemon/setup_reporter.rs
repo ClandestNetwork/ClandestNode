@@ -385,6 +385,7 @@ impl SetupReporterReal {
         MultiConfig::try_new(&app, vcls)
     }
 
+    #[allow(clippy::type_complexity)]
     fn run_configuration(
         dirs_wrapper: &dyn DirsWrapper,
         multi_config: &MultiConfig,
