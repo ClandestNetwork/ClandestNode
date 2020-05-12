@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 // TODO: Probably can take this out once GH-290 makes it in
-const CONSOLE_DIAGNOSTICS: bool = true;
+const CONSOLE_DIAGNOSTICS: bool = false;
 
 pub type SetupCluster = HashMap<String, UiSetupResponseValue>;
 
@@ -90,10 +90,6 @@ impl SetupReporter for SetupReporterReal {
                     (None, None, DEFAULT_CHAIN_NAME.to_string())
                 }
             };
-        eprintln!(
-            "*** fundamental data-directory = {:?} ***",
-            data_directory_opt
-        );
         let real_user = real_user_opt.unwrap_or_else(|| {
             crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref())
         });
@@ -106,10 +102,6 @@ impl SetupReporter for SetupReporterReal {
                 &chain_name,
             ),
         };
-        eprintln!(
-            "*** configuring with data-directory = {:?} ***",
-            data_directory
-        );
         let (configured_setup, error_opt) = Self::calculate_configured_setup(
             self.dirs_wrapper.as_ref(),
             &all_but_configured,
@@ -235,28 +227,20 @@ impl SetupReporterReal {
             (None, Some(uisrv)) => Self::real_user_from_str(&uisrv.value),
             (None, None) => Some(crate::bootstrapper::RealUser::null().populate(dirs_wrapper)),
         };
-        let cn_mc = value_m!(multi_config, "chain", String);
-        let cn_cs = combined_setup.get("chain");
-        eprintln!("Chain name from multi_config: {:?}", cn_mc);
-        eprintln!("Chain name from combined_setup: {:?}", cn_cs);
-        let chain_name = match (cn_mc, cn_cs) {
-            //     value_m!(multi_config, "chain", String),
-            //     combined_setup.get("chain"),
-            // ) {
+        let chain_name = match (
+            value_m!(multi_config, "chain", String),
+            combined_setup.get("chain"),
+        ) {
             (Some(chain_str), None) => chain_str,
             (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
             (Some(chain_str), Some(_)) => chain_str,
             (None, Some(uisrv)) => uisrv.value.clone(),
             (None, None) => DEFAULT_CHAIN_NAME.to_string(),
         };
-        let dd_mc = value_m!(multi_config, "data-directory", String);
-        let dd_cs = combined_setup.get("data-directory");
-        eprintln!("Data directory from multi_config: {:?}", dd_mc);
-        eprintln!("Data directory from combined_setup: {:?}", dd_cs);
-        let data_directory_opt = match (dd_mc, dd_cs) {
-            //     value_m!(multi_config, "data-directory", String),
-            //     combined_setup.get("data-directory"),
-            // ) {
+        let data_directory_opt = match (
+            value_m!(multi_config, "data-directory", String),
+            combined_setup.get("data-directory"),
+        ) {
             (Some(ddir_str), None) => Some(PathBuf::from(&ddir_str)),
             (Some(_), Some(uisrv)) if uisrv.status == Set => Some(PathBuf::from(&uisrv.value)),
             (Some(ddir_str), Some(_)) => Some(PathBuf::from(&ddir_str)),
