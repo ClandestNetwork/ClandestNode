@@ -90,7 +90,10 @@ impl SetupReporter for SetupReporterReal {
                     (None, None, DEFAULT_CHAIN_NAME.to_string())
                 }
             };
-eprintln! ("*** fundamental data-directory = {:?} ***", data_directory_opt);
+        eprintln!(
+            "*** fundamental data-directory = {:?} ***",
+            data_directory_opt
+        );
         let real_user = real_user_opt.unwrap_or_else(|| {
             crate::bootstrapper::RealUser::null().populate(self.dirs_wrapper.as_ref())
         });
@@ -103,7 +106,10 @@ eprintln! ("*** fundamental data-directory = {:?} ***", data_directory_opt);
                 &chain_name,
             ),
         };
-eprintln! ("*** configuring with data-directory = {:?} ***", data_directory);
+        eprintln!(
+            "*** configuring with data-directory = {:?} ***",
+            data_directory
+        );
         let (configured_setup, error_opt) = Self::calculate_configured_setup(
             self.dirs_wrapper.as_ref(),
             &all_but_configured,
@@ -111,7 +117,7 @@ eprintln! ("*** configuring with data-directory = {:?} ***", data_directory);
             &chain_name,
         );
         if let Some(error) = error_opt {
-            error_so_far.extend (error);
+            error_so_far.extend(error);
         }
         error_so_far.param_errors.iter().for_each(|param_error| {
             let _ = incoming_setup.remove(&param_error.parameter);
@@ -231,12 +237,12 @@ impl SetupReporterReal {
         };
         let cn_mc = value_m!(multi_config, "chain", String);
         let cn_cs = combined_setup.get("chain");
-eprintln! ("Chain name from multi_config: {:?}", cn_mc);
-eprintln! ("Chain name from combined_setup: {:?}", cn_cs);
+        eprintln!("Chain name from multi_config: {:?}", cn_mc);
+        eprintln!("Chain name from combined_setup: {:?}", cn_cs);
         let chain_name = match (cn_mc, cn_cs) {
-        //     value_m!(multi_config, "chain", String),
-        //     combined_setup.get("chain"),
-        // ) {
+            //     value_m!(multi_config, "chain", String),
+            //     combined_setup.get("chain"),
+            // ) {
             (Some(chain_str), None) => chain_str,
             (Some(_), Some(uisrv)) if uisrv.status == Set => uisrv.value.clone(),
             (Some(chain_str), Some(_)) => chain_str,
@@ -245,12 +251,12 @@ eprintln! ("Chain name from combined_setup: {:?}", cn_cs);
         };
         let dd_mc = value_m!(multi_config, "data-directory", String);
         let dd_cs = combined_setup.get("data-directory");
-eprintln! ("Data directory from multi_config: {:?}", dd_mc);
-eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
+        eprintln!("Data directory from multi_config: {:?}", dd_mc);
+        eprintln!("Data directory from combined_setup: {:?}", dd_cs);
         let data_directory_opt = match (dd_mc, dd_cs) {
-        //     value_m!(multi_config, "data-directory", String),
-        //     combined_setup.get("data-directory"),
-        // ) {
+            //     value_m!(multi_config, "data-directory", String),
+            //     combined_setup.get("data-directory"),
+            // ) {
             (Some(ddir_str), None) => Some(PathBuf::from(&ddir_str)),
             (Some(_), Some(uisrv)) if uisrv.status == Set => Some(PathBuf::from(&uisrv.value)),
             (Some(ddir_str), Some(_)) => Some(PathBuf::from(&ddir_str)),
@@ -268,10 +274,11 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
         let mut error_so_far = ConfiguratorError::new(vec![]);
         let db_password_opt = combined_setup.get("db-password").map(|v| v.value.clone());
         let command_line = Self::make_command_line(&combined_setup);
-        let multi_config = match Self::make_multi_config(dirs_wrapper, Some(command_line), true, true) {
-            Ok(mc) => mc,
-            Err(ce) => return (HashMap::new(), Some(ce)),
-        };
+        let multi_config =
+            match Self::make_multi_config(dirs_wrapper, Some(command_line), true, true) {
+                Ok(mc) => mc,
+                Err(ce) => return (HashMap::new(), Some(ce)),
+            };
         let ((bootstrapper_config, persistent_config_opt), error_opt) = Self::run_configuration(
             dirs_wrapper,
             &multi_config,
@@ -279,7 +286,7 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
             chain_id_from_name(chain_name),
         );
         if let Some(error) = error_opt {
-            error_so_far.extend (error);
+            error_so_far.extend(error);
         }
         let mut setup = value_retrievers(dirs_wrapper)
             .into_iter()
@@ -304,8 +311,7 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
         };
         if error_so_far.param_errors.is_empty() {
             (setup, None)
-        }
-        else {
+        } else {
             (setup, Some(error_so_far))
         }
     }
@@ -384,8 +390,10 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
         multi_config: &MultiConfig,
         data_directory: &PathBuf,
         chain_id: u8,
-    ) -> ((BootstrapperConfig, Option<Box<dyn PersistentConfiguration>>), Option<ConfiguratorError>)
-    {
+    ) -> (
+        (BootstrapperConfig, Option<Box<dyn PersistentConfiguration>>),
+        Option<ConfiguratorError>,
+    ) {
         let mut error_so_far = ConfiguratorError::new(vec![]);
         let mut streams = StdStreams {
             stdin: &mut ByteArrayReader::new(b""),
@@ -402,7 +410,7 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
         ) {
             Ok(_) => (),
             Err(ce) => {
-                error_so_far.extend (ce);
+                error_so_far.extend(ce);
             }
         };
         let initializer = DbInitializerReal::new();
@@ -415,11 +423,17 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
                     &mut streams,
                     Some(&persistent_config),
                 ) {
-                    Ok(_) => ((bootstrapper_config, Some(Box::new(persistent_config))), None),
+                    Ok(_) => (
+                        (bootstrapper_config, Some(Box::new(persistent_config))),
+                        None,
+                    ),
                     Err(ce) => {
-                        error_so_far.extend (ce);
-                        ((bootstrapper_config, Some (Box::new(persistent_config))), Some (error_so_far))
-                    },
+                        error_so_far.extend(ce);
+                        (
+                            (bootstrapper_config, Some(Box::new(persistent_config))),
+                            Some(error_so_far),
+                        )
+                    }
                 }
             }
             Err(_) => {
@@ -431,9 +445,9 @@ eprintln! ("Data directory from combined_setup: {:?}", dd_cs);
                 ) {
                     Ok(_) => ((bootstrapper_config, None), None),
                     Err(ce) => {
-                        error_so_far.extend (ce);
-                        ((bootstrapper_config, None), Some (error_so_far))
-                    },
+                        error_so_far.extend(ce);
+                        ((bootstrapper_config, None), Some(error_so_far))
+                    }
                 }
             }
         }
@@ -1460,7 +1474,11 @@ mod tests {
             ),
             ("db-password", "", Required),
             ("dns-servers", "1.1.1.1", Default),
-            ("earning-wallet", "0x47fb8671db83008d382c2e6ea67fa377378c0cea", Default),
+            (
+                "earning-wallet",
+                "0x47fb8671db83008d382c2e6ea67fa377378c0cea",
+                Default,
+            ),
             ("gas-price", "1", Default),
             ("ip", "1.2.3.4", Set),
             ("log-level", "warn", Default),
@@ -1491,7 +1509,9 @@ mod tests {
 
         let result = subject
             .get_modified_setup(existing_setup, incoming_setup)
-            .err().unwrap().0;
+            .err()
+            .unwrap()
+            .0;
 
         let actual_data_directory = PathBuf::from(&result.get("data-directory").unwrap().value);
         assert_eq!(actual_data_directory, expected_data_directory);
@@ -1811,7 +1831,8 @@ mod tests {
             &setup,
             &data_directory,
             "irrelevant",
-        ).0;
+        )
+        .0;
 
         assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
@@ -1879,7 +1900,8 @@ mod tests {
             &setup,
             &data_directory,
             "irrelevant",
-        ).1
+        )
+        .1
         .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
@@ -1924,7 +1946,8 @@ mod tests {
             &setup,
             &data_directory,
             "irrelevant",
-        ).0;
+        )
+        .0;
 
         assert_eq!(result.get("gas-price").unwrap().value, "10".to_string());
     }
@@ -1957,7 +1980,8 @@ mod tests {
             &setup,
             &data_directory,
             "irrelevant",
-        ).1
+        )
+        .1
         .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
