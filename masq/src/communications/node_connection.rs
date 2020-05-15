@@ -5,7 +5,6 @@ use crate::communications::node_conversation::NodeConversation;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UnmarshalError;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Sender, Receiver};
 
 pub const BROADCAST_CONTEXT_ID: u64 = 0;
 
@@ -23,9 +22,6 @@ pub struct NodeConnection {
     active_ui_port: u16,
     next_context_id: u64,
     client_handle_arc: Arc<Mutex<ClientHandle>>,
-    //------
-    new_conversation_tx: Sender<()>,
-    new_conversation_rx: Receiver<NodeConveration>
 }
 
 impl Drop for NodeConnection {

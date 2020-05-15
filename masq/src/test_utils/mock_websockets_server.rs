@@ -16,7 +16,7 @@ use websocket::OwnedMessage;
 pub struct MockWebSocketsServer {
     port: u16,
     pub protocol: String,
-    responses_arc: Arc<Mutex<Vec<String>>>,
+    responses_arc: Arc<Mutex<Vec<OwnedMessage>>>,
 }
 
 pub struct MockWebSocketsServerStopHandle {
@@ -35,15 +35,15 @@ impl MockWebSocketsServer {
     }
 
     pub fn queue_response(self, message: MessageBody) -> Self {
-        self.responses_arc
-            .lock()
-            .unwrap()
-            .push(UiTrafficConverter::new_marshal(message));
-        self
+        self.queue_string (&UiTrafficConverter::new_marshal(message))
     }
 
     pub fn queue_string(self, string: &str) -> Self {
-        self.responses_arc.lock().unwrap().push(string.to_string());
+        self.queue_owned_message (OwnedMessage::Text (string.to_string()))
+    }
+
+    pub fn queue_owned_message (self, msg: OwnedMessage) -> Self {
+        self.responses_arc.lock().unwrap().push(msg);
         self
     }
 
@@ -91,11 +91,18 @@ impl MockWebSocketsServer {
                 };
                 if let Some(incoming) = incoming_opt {
                     requests.push(incoming);
-                    let outgoing: String = inner_responses_arc.lock().unwrap().remove(0);
-                    if outgoing == "disconnect" {
-                        break;
+                    match inner_responses_arc.lock().unwrap().remove(0) {
+                        OwnedMessage::Text(outgoing) => {
+                            if outgoing == "disconnect" {
+                                break;
+                            }
+                            if outgoing == "close" {
+                                client.send_message (&OwnedMessage::Close(None)).unwrap();
+                            }
+                            client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
+                        },
+                        om => client.send_message (&om).unwrap(),
                     }
-                    client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
                 }
                 if let Ok(kill) = stop_rx.try_recv() {
                     if !kill {
