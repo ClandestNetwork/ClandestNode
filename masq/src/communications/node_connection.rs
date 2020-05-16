@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use crate::communications::client_handle::ClientHandle;
-use crate::communications::node_conversation::NodeConversation;
+use crate::communications::node_conversation_old::NodeConversationOld;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UnmarshalError;
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,7 @@ pub const BROADCAST_CONTEXT_ID: u64 = 0;
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientError {
     NoServer(u16, String),
-    ConnectionDropped(String),
+    ConnectionDropped(String), // TODO: Remove the String here
     FallbackFailed(String),
     PacketType(String),
     Deserialization(UnmarshalError),
@@ -54,13 +54,13 @@ impl NodeConnection {
         self.active_ui_port
     }
 
-    pub fn start_conversation(&mut self) -> NodeConversation {
+    pub fn start_conversation(&mut self) -> NodeConversationOld {
         let context_id = {
             let context_id = self.next_context_id;
             self.next_context_id += 1;
             context_id
         };
-        NodeConversation::new(context_id, &self.client_handle_arc)
+        NodeConversationOld::new(context_id, &self.client_handle_arc)
     }
 
     #[allow(dead_code)]

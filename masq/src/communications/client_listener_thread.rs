@@ -1,6 +1,7 @@
-use websocket::sync::Client;
+// Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
+
 use std::net::TcpStream;
-use std::sync::mpsc::Sender;
+use crossbeam_channel::Sender;
 use masq_lib::ui_gateway::MessageBody;
 use websocket::receiver::Reader;
 use std::thread;
@@ -9,14 +10,14 @@ use websocket::ws::receiver::Receiver;
 use websocket::OwnedMessage;
 
 #[derive (Clone, Copy, PartialEq, Debug)]
-enum ClientListenerError {
+pub enum ClientListenerError {
     Closed,
     Broken,
     UnexpectedPacket,
 }
 
 impl ClientListenerError {
-    fn is_fatal (&self) -> bool {
+    pub fn is_fatal (&self) -> bool {
         match self {
             &ClientListenerError::Closed => true,
             &ClientListenerError::Broken => true,
@@ -25,7 +26,7 @@ impl ClientListenerError {
     }
 }
 
-struct ClientListenerThread {
+pub struct ClientListenerThread {
     listener_half: Reader<TcpStream>,
     message_body_tx: Sender<Result<MessageBody, ClientListenerError>>,
 }
@@ -73,19 +74,13 @@ impl ClientListenerThread {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
-    use masq_lib::messages::{UiShutdownResponse, UiShutdownRequest, NODE_UI_PROTOCOL};
+    use crossbeam_channel::unbounded;
+    use masq_lib::messages::{UiShutdownResponse, UiShutdownRequest};
     use masq_lib::messages::ToMessageBody;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use masq_lib::utils::{find_free_port, localhost};
-    use websocket::ClientBuilder;
+    use masq_lib::utils::{find_free_port};
+    use crate::test_utils::client_utils::make_client;
     use websocket::ws::sender::Sender;
-
-    fn make_client (port: u16) -> Client<TcpStream> {
-        let builder =
-            ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
-        builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure().unwrap()
-    }
 
     #[test]
     fn listens_and_passes_data_through () {
@@ -96,7 +91,7 @@ mod tests {
         let stop_handle = server.start();
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
-        let (message_body_tx, message_body_rx) = mpsc::channel();
+        let (message_body_tx, message_body_rx) = unbounded();
         let subject = ClientListenerThread::new(listener_half, message_body_tx);
         subject.start();
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
@@ -117,7 +112,7 @@ mod tests {
         let stop_handle = server.start();
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
-        let (message_body_tx, message_body_rx) = mpsc::channel();
+        let (message_body_tx, message_body_rx) = unbounded();
         let subject = ClientListenerThread::new(listener_half, message_body_tx);
         subject.start();
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
@@ -137,7 +132,7 @@ mod tests {
         let stop_handle = server.start();
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
-        let (message_body_tx, message_body_rx) = mpsc::channel();
+        let (message_body_tx, message_body_rx) = unbounded();
         let subject = ClientListenerThread::new(listener_half, message_body_tx);
         subject.start();
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
@@ -157,7 +152,7 @@ mod tests {
         let stop_handle = server.start();
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
-        let (message_body_tx, message_body_rx) = mpsc::channel();
+        let (message_body_tx, message_body_rx) = unbounded();
         let subject = ClientListenerThread::new(listener_half, message_body_tx);
         subject.start();
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
@@ -177,7 +172,7 @@ mod tests {
         let stop_handle = server.start();
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
-        let (message_body_tx, message_body_rx) = mpsc::channel();
+        let (message_body_tx, message_body_rx) = unbounded();
         let subject = ClientListenerThread::new(listener_half, message_body_tx);
         subject.start();
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));

@@ -34,6 +34,10 @@ impl MockWebSocketsServer {
         }
     }
 
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     pub fn queue_response(self, message: MessageBody) -> Self {
         self.queue_string (&UiTrafficConverter::new_marshal(message))
     }

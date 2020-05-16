@@ -171,7 +171,6 @@ impl Daemon {
                     }
                 }
                 Err((lame_cluster, errors)) => {
-                    // TODO SPIKE
                     self.params = lame_cluster.clone();
                     UiSetupResponse {
                         running: false,
