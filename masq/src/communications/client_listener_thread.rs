@@ -1,13 +1,16 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use std::net::TcpStream;
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, Receiver, unbounded};
 use masq_lib::ui_gateway::MessageBody;
 use websocket::receiver::Reader;
 use std::thread;
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
-use websocket::ws::receiver::Receiver;
+use websocket::ws::receiver::Receiver as WsReceiver;
 use websocket::OwnedMessage;
+use std::thread::JoinHandle;
+use std::cell::RefCell;
+use std::sync::{Mutex, Arc};
 
 #[derive (Clone, Copy, PartialEq, Debug)]
 pub enum ClientListenerError {
@@ -26,7 +29,38 @@ impl ClientListenerError {
     }
 }
 
-pub struct ClientListenerThread {
+pub struct ClientListener {
+    signal_opt: Arc<Mutex<Option<Receiver<()>>>>,
+}
+
+impl ClientListener {
+    pub fn new () -> Self {
+        Self {
+            signal_opt: Arc::new (Mutex::new (None))
+        }
+    }
+
+    pub fn start(&self, listener_half: Reader<TcpStream>, message_body_tx: Sender<Result<MessageBody, ClientListenerError>>) {
+        let thread = ClientListenerThread::new (listener_half, message_body_tx);
+        self.signal_opt.lock().expect ("ClientListener thread handle poisoned").replace (thread.start());
+    }
+
+    pub fn is_running (&self) -> bool {
+        let mut handle_opt_guard = self.signal_opt.lock().expect ("ClientListener thread handle poisoned");
+        match handle_opt_guard.take () {
+            Some (receiver) => match receiver.try_recv () {
+                Ok (_) => false,
+                Err (_) => {
+                    handle_opt_guard.replace (receiver);
+                    true
+                }
+            },
+            None => false
+        }
+    }
+}
+
+struct ClientListenerThread {
     listener_half: Reader<TcpStream>,
     message_body_tx: Sender<Result<MessageBody, ClientListenerError>>,
 }
@@ -39,7 +73,8 @@ impl ClientListenerThread {
         }
     }
 
-    pub fn start(mut self) {
+    pub fn start(mut self) -> Receiver<()> {
+        let (tx, rx) = unbounded();
         thread::spawn (move || {
             loop {
                 match self.listener_half.receiver.recv_message(&mut self.listener_half.stream) {
@@ -67,7 +102,9 @@ impl ClientListenerThread {
                     },
                 }
             }
+            let _ = tx.send(());
         });
+        rx
     }
 }
 
@@ -92,15 +129,17 @@ mod tests {
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
         let (message_body_tx, message_body_rx) = unbounded();
-        let subject = ClientListenerThread::new(listener_half, message_body_tx);
-        subject.start();
+        let subject = ClientListener::new();
+        subject.start (listener_half, message_body_tx);
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
 
         talker_half.sender.send_message(&mut talker_half.stream, &message).unwrap();
 
         let message_body = message_body_rx.recv().unwrap().unwrap();
         assert_eq! (message_body, expected_message.tmb(1));
+        assert_eq! (subject.is_running(), true);
         let _ = stop_handle.stop();
+        assert_eq! (subject.is_running(), false);
     }
 
     #[test]
@@ -113,14 +152,15 @@ mod tests {
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
         let (message_body_tx, message_body_rx) = unbounded();
-        let subject = ClientListenerThread::new(listener_half, message_body_tx);
-        subject.start();
+        let subject = ClientListener::new();
+        subject.start (listener_half, message_body_tx);
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
 
         talker_half.sender.send_message(&mut talker_half.stream, &message).unwrap();
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq! (error, ClientListenerError::Closed);
+        assert_eq! (subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -133,14 +173,15 @@ mod tests {
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
         let (message_body_tx, message_body_rx) = unbounded();
-        let subject = ClientListenerThread::new(listener_half, message_body_tx);
-        subject.start();
+        let subject = ClientListener::new();
+        subject.start (listener_half, message_body_tx);
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
 
         talker_half.sender.send_message(&mut talker_half.stream, &message).unwrap();
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq! (error, ClientListenerError::Broken);
+        assert_eq! (subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -153,15 +194,17 @@ mod tests {
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
         let (message_body_tx, message_body_rx) = unbounded();
-        let subject = ClientListenerThread::new(listener_half, message_body_tx);
-        subject.start();
+        let subject = ClientListener::new();
+        subject.start (listener_half, message_body_tx);
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
 
         talker_half.sender.send_message(&mut talker_half.stream, &message).unwrap();
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq! (error, ClientListenerError::UnexpectedPacket);
+        assert_eq! (subject.is_running(), true);
         let _ = stop_handle.stop();
+        assert_eq! (subject.is_running(), false);
     }
 
     #[test]
@@ -173,14 +216,15 @@ mod tests {
         let client = make_client(port);
         let (listener_half, mut talker_half) = client.split().unwrap();
         let (message_body_tx, message_body_rx) = unbounded();
-        let subject = ClientListenerThread::new(listener_half, message_body_tx);
-        subject.start();
+        let subject = ClientListener::new();
+        subject.start (listener_half, message_body_tx);
         let message = OwnedMessage::Text(UiTrafficConverter::new_marshal(UiShutdownRequest{}.tmb(1)));
 
         talker_half.sender.send_message(&mut talker_half.stream, &message).unwrap();
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq! (error, ClientListenerError::UnexpectedPacket);
+        assert_eq! (subject.is_running(), true);
         let _ = stop_handle.stop();
     }
 

@@ -5,23 +5,76 @@ use std::collections::HashMap;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use websocket::sender::Writer;
 use std::net::TcpStream;
-use crate::communications::node_conversation::NodeConversation;
+use crate::communications::node_conversation::{NodeConversation, NodeConversationTermination};
 use std::thread;
-use crate::communications::client_listener_thread::ClientListenerError;
+use crate::communications::client_listener_thread::{ClientListenerError, ClientListener};
 use crossbeam_channel::unbounded;
 use websocket::ws::sender::Sender as WsSender;
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use websocket::OwnedMessage;
+use masq_lib::utils::localhost;
+use masq_lib::messages::NODE_UI_PROTOCOL;
+use websocket::ClientBuilder;
+
+pub struct ConnectionManager {
+    conversation_trigger_tx: Sender<()>,
+    conversation_return_rx: Receiver<NodeConversation>,
+    disconnect_tx: Sender<()>,
+    client_listener: ClientListener,
+}
+
+impl ConnectionManager {
+    pub fn new () -> ConnectionManager {
+        let client_listener = ClientListener::new();
+        ConnectionManager {
+            conversation_trigger_tx: unbounded().0,
+            conversation_return_rx: unbounded().1,
+            disconnect_tx: unbounded().0,
+            client_listener,
+        }
+    }
+
+    pub fn connect (&mut self, port: u16) -> Result<(), ClientListenerError> {
+        let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
+        let builder =
+            ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
+        let client = match builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure() {
+            Ok(c) => c,
+            Err (e) => return Err(ClientListenerError::Broken),
+        };
+        let (listener_half, talker_half) = client.split().unwrap();
+        let client_listener = ClientListener::new();
+        client_listener.start(listener_half, listener_to_manager_tx);
+        let (conversation_trigger_tx, conversation_trigger_rx) = unbounded();
+        let (conversation_return_tx, conversation_return_rx) = unbounded();
+        let (disconnect_tx, disconnect_rx) = unbounded();
+        self.conversation_trigger_tx = conversation_trigger_tx;
+        self.conversation_return_rx = conversation_return_rx;
+        self.disconnect_tx = disconnect_tx;
+        let connection_manager_thread = ConnectionManagerThread::new(
+            conversation_trigger_rx,
+            conversation_return_tx,
+            disconnect_rx,
+        );
+        connection_manager_thread.start (talker_half, listener_to_manager_rx);
+        Ok(())
+    }
+
+    pub fn start_conversation (&self) -> NodeConversation {
+        self.conversation_trigger_tx.send (()).expect("ConnectionManager is not connected");
+        self.conversation_return_rx.recv().expect("ConnectionManager is not connected")
+    }
+}
 
 struct CmsInner {
-    conversations: HashMap<u64, Sender<Option<MessageBody>>>,
+    conversations: HashMap<u64, Sender<Result<MessageBody, NodeConversationTermination>>>,
     next_context_id: u64,
     conversation_trigger_rx: Receiver<()>,
     conversation_return_tx: Sender<NodeConversation>,
-    listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     conversations_to_manager_tx: Sender<Result<MessageBody, u64>>,
     conversations_to_manager_rx: Receiver<Result<MessageBody, u64>>,
-    talker_half: Writer<TcpStream>,
+    disconnect_rx: Receiver<()>,
+    talker_half: Option<Writer<TcpStream>>,
 }
 
 pub struct ConnectionManagerThread {
@@ -29,31 +82,33 @@ pub struct ConnectionManagerThread {
 }
 
 impl ConnectionManagerThread {
-    pub fn new(conversation_trigger_rx: Receiver<()>, conversation_return_tx: Sender<NodeConversation>, listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>, talker_half: Writer<TcpStream>) -> Self {
+    pub fn new(conversation_trigger_rx: Receiver<()>, conversation_return_tx: Sender<NodeConversation>, disconnect_rx: Receiver<()>) -> Self {
         let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
         let inner = CmsInner {
             conversations: HashMap::new(),
             next_context_id: 1,
             conversation_trigger_rx,
             conversation_return_tx,
-            listener_to_manager_rx,
             conversations_to_manager_tx,
             conversations_to_manager_rx,
-            talker_half
+            disconnect_rx,
+            talker_half: None,
         };
         ConnectionManagerThread {
             inner_opt: Some(inner),
         }
     }
 
-    pub fn start(mut self) {
+    pub fn start(mut self, talker_half: Writer<TcpStream>, listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>) {
         let mut inner = self.inner_opt.take().expect("Inner disappeared!");
+        inner.talker_half = Some (talker_half);
         thread::spawn (move || {
             loop {
                 select! {
                     recv(inner.conversation_trigger_rx) -> _ => Self::handle_conversation_trigger (&mut inner),
-                    recv(inner.listener_to_manager_rx) -> message_body_result_result => Self::handle_incoming_message_body (&mut inner, message_body_result_result),
+                    recv(listener_to_manager_rx) -> message_body_result_result => Self::handle_incoming_message_body (&mut inner, message_body_result_result),
                     recv(inner.conversations_to_manager_rx) -> message_body_result_result => Self::handle_outgoing_message_body (&mut inner, message_body_result_result),
+                    recv(inner.disconnect_rx) -> _ => Self::handle_disconnect (&mut inner),
                 }
             }
         });
@@ -67,7 +122,9 @@ impl ConnectionManagerThread {
         inner.conversations.insert (context_id, manager_to_conversation_tx);
         match inner.conversation_return_tx.send (conversation) {
             Ok(_) => (),
-            Err (e) => unimplemented! ("{:?}", e),
+            Err (e) => {
+                inner.conversations.remove (&context_id);
+            },
         }
     }
 
@@ -76,7 +133,7 @@ impl ConnectionManagerThread {
             Ok (msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
                     MessagePath::Conversation(context_id) => match inner.conversations.get(&context_id) {
-                        Some(sender) => match sender.send(Some(message_body)) {
+                        Some(sender) => match sender.send(Ok(message_body)) {
                             Ok(_) => (),
                             Err(e) => unimplemented!("{:?}", e),
                         },
@@ -86,14 +143,18 @@ impl ConnectionManagerThread {
                 },
                 Err(e) => unimplemented!("{:?}", e),
             },
-            Err (e) => unimplemented!("{:?}", e),
+            Err (e) => unimplemented! ("{:?}", e),
         }
     }
 
     fn handle_outgoing_message_body (inner: &mut CmsInner, msg_result_result: Result<Result<MessageBody, u64>, RecvError>) {
+        let talker_half_ref = match inner.talker_half.as_mut() {
+            Some (th) => th,
+            None => unimplemented!(),
+        };
         match msg_result_result {
             Ok(msg_opt) => match msg_opt {
-                Ok(message_body) => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
+                Ok(message_body) => match talker_half_ref.sender.send_message(&mut talker_half_ref.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
                     Ok(_) => (),
                     Err(e) => unimplemented!("{:?}", e),
                 },
@@ -101,6 +162,10 @@ impl ConnectionManagerThread {
             },
             Err(e) => unimplemented!("{:?}", e),
         }
+    }
+
+    fn handle_disconnect (inner: &mut CmsInner) {
+        unimplemented!()
     }
 }
 
@@ -113,20 +178,14 @@ mod tests {
     use masq_lib::messages::{UiShutdownResponse, UiShutdownRequest, UiStartResponse, UiStartOrder};
     use std::thread;
     use masq_lib::messages::ToMessageBody;
-    use crate::communications::client_listener_thread::ClientListenerThread;
+    use crate::communications::client_listener_thread::ClientListener;
 
-    fn make_subject (server: MockWebSocketsServer) -> (ConnectionManagerThread, Sender<()>, Receiver<NodeConversation>, MockWebSocketsServerStopHandle) {
+    fn make_subject (server: MockWebSocketsServer) -> (ConnectionManager, MockWebSocketsServerStopHandle) {
         let port = server.port();
-        let (conversation_trigger_tx, conversation_trigger_rx) = unbounded();
-        let (conversation_return_tx, conversation_return_rx) = unbounded();
-        let (message_body_tx, message_body_rx) = unbounded();
         let stop_handle = server.start();
-        let client = make_client(port);
-        let (listener_half, talker_half) = client.split().unwrap();
-        let client_listener_thread = ClientListenerThread::new(listener_half, message_body_tx);
-        client_listener_thread.start();
-        let subject = ConnectionManagerThread::new (conversation_trigger_rx, conversation_return_tx, message_body_rx, talker_half);
-        (subject, conversation_trigger_tx, conversation_return_rx, stop_handle)
+        let mut subject = ConnectionManager::new ();
+        subject.connect(port);
+        (subject, stop_handle)
     }
 
     #[test]
@@ -136,12 +195,9 @@ mod tests {
             .queue_response (UiShutdownResponse{}.tmb(1))
             .queue_response (UiStartResponse{new_process_id: 11, redirect_ui_port: 12}.tmb(1))
             .queue_response (UiStartResponse{new_process_id: 21, redirect_ui_port: 22}.tmb(2));
-        let (subject, conversation_trigger_tx, conversation_return_rx, stop_handle) = make_subject (server);
-        subject.start();
-        conversation_trigger_tx.send (()).unwrap();
-        conversation_trigger_tx.send (()).unwrap();
-        let conversation1 = conversation_return_rx.recv().unwrap();
-        let conversation2 = conversation_return_rx.recv().unwrap();
+        let (subject, stop_handle) = make_subject (server);
+        let conversation1 = subject.start_conversation();
+        let conversation2 = subject.start_conversation();
 
         let conversation1_handle = thread::spawn (move || {
             let response1 = conversation1.transact (UiShutdownRequest{}.tmb(0)).unwrap();
@@ -161,5 +217,32 @@ mod tests {
         assert_eq! (conversation2_response1, UiShutdownRequest{}.tmb(2));
         assert_eq! (conversation2_response2, UiStartResponse{new_process_id: 21, redirect_ui_port: 22}.tmb(2));
         let _ = stop_handle.stop();
+    }
+
+    fn make_inner() -> CmsInner {
+        let port = find_free_port();
+        CmsInner {
+            conversations: HashMap::new(),
+            next_context_id: 0,
+            conversation_trigger_rx: unbounded().1,
+            conversation_return_tx: unbounded().0,
+            conversations_to_manager_tx: unbounded().0,
+            conversations_to_manager_rx: unbounded().1,
+            disconnect_rx: unbounded().1,
+            talker_half: None,
+        }
+    }
+
+    #[test]
+    fn handles_failed_conversation_requester() {
+        let mut inner = make_inner();
+        let (conversation_return_tx, _) = unbounded();
+        inner.next_context_id = 42;
+        inner.conversation_return_tx = conversation_return_tx;
+
+        ConnectionManagerThread::handle_conversation_trigger (&mut inner);
+
+        assert_eq! (inner.next_context_id, 43);
+        assert_eq! (inner.conversations.is_empty(), true);
     }
 }
