@@ -8,8 +8,6 @@ use std::thread;
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use websocket::ws::receiver::Receiver as WsReceiver;
 use websocket::OwnedMessage;
-use std::thread::JoinHandle;
-use std::cell::RefCell;
 use std::sync::{Mutex, Arc};
 
 #[derive (Clone, Copy, PartialEq, Debug)]

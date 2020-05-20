@@ -4,9 +4,10 @@ use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use crate::communications::node_connection::ClientError;
 use crossbeam_channel::{Sender, Receiver};
 
+#[derive (PartialEq, Clone, Copy, Debug)]
 pub enum NodeConversationTermination {
     Graceful,
-    AttemptReconnect,
+    Resend,
     Fatal,
 }
 
@@ -36,7 +37,7 @@ eprint! ("transact called: {:?}", outgoing_msg);
             Ok (_) => match self.message_body_receive_rx.recv() {
                 Ok(Ok(body)) => Ok(body),
                 Ok(Err(NodeConversationTermination::Graceful)) => Err(ClientError::ConnectionDropped(String::new())),
-                Ok(Err(NodeConversationTermination::AttemptReconnect)) => unimplemented!("AttemptReconnect"),
+                Ok(Err(NodeConversationTermination::Resend)) => unimplemented!("AttemptReconnect"),
                 Ok(Err(NodeConversationTermination::Fatal)) => unimplemented!("Fatal"),
                 Err(e) => Err(ClientError::ConnectionDropped(String::new())),
             },
