@@ -39,12 +39,17 @@ eprint! ("transact called: {:?}", outgoing_msg);
                 Ok(Err(NodeConversationTermination::Graceful)) => Err(ClientError::ConnectionDropped(String::new())),
                 Ok(Err(NodeConversationTermination::Resend)) => unimplemented!("AttemptReconnect"),
                 Ok(Err(NodeConversationTermination::Fatal)) => unimplemented!("Fatal"),
-                Err(e) => Err(ClientError::ConnectionDropped(String::new())),
+                Err(_) => Err(ClientError::ConnectionDropped(String::new())),
             },
-            Err (e) => Err(ClientError::ConnectionDropped(String::new())),
+            Err (_) => Err(ClientError::ConnectionDropped(String::new())),
         };
 eprintln! (" -> {:?}", result);
         result
+    }
+
+    #[cfg(test)]
+    pub fn tx_rx (&self) -> (Sender<Result<MessageBody, u64>>, Receiver<Result<MessageBody, NodeConversationTermination>>) {
+        (self.message_body_send_tx.clone(), self.message_body_receive_rx.clone())
     }
 }
 
@@ -71,7 +76,7 @@ mod tests {
 
     #[test]
     fn handles_gracefully_closed_conversation () {
-        let (message_body_send_tx, message_body_send_rx) = unbounded();
+        let (message_body_send_tx, _) = unbounded();
         let (message_body_receive_tx, message_body_receive_rx) = unbounded();
         let subject = NodeConversation::new (42, message_body_send_tx, message_body_receive_rx);
         message_body_receive_tx.send(Err(NodeConversationTermination::Graceful)).unwrap();
@@ -99,11 +104,11 @@ mod tests {
 
     #[test]
     fn handles_receive_error () {
-        let (message_body_send_tx, message_body_send_rx) = unbounded();
+        let (message_body_send_tx, _) = unbounded();
         let (_, message_body_receive_rx) = unbounded();
         let subject = NodeConversation::new (42, message_body_send_tx, message_body_receive_rx);
 
-        let result = subject.transact (UiShutdownRequest{}.tmb(0)).err().unwrap();
+        let result = subject.transact (UiShutdownRequest{}.tmb(24)).err().unwrap();
 
         assert_eq! (result, ClientError::ConnectionDropped(String::new()));
     }

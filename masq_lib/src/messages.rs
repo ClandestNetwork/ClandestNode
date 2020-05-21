@@ -267,6 +267,23 @@ impl UiSetupResponse {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct UiSetupBroadcast {
+    pub running: bool,
+    pub values: Vec<UiSetupResponseValue>,
+    pub errors: Vec<(String, String)>,
+}
+fire_and_forget_message!(UiSetupBroadcast, "setup");
+impl UiSetupBroadcast {
+    pub fn new(response: &UiSetupResponse) -> UiSetupBroadcast {
+        UiSetupBroadcast {
+            running: response.running,
+            values: response.values.clone(),
+            errors: response.errors.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UiStartOrder {}
 conversation_message!(UiStartOrder, "start");
