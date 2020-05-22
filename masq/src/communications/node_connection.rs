@@ -11,7 +11,7 @@ pub const BROADCAST_CONTEXT_ID: u64 = 0;
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientError {
     NoServer(u16, String),
-    ConnectionDropped(String), // TODO: Remove the String here
+    ConnectionDropped(),
     FallbackFailed(String),
     PacketType(String),
     Deserialization(UnmarshalError),

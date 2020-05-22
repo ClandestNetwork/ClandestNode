@@ -45,7 +45,7 @@ impl ClientHandle {
         };
         if let Err(e) = result {
             match self.fall_back(&e) {
-                Ok(_) => Err(ConnectionDropped(format!("{:?}", e))),
+                Ok(_) => Err(ConnectionDropped()),
                 Err(e) => Err(e),
             }
         } else {
@@ -60,7 +60,7 @@ impl ClientHandle {
             Ok(x) => return Err(PacketType(format!("{:?}", x))),
             Err(e) => {
                 return match self.fall_back(&e) {
-                    Ok(_) => Err(ClientError::ConnectionDropped(format!("{:?}", e))),
+                    Ok(_) => Err(ClientError::ConnectionDropped()),
                     Err(e) => Err(e),
                 }
             }

@@ -109,7 +109,7 @@ mod tests {
         let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
         match result {
-            Err(ConnectionDropped(_)) => (),
+            Err(ConnectionDropped()) => (),
             x => panic!("Expected ConnectionDropped, got {:?}", x),
         }
         assert_eq!(daemon_handle.kill().len(), 0);
@@ -149,7 +149,7 @@ mod tests {
         let result = subject.transact(UiShutdownRequest {}.tmb(1));
 
         match result {
-            Err(ConnectionDropped(_)) => (),
+            Err(ConnectionDropped()) => (),
             x => panic!("Expected ConnectionDropped, got {:?}", x),
         }
         assert_eq!(daemon_stop_handle.kill().len(), 0);

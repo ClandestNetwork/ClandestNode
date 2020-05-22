@@ -20,6 +20,13 @@ pub trait BroadcastHandler: Send {
     fn handle (&self, message_body: MessageBody) -> ();
 }
 
+#[derive (Debug, Clone, PartialEq)]
+pub enum OutgoingMessageType {
+    ConversationMessage (MessageBody),
+    FireAndForgetMessage (MessageBody, u64),
+    SignOff (u64),
+}
+
 pub struct ConnectionManager {
     conversation_trigger_tx: Sender<()>,
     conversation_return_rx: Receiver<NodeConversation>,
@@ -79,8 +86,8 @@ struct CmsInner {
     next_context_id: u64,
     conversation_trigger_rx: Receiver<()>,
     conversation_return_tx: Sender<NodeConversation>,
-    conversations_to_manager_tx: Sender<Result<MessageBody, u64>>,
-    conversations_to_manager_rx: Receiver<Result<MessageBody, u64>>,
+    conversations_to_manager_tx: Sender<OutgoingMessageType>,
+    conversations_to_manager_rx: Receiver<OutgoingMessageType>,
     listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     talker_half: Writer<TcpStream>,
     broadcast_handler: Box<dyn BroadcastHandler>,
@@ -181,27 +188,34 @@ impl ConnectionManagerThread {
         inner
     }
 
-    fn handle_outgoing_message_body (mut inner: CmsInner, msg_result_result: Result<Result<MessageBody, u64>, RecvError>) -> CmsInner {
-        match msg_result_result {
-            Ok(msg_result) => match msg_result {
-                Ok(message_body) => match message_body.path {
-                    MessagePath::Conversation(context_id) => match inner.conversations.get (&context_id) {
-                        Some (_) => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
-                            Ok(_) => {
-                                inner.conversations_waiting.insert (context_id);
-                            },
-                            Err(e) => unimplemented!("{:?}", e),
+    fn handle_outgoing_message_body (mut inner: CmsInner, msg_result_result: Result<OutgoingMessageType, RecvError>) -> CmsInner {
+        match msg_result_result.expect ("Received message from beyond the grave") {
+            OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
+                MessagePath::Conversation(context_id) => match inner.conversations.get(&context_id) {
+                    Some(_) => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
+                        Ok(_) => {
+                            inner.conversations_waiting.insert(context_id);
                         },
-                        None => unimplemented!(),
+                        Err(e) => unimplemented!("{:?}", e),
                     },
-                    MessagePath::FireAndForget => unimplemented!(),
+                    None => unimplemented!(),
                 },
-                Err(context_id) => {
-                    let _ = inner.conversations.remove (&context_id);
-                    let _ = inner.conversations_waiting.remove (&context_id);
-                },
+                MessagePath::FireAndForget => panic!("NodeConversation should have prevented sending a FireAndForget message with transact()"),
             },
-            Err(e) => unimplemented!("{:?}", e),
+            OutgoingMessageType::FireAndForgetMessage(message_body, context_id) => match message_body.path {
+                MessagePath::FireAndForget => match inner.conversations.get (&context_id) {
+                    Some (conversation_tx) => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
+                        Ok (_) => {let _ = conversation_tx.send(Err(NodeConversationTermination::FiredAndForgotten));},
+                        Err (e) => unimplemented! ("{:?}", e),
+                    },
+                    None => unimplemented!(),
+                }
+                MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
+            },
+            OutgoingMessageType::SignOff(context_id) => {
+                let _ = inner.conversations.remove (&context_id);
+                let _ = inner.conversations_waiting.remove (&context_id);
+            },
         };
         inner
     }
@@ -230,11 +244,12 @@ mod tests {
     use crate::test_utils::client_utils::make_client;
     use masq_lib::utils::find_free_port;
     use crate::test_utils::mock_websockets_server::{MockWebSocketsServer, MockWebSocketsServerStopHandle};
-    use masq_lib::messages::{UiShutdownResponse, UiShutdownRequest, UiStartResponse, UiStartOrder, UiSetupResponse, UiSetupRequest, UiSetupBroadcast};
+    use masq_lib::messages::{UiShutdownResponse, UiShutdownRequest, UiStartResponse, UiStartOrder, UiSetupResponse, UiSetupRequest, UiSetupBroadcast, UiUnmarshalError};
     use std::thread;
-    use masq_lib::messages::ToMessageBody;
+    use masq_lib::messages::{ToMessageBody, FromMessageBody};
     use std::sync::{Mutex, Arc};
     use std::hash::Hash;
+    use std::time::Duration;
 
     struct NullBroadcastHandler;
 
@@ -282,6 +297,30 @@ mod tests {
     }
 
     #[test]
+    fn handles_fire_and_forget_messages () {
+        let server = MockWebSocketsServer::new(find_free_port());
+        let (subject, stop_handle) = make_subject (server);
+        let conversation = subject.start_conversation();
+        let message1 = UiUnmarshalError{
+            message: "Message 1".to_string(),
+            bad_data: "Data 1".to_string()
+        };
+        let message2 = UiUnmarshalError{
+            message: "Message 2".to_string(),
+            bad_data: "Data 2".to_string()
+        };
+
+        conversation.send (message1.clone().tmb(0)).unwrap();
+        conversation.send (message2.clone().tmb(0)).unwrap();
+
+        thread::sleep (Duration::from_millis(200));
+        let mut outgoing_messages = stop_handle.stop();
+        assert_eq! (UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()).unwrap(), (message1, 0));
+        assert_eq! (UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()).unwrap(), (message2, 0));
+        assert_eq! (outgoing_messages.is_empty(), true);
+    }
+
+    #[test]
     fn conversations_waiting_is_set_correctly() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port)
@@ -316,7 +355,7 @@ mod tests {
         assert_eq! (inner.conversations_waiting, vec_to_set(vec![]));
 
         // Send request from Conversation 1 and process it
-        conversation1_tx.send (Ok (UiShutdownRequest{}.tmb (1))).unwrap();
+        conversation1_tx.send (OutgoingMessageType::ConversationMessage (UiShutdownRequest{}.tmb (1))).unwrap();
         inner = ConnectionManagerThread::thread_loop_guts(inner); // send request 1
 
         // Conversations 1 and 2, 1 waiting
@@ -324,7 +363,7 @@ mod tests {
         assert_eq! (inner.conversations_waiting, vec_to_set(vec![1]));
 
         // Send request from Conversation 2 and process it
-        conversation2_tx.send (Ok (UiShutdownRequest{}.tmb(2))).unwrap();
+        conversation2_tx.send (OutgoingMessageType::ConversationMessage (UiShutdownRequest{}.tmb(2))).unwrap();
         inner = ConnectionManagerThread::thread_loop_guts(inner);
 
         // Conversations 1 and 2, 1 and 2 waiting
@@ -357,7 +396,7 @@ mod tests {
         assert_eq! (inner.conversations_waiting, vec_to_set(vec![]));
 
         // Conversation 1 signals exit; process it
-        conversation1_tx.send(Err (1)).unwrap();
+        conversation1_tx.send(OutgoingMessageType::SignOff(1)).unwrap();
         inner = ConnectionManagerThread::thread_loop_guts(inner);
 
         // Only Conversation 2, nobody waiting
@@ -365,7 +404,7 @@ mod tests {
         assert_eq! (inner.conversations_waiting, vec_to_set(vec![]));
 
         // Conversation 2 signals exit; process it
-        conversation2_tx.send(Err (2)).unwrap();
+        conversation2_tx.send(OutgoingMessageType::SignOff(2)).unwrap();
         inner = ConnectionManagerThread::thread_loop_guts(inner);
 
         // No more conversations, nobody waiting
@@ -406,7 +445,7 @@ mod tests {
         assert_eq! (inner.daemon_port, daemon_port);
         assert_eq! (inner.node_port, None);
         assert_eq! (inner.conversations_waiting.is_empty(), true);
-        let _ = ConnectionManagerThread::handle_outgoing_message_body (inner, Ok (Ok (UiSetupRequest{ values: vec![] }.tmb(4))));
+        let _ = ConnectionManagerThread::handle_outgoing_message_body (inner, Ok (OutgoingMessageType::ConversationMessage (UiSetupRequest{ values: vec![] }.tmb(4))));
         let mut outgoing_messages = stop_handle.stop();
         assert_eq! (outgoing_messages.remove (0), Ok(UiSetupRequest{values: vec![]}.tmb(4)));
     }
@@ -459,7 +498,7 @@ mod tests {
         assert_eq! (inner.daemon_port, daemon_port);
         assert_eq! (inner.node_port, None);
         assert_eq! (inner.conversations_waiting.is_empty(), true);
-        let _ = ConnectionManagerThread::handle_outgoing_message_body (inner, Ok (Ok (UiSetupRequest{ values: vec![] }.tmb(4))));
+        let _ = ConnectionManagerThread::handle_outgoing_message_body (inner, Ok (OutgoingMessageType::ConversationMessage (UiSetupRequest{ values: vec![] }.tmb(4))));
         let mut outgoing_messages = stop_handle.stop();
         assert_eq! (outgoing_messages.remove (0), Ok(UiSetupRequest{values: vec![]}.tmb(4)));
     }
@@ -576,6 +615,37 @@ mod tests {
 
         assert_eq! (inner.next_context_id, 43);
         assert_eq! (inner.conversations.is_empty(), true);
+    }
+
+    #[test]
+    fn handles_fire_and_forget_outgoing_message() {
+        let port = find_free_port();
+        let server = MockWebSocketsServer::new(port);
+        let stop_handle = server.start ();
+        let (_, talker_half) = make_client (port).split().unwrap();
+        let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
+        let (conversation_trigger_tx, conversation_trigger_rx) = unbounded();
+        let (conversation_return_tx, conversation_return_rx) = unbounded();
+        let (_listener_to_manager_tx, listener_to_manager_rx) = unbounded();
+        let mut inner = make_inner();
+        inner.next_context_id = 1;
+        inner.conversation_trigger_rx = conversation_trigger_rx;
+        inner.conversation_return_tx = conversation_return_tx;
+        inner.conversations_to_manager_tx = conversations_to_manager_tx;
+        inner.conversations_to_manager_rx = conversations_to_manager_rx;
+        inner.listener_to_manager_rx = listener_to_manager_rx;
+        inner.talker_half = talker_half;
+        conversation_trigger_tx.send (()).unwrap();
+        inner = ConnectionManagerThread::thread_loop_guts(inner);
+        let conversation = conversation_return_rx.try_recv().unwrap();
+        let outgoing_message = UiUnmarshalError{ message: "".to_string(), bad_data: "".to_string() }.tmb(0);
+
+        let inner = ConnectionManagerThread::handle_outgoing_message_body (inner, Ok (OutgoingMessageType::FireAndForgetMessage (outgoing_message.clone(), conversation.context_id())));
+
+        assert_eq! (inner.conversations.len(), 1);
+        assert_eq! (inner.conversations_waiting.is_empty(), true);
+        let mut outgoing_messages = stop_handle.stop();
+        assert_eq! (UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()), UiUnmarshalError::fmb(outgoing_message));
     }
 
     fn make_inner() -> CmsInner {

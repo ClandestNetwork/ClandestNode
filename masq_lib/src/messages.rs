@@ -311,7 +311,7 @@ fire_and_forget_message!(UiRedirect, "redirect");
 // These messages are sent to or by both the Daemon and the Node
 ///////////////////////////////////////////////////////////////////
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UiUnmarshalError {
     pub message: String,
     #[serde(rename = "badData")]

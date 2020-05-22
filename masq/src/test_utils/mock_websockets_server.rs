@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 use masq_lib::messages::NODE_UI_PROTOCOL;
-use masq_lib::ui_gateway::MessageBody;
+use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use masq_lib::utils::localhost;
 use std::net::SocketAddr;
@@ -94,18 +94,28 @@ impl MockWebSocketsServer {
                     Ok(x) => Some(Err(format!("{:?}", x))),
                 };
                 if let Some(incoming) = incoming_opt {
-                    requests.push(incoming);
-                    match inner_responses_arc.lock().unwrap().remove(0) {
-                        OwnedMessage::Text(outgoing) => {
-                            if outgoing == "disconnect" {
-                                break;
+                    requests.push(incoming.clone());
+                    match incoming {
+                        Ok(message_body) => match message_body.path {
+                            MessagePath::Conversation(_) => match inner_responses_arc.lock().unwrap().remove(0) {
+                                OwnedMessage::Text(outgoing) => {
+                                    if outgoing == "disconnect" {
+                                        break;
+                                    }
+                                    if outgoing == "close" {
+                                        client.send_message (&OwnedMessage::Close(None)).unwrap();
+                                    }
+                                    client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
+                                },
+                                om => {
+                                    client.send_message (&om).unwrap()
+                                },
+                            },
+                            MessagePath::FireAndForget => {
+                                ()
                             }
-                            if outgoing == "close" {
-                                client.send_message (&OwnedMessage::Close(None)).unwrap();
-                            }
-                            client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
                         },
-                        om => client.send_message (&om).unwrap(),
+                        Err(_) => (),
                     }
                 }
                 if let Ok(kill) = stop_rx.try_recv() {
@@ -114,7 +124,7 @@ impl MockWebSocketsServer {
                     }
                     break;
                 }
-                thread::sleep(Duration::from_millis(100))
+                thread::sleep(Duration::from_millis(50))
             }
         });
         ready_rx.recv().unwrap();
