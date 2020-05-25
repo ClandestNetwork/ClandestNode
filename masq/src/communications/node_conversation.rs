@@ -3,7 +3,7 @@
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use crate::communications::node_connection::ClientError;
 use crossbeam_channel::{Sender, Receiver};
-use crate::communications::connection_manager_thread::OutgoingMessageType;
+use crate::communications::connection_manager::OutgoingMessageType;
 
 #[derive (PartialEq, Clone, Copy, Debug)]
 pub enum NodeConversationTermination {
@@ -63,7 +63,9 @@ impl NodeConversation {
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
         let result = match self.conversations_to_manager_tx.send (OutgoingMessageType::ConversationMessage(outgoing_msg.clone())) {
             Ok (_) => {
-                match self.manager_to_conversation_rx.recv() {
+                let recv_result = self.manager_to_conversation_rx.recv();
+eprintln! ("recv_result: {:?}", recv_result);
+                match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => Err(ClientError::ConnectionDropped()),
                     Ok(Err(NodeConversationTermination::Resend)) => return self.transact(outgoing_msg),

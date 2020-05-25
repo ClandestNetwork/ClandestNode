@@ -43,6 +43,7 @@ impl ClientListener {
         self.signal_opt.lock().expect ("ClientListener thread handle poisoned").replace (thread.start());
     }
 
+    #[allow(dead_code)]
     pub fn is_running (&self) -> bool {
         let mut handle_opt_guard = self.signal_opt.lock().expect ("ClientListener thread handle poisoned");
         match handle_opt_guard.take () {

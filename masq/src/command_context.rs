@@ -1,12 +1,14 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::ContextError::{ConnectionRefused, RedirectFailure};
-use crate::communications::node_connection::{ClientError, NodeConnection};
+use crate::communications::node_connection::{ClientError};
+use crate::communications::connection_manager::ConnectionManager;
 use masq_lib::messages::{FromMessageBody, UiRedirect};
 use masq_lib::ui_gateway::MessageBody;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use std::io;
 use std::io::{Read, Write};
+use crate::communications::broadcast_handler::BroadcastHandlerReal;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -27,7 +29,7 @@ pub trait CommandContext {
 }
 
 pub struct CommandContextReal {
-    connection: NodeConnection,
+    connection: ConnectionManager,
     pub stdin: Box<dyn Read>,
     pub stdout: Box<dyn Write>,
     pub stderr: Box<dyn Write>,
@@ -40,7 +42,9 @@ impl CommandContext for CommandContextReal {
 
     fn transact(&mut self, outgoing_message: MessageBody) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
-        let incoming_message = match conversation.transact(outgoing_message) {
+        let incoming_message_result = conversation.transact (outgoing_message);
+eprintln! ("incoming_message_result: {:?}", incoming_message_result);
+        let incoming_message = match incoming_message_result {
             Err(ClientError::FallbackFailed(e)) => return Err(ContextError::ConnectionDropped(e)),
             Err(e) => return Err(ContextError::Other(format!("{:?}", e))),
             Ok(message) => match message.payload {
@@ -81,8 +85,9 @@ impl CommandContext for CommandContextReal {
 
 impl CommandContextReal {
     pub fn new(daemon_ui_port: u16) -> Result<Self, ContextError> {
-        match NodeConnection::new(daemon_ui_port, daemon_ui_port) {
-            Ok(connection) => Ok(Self {
+        let mut connection = ConnectionManager::new();
+        match connection.connect(daemon_ui_port, Box::new (BroadcastHandlerReal::new())) {
+            Ok(_) => Ok(Self {
                 connection,
                 stdin: Box::new(io::stdin()),
                 stdout: Box::new(io::stdout()),
@@ -93,12 +98,10 @@ impl CommandContextReal {
     }
 
     fn process_redirect(&mut self, redirect: UiRedirect) -> Result<MessageBody, ContextError> {
-        let node_connection =
-            match NodeConnection::new(self.connection.daemon_ui_port(), redirect.port) {
-                Ok(nc) => nc,
-                Err(e) => return Err(RedirectFailure(format!("{:?}", e))),
-            };
-        self.connection = node_connection;
+        match self.connection.redirect (redirect.port) {
+            Ok (()) => (),
+            Err (e) => return Err(RedirectFailure(format!("{:?}", e))),
+        }
         let message_body = MessageBody {
             opcode: redirect.opcode,
             path: if let Some(context_id) = redirect.context_id {
