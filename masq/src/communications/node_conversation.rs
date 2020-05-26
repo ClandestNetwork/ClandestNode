@@ -26,7 +26,12 @@ impl Drop for NodeConversation {
 }
 
 impl NodeConversation {
-    pub fn new (context_id: u64, conversations_to_manager_tx: Sender<OutgoingMessageType>, manager_to_conversation_rx: Receiver<Result<MessageBody, NodeConversationTermination>>) -> Self {
+    pub fn new (
+        context_id: u64,
+        conversations_to_manager_tx:
+        Sender<OutgoingMessageType>,
+        manager_to_conversation_rx: Receiver<Result<MessageBody, NodeConversationTermination>>
+    ) -> Self {
         Self {
             context_id,
             conversations_to_manager_tx,
@@ -61,10 +66,12 @@ impl NodeConversation {
             panic! ("Cannot use NodeConversation::transact() to send message with MessagePath::FireAndForget. Use NodeCoversation::send() instead.")
         }
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
+eprintln! ("Transacting with outgoing message: {:?}", outgoing_msg);
         let result = match self.conversations_to_manager_tx.send (OutgoingMessageType::ConversationMessage(outgoing_msg.clone())) {
             Ok (_) => {
+eprintln! ("Sent message successfully");
                 let recv_result = self.manager_to_conversation_rx.recv();
-eprintln! ("recv_result: {:?}", recv_result);
+eprintln! ("Response reception result: {:?}", recv_result);
                 match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => Err(ClientError::ConnectionDropped()),
@@ -74,7 +81,10 @@ eprintln! ("recv_result: {:?}", recv_result);
                     Err(_) => Err(ClientError::ConnectionDropped()),
                 }
             },
-            Err (_) => Err(ClientError::ConnectionDropped()),
+            Err (e) => {
+eprintln! ("Message not sent: {:?}", e);
+                Err(ClientError::ConnectionDropped())
+            },
         };
         result
     }

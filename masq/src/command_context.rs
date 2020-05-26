@@ -43,7 +43,6 @@ impl CommandContext for CommandContextReal {
     fn transact(&mut self, outgoing_message: MessageBody) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
         let incoming_message_result = conversation.transact (outgoing_message);
-eprintln! ("incoming_message_result: {:?}", incoming_message_result);
         let incoming_message = match incoming_message_result {
             Err(ClientError::FallbackFailed(e)) => return Err(ContextError::ConnectionDropped(e)),
             Err(e) => return Err(ContextError::Other(format!("{:?}", e))),

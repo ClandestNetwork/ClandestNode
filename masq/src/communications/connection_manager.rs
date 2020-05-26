@@ -200,7 +200,10 @@ impl ConnectionManagerThread {
                             ()
                         },
                     },
-                    MessagePath::FireAndForget => inner.broadcast_handler.handle (message_body),
+                    MessagePath::FireAndForget => {
+eprintln! ("Handling broadcast of message: {:?}", message_body);
+                        inner.broadcast_handler.handle (message_body)
+                    },
                 },
                 Err(e) => if e.is_fatal() {
                     // Fatal connection error: connection is dead, need to reestablish
@@ -276,6 +279,10 @@ impl ConnectionManagerThread {
     fn handle_active_port_request (inner: CmsInner) -> CmsInner {
         inner.active_port_response_tx.send (inner.active_port).expect ("ConnectionManager is dead");
         inner
+    }
+
+    fn handle_disconnect (inner: CmsInner) -> CmsInner {
+        unimplemented!()
     }
 
     fn fallback (mut inner: CmsInner) -> CmsInner {
@@ -878,6 +885,29 @@ mod tests {
 
         assert_eq! (inner.conversations.len(), 2);
         assert_eq! (inner.conversations_waiting.len(), 1);
+    }
+
+    #[test]
+    fn handles_disconnect () {
+        let port = find_free_port();
+        let server = MockWebSocketsServer::new(port)
+            .queue_owned_message (OwnedMessage::Close (None));
+        let stop_handle = server.start();
+        let client = make_client (port);
+        let (listener_half, talker_half) = client.split().unwrap();
+        let (conversation1_tx, conversation1_rx) = unbounded();
+        let (conversation2_tx, conversation2_rx) = unbounded();
+        let (conversation3_tx, conversation3_rx) = unbounded();
+        let conversations = vec![(1, conversation1_tx), (2, conversation2_tx), (3, conversation3_tx)].into_iter()
+            .collect::<HashMap<u64, Sender<Result<MessageBody, NodeConversationTermination>>>>();
+        let mut inner = make_inner();
+        inner.conversations = conversations;
+        inner.conversations_waiting = vec_to_set(vec![2, 3]);
+        inner.talker_half = talker_half;
+
+        inner = ConnectionManagerThread::handle_disconnect (inner);
+
+
     }
 
     fn make_inner() -> CmsInner {

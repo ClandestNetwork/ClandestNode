@@ -61,11 +61,14 @@ impl MockWebSocketsServer {
         let stop_pair: (Sender<bool>, Receiver<bool>) = std::sync::mpsc::channel();
         let (stop_tx, stop_rx) = stop_pair;
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+eprintln! ("Starting MockWebSocketsServer on port {}", self.port);
         let join_handle = thread::spawn(move || {
             let mut server = server_arc.lock().unwrap();
             let mut requests = inner_requests_arc.lock().unwrap();
+eprintln! ("Server started");
             ready_tx.send(()).unwrap();
             let upgrade = server.accept().unwrap();
+eprintln! ("Server sensed connection");
             if upgrade
                 .protocols()
                 .iter()
@@ -76,6 +79,7 @@ impl MockWebSocketsServer {
             }
             let mut client = upgrade.accept().unwrap();
             client.set_nonblocking(true).unwrap();
+eprintln! ("Looping for client");
             loop {
                 let incoming_opt = match client.recv_message() {
                     Err(WebSocketError::NoDataAvailable) => None,
@@ -94,20 +98,27 @@ impl MockWebSocketsServer {
                     Ok(x) => Some(Err(format!("{:?}", x))),
                 };
                 if let Some(incoming) = incoming_opt {
+eprintln! ("Mock server received outgoing message: {:?}", incoming);
                     requests.push(incoming.clone());
                     match incoming {
                         Ok(message_body) => match message_body.path {
                             MessagePath::Conversation(_) => match inner_responses_arc.lock().unwrap().remove(0) {
                                 OwnedMessage::Text(outgoing) => {
                                     if outgoing == "disconnect" {
+eprintln! ("Mock server disconnecting abruptly");
                                         break;
                                     }
                                     if outgoing == "close" {
+eprintln! ("Mock server closing connection");
                                         client.send_message (&OwnedMessage::Close(None)).unwrap();
                                     }
-                                    client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
+                                    else {
+eprintln! ("Mock server responding with incoming message: {:?}", outgoing);
+                                        client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
+                                    }
                                 },
                                 om => {
+eprintln! ("Mock server responding with incoming message: {:?}", om);
                                     client.send_message (&om).unwrap()
                                 },
                             },
@@ -115,13 +126,19 @@ impl MockWebSocketsServer {
                                 ()
                             }
                         },
-                        Err(_) => (),
+                        Err(e) => {
+eprintln! ("Mock server encountered error receiving outgoing message: {:?}", e);
+                            ()
+                        },
                     }
                 }
+eprintln! ("Mock server checking stop handle");
                 if let Ok(kill) = stop_rx.try_recv() {
                     if !kill {
+eprintln! ("Mock server closing connection politely");
                         client.send_message(&OwnedMessage::Close(None)).unwrap();
                     }
+eprintln! ("Mock server exiting");
                     break;
                 }
                 thread::sleep(Duration::from_millis(50))
