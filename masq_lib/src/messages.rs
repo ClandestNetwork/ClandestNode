@@ -9,6 +9,7 @@ use serde::export::fmt::Error;
 use serde::export::Formatter;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt;
+use std::fmt::Debug;
 
 pub const NODE_UI_PROTOCOL: &str = "MASQNode-UIv2";
 
@@ -56,7 +57,7 @@ pub trait ToMessageBody: serde::Serialize {
     fn is_conversational(&self) -> bool;
 }
 
-pub trait FromMessageBody: DeserializeOwned {
+pub trait FromMessageBody: DeserializeOwned + Debug {
     fn fmb(body: MessageBody) -> Result<(Self, u64), UiMessageError>;
 }
 

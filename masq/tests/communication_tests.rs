@@ -14,11 +14,11 @@ fn setup_results_are_broadcast_to_all_uis() {
     let mut setupper_handle = MasqProcess::new().start_interactive();
     let mut receiver_handle = MasqProcess::new().start_interactive();
 
-    setupper_handle.type_command ("setup --neighborhood-mode zero-hop");
+    setupper_handle.type_command("setup --neighborhood-mode zero-hop");
 
     let (stdout, stderr) = receiver_handle.get_response();
-    setupper_handle.type_command ("exit");
-    receiver_handle.type_command ("exit");
+    setupper_handle.type_command("exit");
+    receiver_handle.type_command("exit");
     daemon_handle.kill();
     assert_eq!(&stderr, "", "{}", stderr);
     assert_eq!(

@@ -3,8 +3,7 @@
 use crate::communications::connection_manager::BroadcastHandler;
 use masq_lib::ui_gateway::MessageBody;
 
-pub struct BroadcastHandlerReal {
-}
+pub struct BroadcastHandlerReal {}
 
 impl BroadcastHandler for BroadcastHandlerReal {
     fn handle(&self, _message_body: MessageBody) -> () {
@@ -13,7 +12,7 @@ impl BroadcastHandler for BroadcastHandlerReal {
 }
 
 impl BroadcastHandlerReal {
-    pub fn new () -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }
