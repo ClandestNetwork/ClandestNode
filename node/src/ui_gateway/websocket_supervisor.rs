@@ -140,6 +140,7 @@ impl WebSocketSupervisorReal {
     fn send_msg(locked_inner: &mut MutexGuard<WebSocketSupervisorInner>, msg: NodeToUiMessage) {
         let client_ids = match msg.target {
             MessageTarget::ClientId(n) => vec![n],
+            MessageTarget::AllExcept(n) => locked_inner.client_by_id.keys().filter(|k| k != &&n).copied().collect_vec(),
             MessageTarget::AllClients => locked_inner.client_by_id.keys().copied().collect_vec(),
         };
         let json = UiTrafficConverter::new_marshal(msg.body);
@@ -1387,7 +1388,50 @@ mod tests {
     }
 
     #[test]
-    fn send_msg_with_no_client_id_sends_a_message_to_all_clients() {
+    fn send_msg_with_all_except_sends_a_message_to_all_except() {
+        let port = find_free_port();
+        let (ui_gateway, _, _) = make_recorder();
+        let (from_ui_message, ui_message_sub) = subs(ui_gateway);
+        let system = System::new("send_msg_sends_a_message_to_the_client");
+        let lazy_future = lazy(move || {
+            let subject = WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub);
+            let one_mock_client = ClientWrapperMock::new()
+                .send_result(Ok(()))
+                .flush_result(Ok(()));
+            let another_mock_client = ClientWrapperMock::new()
+                .send_result(Ok(()))
+                .flush_result(Ok(()));
+            let one_client_id = subject.inject_mock_client(one_mock_client, false);
+            let another_client_id = subject.inject_mock_client(another_mock_client, false);
+            let msg = NodeToUiMessage {
+                target: MessageTarget::AllExcept(another_client_id),
+                body: MessageBody {
+                    opcode: "booga".to_string(),
+                    path: FireAndForget,
+                    payload: Ok("{}".to_string()),
+                },
+            };
+
+            subject.send_msg(msg.clone());
+
+            let one_mock_client_ref = subject.get_mock_client(one_client_id);
+            let actual_message = match one_mock_client_ref.send_params.lock().unwrap().get(0) {
+                Some(OwnedMessage::Text(json)) => UiTrafficConverter::new_unmarshal_to_ui(json.as_str(), MessageTarget::AllExcept(another_client_id)).unwrap(),
+                Some(x) => panic! ("send should have been called with OwnedMessage::Text, but was called with {:?} instead", x),
+                None => panic! ("send should have been called, but wasn't"),
+            };
+            assert_eq!(actual_message, msg);
+            let another_mock_client_ref = subject.get_mock_client(another_client_id);
+            assert_eq!(another_mock_client_ref.send_params.lock().unwrap().len(), 0);
+            Ok(())
+        });
+        actix::spawn(lazy_future);
+        System::current().stop();
+        system.run();
+    }
+
+    #[test]
+    fn send_msg_with_all_clients_sends_a_message_to_all_clients() {
         let port = find_free_port();
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
