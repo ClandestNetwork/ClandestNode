@@ -140,7 +140,12 @@ impl WebSocketSupervisorReal {
     fn send_msg(locked_inner: &mut MutexGuard<WebSocketSupervisorInner>, msg: NodeToUiMessage) {
         let client_ids = match msg.target {
             MessageTarget::ClientId(n) => vec![n],
-            MessageTarget::AllExcept(n) => locked_inner.client_by_id.keys().filter(|k| k != &&n).copied().collect_vec(),
+            MessageTarget::AllExcept(n) => locked_inner
+                .client_by_id
+                .keys()
+                .filter(|k| k != &&n)
+                .copied()
+                .collect_vec(),
             MessageTarget::AllClients => locked_inner.client_by_id.keys().copied().collect_vec(),
         };
         let json = UiTrafficConverter::new_marshal(msg.body);
