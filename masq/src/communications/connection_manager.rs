@@ -16,10 +16,7 @@ use websocket::sender::Writer;
 use websocket::ws::sender::Sender as WsSender;
 use websocket::ClientBuilder;
 use websocket::OwnedMessage;
-
-pub trait BroadcastHandler: Send {
-    fn handle(&self, message_body: MessageBody) -> ();
-}
+use crate::communications::broadcast_handler::BroadcastHandler;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
@@ -444,6 +441,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
+    use crate::communications::broadcast_handler::BroadcastHandler;
 
     struct MockBroadcastHandler {
         handle_params: Arc<Mutex<Vec<MessageBody>>>,

@@ -7,6 +7,7 @@ use crate::commands::commands_common::CommandError::{
 use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError};
 use masq_lib::ui_gateway::MessageBody;
 use std::fmt::Debug;
+use std::io::Write;
 
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
@@ -21,6 +22,9 @@ pub enum CommandError {
 
 pub trait Command: Debug {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError>;
+    fn handle_broadcast(&self, msg: MessageBody, stdout: &mut dyn Write, stderr: &mut dyn Write, new_prompt: bool) {
+        panic! ("No provision made for handling broadcast of '{}' message", msg.opcode);
+    }
 }
 
 pub fn transaction<I, O>(input: I, context: &mut dyn CommandContext) -> Result<O, CommandError>

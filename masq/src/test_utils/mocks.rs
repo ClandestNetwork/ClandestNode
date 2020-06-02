@@ -10,6 +10,7 @@ use masq_lib::ui_gateway::MessageBody;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
+use crate::communications::broadcast_handler::StreamFactory;
 
 #[derive(Default)]
 pub struct CommandFactoryMock {
@@ -168,13 +169,13 @@ impl CommandProcessorMock {
 
 #[derive(Default)]
 pub struct CommandProcessorFactoryMock {
-    make_params: Arc<Mutex<Vec<Vec<String>>>>,
+    make_params: Arc<Mutex<Vec<(Box<dyn StreamFactory>, Vec<String>)>>>,
     make_results: RefCell<Vec<Result<Box<dyn CommandProcessor>, CommandError>>>,
 }
 
 impl CommandProcessorFactory for CommandProcessorFactoryMock {
-    fn make(&self, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
-        self.make_params.lock().unwrap().push(args.to_vec());
+    fn make(&self, broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
+        self.make_params.lock().unwrap().push((broadcast_stream_factory, args.to_vec()));
         self.make_results.borrow_mut().remove(0)
     }
 }
@@ -184,7 +185,7 @@ impl CommandProcessorFactoryMock {
         Self::default()
     }
 
-    pub fn make_params(mut self, params: &Arc<Mutex<Vec<Vec<String>>>>) -> Self {
+    pub fn make_params(mut self, params: &Arc<Mutex<Vec<(Box<dyn StreamFactory>, Vec<String>)>>>) -> Self {
         self.make_params = params.clone();
         self
     }

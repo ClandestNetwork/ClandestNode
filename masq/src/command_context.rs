@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::ContextError::ConnectionRefused;
-use crate::communications::broadcast_handler::BroadcastHandlerReal;
+use crate::communications::broadcast_handler::{BroadcastHandlerReal, StreamFactory};
 use crate::communications::connection_manager::ConnectionManager;
 use crate::communications::node_conversation::ClientError;
 use masq_lib::ui_gateway::MessageBody;
@@ -73,9 +73,9 @@ impl CommandContext for CommandContextReal {
 }
 
 impl CommandContextReal {
-    pub fn new(daemon_ui_port: u16) -> Result<Self, ContextError> {
+    pub fn new(daemon_ui_port: u16, broadcast_stream_factory: Box<dyn StreamFactory>) -> Result<Self, ContextError> {
         let mut connection = ConnectionManager::new();
-        match connection.connect(daemon_ui_port, Box::new(BroadcastHandlerReal::new())) {
+        match connection.connect(daemon_ui_port, Box::new(BroadcastHandlerReal::new(broadcast_stream_factory))) {
             Ok(_) => Ok(Self {
                 connection,
                 stdin: Box::new(io::stdin()),
@@ -100,6 +100,7 @@ mod tests {
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::utils::find_free_port;
+    use crate::communications::broadcast_handler::StreamFactoryReal;
 
     #[test]
     fn sets_active_port_correctly_initially() {
@@ -107,7 +108,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let handle = server.start();
 
-        let subject = CommandContextReal::new(port).unwrap();
+        let subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
 
         assert_eq!(subject.active_port(), port);
         handle.kill();
@@ -123,7 +124,7 @@ mod tests {
         let stderr_arc = stderr.inner_arc();
         let server = MockWebSocketsServer::new(port).queue_response(UiShutdownResponse {}.tmb(1));
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port).unwrap();
+        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
         subject.stdin = Box::new(stdin);
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
@@ -154,7 +155,7 @@ mod tests {
     fn works_when_server_isnt_present() {
         let port = find_free_port();
 
-        let result = CommandContextReal::new(port);
+        let result = CommandContextReal::new(port, Box::new (StreamFactoryReal::new()));
 
         match result {
             Err(ConnectionRefused(_)) => (),
@@ -172,7 +173,7 @@ mod tests {
             payload: Err((101, "booga".to_string())),
         });
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port).unwrap();
+        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 
@@ -185,7 +186,7 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port).unwrap();
+        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 
