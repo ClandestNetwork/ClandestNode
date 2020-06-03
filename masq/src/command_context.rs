@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::ContextError::ConnectionRefused;
-use crate::communications::broadcast_handler::{BroadcastHandlerReal, StreamFactory};
+use crate::communications::broadcast_handler::{BroadcastHandlerRealOld, StreamFactory};
 use crate::communications::connection_manager::ConnectionManager;
 use crate::communications::node_conversation::ClientError;
 use masq_lib::ui_gateway::MessageBody;
@@ -75,7 +75,7 @@ impl CommandContext for CommandContextReal {
 impl CommandContextReal {
     pub fn new(daemon_ui_port: u16, broadcast_stream_factory: Box<dyn StreamFactory>) -> Result<Self, ContextError> {
         let mut connection = ConnectionManager::new();
-        match connection.connect(daemon_ui_port, Box::new(BroadcastHandlerReal::new(broadcast_stream_factory))) {
+        match connection.connect(daemon_ui_port, Box::new(BroadcastHandlerRealOld::new(broadcast_stream_factory))) {
             Ok(_) => Ok(Self {
                 connection,
                 stdin: Box::new(io::stdin()),

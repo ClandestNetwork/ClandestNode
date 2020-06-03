@@ -29,13 +29,17 @@ impl BroadcastHandle {
     }
 }
 
-pub struct BroadcastHandler {
+pub trait BroadcastHandler {
+    fn start (&self, stream_factory: Box<dyn StreamFactory>) -> BroadcastHandle;
+}
+
+pub struct BroadcastHandlerReal {
     message_rx: Receiver<MessageBody>,
     stop_rx: Receiver<()>,
 }
 
-impl BroadcastHandler {
-    pub fn start (stream_factory: Box<dyn StreamFactory>) -> BroadcastHandle {
+impl BroadcastHandler for BroadcastHandlerReal {
+    fn start (&self, stream_factory: Box<dyn StreamFactory>) -> BroadcastHandle {
         let (message_tx, message_rx) = unbounded();
         let (stop_tx, stop_rx) = unbounded();
         let stopper = thread::spawn (move || {
@@ -44,6 +48,15 @@ impl BroadcastHandler {
             }
         });
         BroadcastHandle { message_tx, stop_tx, stopper }
+    }
+}
+
+impl BroadcastHandlerReal {
+    pub fn new () -> Self {
+        Self {
+            message_rx: unbounded().1,
+            stop_rx: unbounded().1,
+        }
     }
 
     fn thread_loop_guts(message_rx: &Receiver<MessageBody>, stop_rx: &Receiver<()>, stdout: &mut dyn Write, stderr: &mut dyn Write) -> bool {
@@ -76,17 +89,17 @@ pub trait BroadcastHandlerOld: Send {
     fn handle(&self, message_body: MessageBody) -> ();
 }
 
-pub struct BroadcastHandlerReal {
+pub struct BroadcastHandlerRealOld {
     stream_factory: Box<dyn StreamFactory>,
 }
 
-impl BroadcastHandlerOld for BroadcastHandlerReal {
+impl BroadcastHandlerOld for BroadcastHandlerRealOld {
     fn handle(&self, message_body: MessageBody) -> () {
         panic! ("No provision made for receiving '{}' message as broadcast", message_body.opcode)
     }
 }
 
-impl BroadcastHandlerReal {
+impl BroadcastHandlerRealOld {
     pub fn new(stream_factory: Box<dyn StreamFactory>) -> Self {
         Self {
             stream_factory,
@@ -128,7 +141,7 @@ mod tests {
     #[test]
     fn broadcast_of_setup_triggers_correct_handler() {
         let (factory, handle) = TestStreamFactory::new();
-        let subject = BroadcastHandler::start (Box::new (factory));
+        let subject = BroadcastHandlerReal::new().start (Box::new (factory));
         let message = UiSetupBroadcast{
             running: true,
             values: vec![],
@@ -147,7 +160,7 @@ mod tests {
     #[test]
     fn unexpected_broadcasts_are_ineffectual_but_dont_kill_the_handler () {
         let (factory, handle) = TestStreamFactory::new();
-        let subject = BroadcastHandler::start (Box::new (factory));
+        let subject = BroadcastHandlerReal::new().start (Box::new (factory));
         let bad_message = MessageBody {
             opcode: "unrecognized".to_string(),
             path: MessagePath::FireAndForget,
