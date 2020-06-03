@@ -287,6 +287,33 @@ impl UiSetupBroadcast {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct UiSetupInner {
+    pub running: bool,
+    pub values: Vec<UiSetupResponseValue>,
+    pub errors: Vec<(String, String)>,
+}
+
+impl From<UiSetupResponse> for UiSetupInner {
+    fn from(input: UiSetupResponse) -> Self {
+        Self {
+            running: input.running,
+            values: input.values,
+            errors: input.errors,
+        }
+    }
+}
+
+impl From<UiSetupBroadcast> for UiSetupInner {
+    fn from(input: UiSetupBroadcast) -> Self {
+        Self {
+            running: input.running,
+            values: input.values,
+            errors: input.errors,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UiStartOrder {}
 conversation_message!(UiStartOrder, "start");

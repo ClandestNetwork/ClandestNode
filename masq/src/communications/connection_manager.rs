@@ -16,7 +16,7 @@ use websocket::sender::Writer;
 use websocket::ws::sender::Sender as WsSender;
 use websocket::ClientBuilder;
 use websocket::OwnedMessage;
-use crate::communications::broadcast_handler::BroadcastHandler;
+use crate::communications::broadcast_handler::BroadcastHandlerOld;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
@@ -52,7 +52,7 @@ impl ConnectionManager {
     pub fn connect(
         &mut self,
         port: u16,
-        broadcast_handler: Box<dyn BroadcastHandler>,
+        broadcast_handler: Box<dyn BroadcastHandlerOld>,
     ) -> Result<(), ClientListenerError> {
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
@@ -144,7 +144,7 @@ struct CmsInner {
     conversations_to_manager_rx: Receiver<OutgoingMessageType>,
     listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     talker_half: Writer<TcpStream>,
-    broadcast_handler: Box<dyn BroadcastHandler>,
+    broadcast_handler: Box<dyn BroadcastHandlerOld>,
     redirect_order_rx: Receiver<(u16, u64)>,
     redirect_response_tx: Sender<Result<(), ClientListenerError>>,
     active_port_response_tx: Sender<u16>,
@@ -389,11 +389,11 @@ impl ConnectionManagerThread {
 }
 
 struct RedirectBroadcastHandler {
-    next_handler: Box<dyn BroadcastHandler>,
+    next_handler: Box<dyn BroadcastHandlerOld>,
     redirect_order_tx: Sender<(u16, u64)>,
 }
 
-impl BroadcastHandler for RedirectBroadcastHandler {
+impl BroadcastHandlerOld for RedirectBroadcastHandler {
     fn handle(&self, message_body: MessageBody) -> () {
         match UiRedirect::fmb(message_body.clone()) {
             Ok((redirect, _)) => {
@@ -411,7 +411,7 @@ impl BroadcastHandler for RedirectBroadcastHandler {
 
 impl RedirectBroadcastHandler {
     pub fn new(
-        next_handler: Box<dyn BroadcastHandler>,
+        next_handler: Box<dyn BroadcastHandlerOld>,
         redirect_order_tx: Sender<(u16, u64)>,
     ) -> Self {
         Self {
@@ -441,13 +441,13 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use crate::communications::broadcast_handler::BroadcastHandler;
+    use crate::communications::broadcast_handler::BroadcastHandlerOld;
 
     struct MockBroadcastHandler {
         handle_params: Arc<Mutex<Vec<MessageBody>>>,
     }
 
-    impl BroadcastHandler for MockBroadcastHandler {
+    impl BroadcastHandlerOld for MockBroadcastHandler {
         fn handle(&self, message_body: MessageBody) -> () {
             self.handle_params.lock().unwrap().push(message_body);
         }

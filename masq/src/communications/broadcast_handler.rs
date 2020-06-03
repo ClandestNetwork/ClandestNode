@@ -2,8 +2,77 @@
 
 use masq_lib::ui_gateway::MessageBody;
 use std::io::Write;
+use crate::commands::setup_command::SetupCommand;
+use crossbeam_channel::{Sender, Receiver, unbounded, RecvError};
+use std::thread::JoinHandle;
+use std::thread;
+use std::fmt::Debug;
 
-pub trait BroadcastHandler: Send {
+pub struct BroadcastHandle {
+    message_tx: Sender<MessageBody>,
+    stop_tx: Sender<()>,
+    stopper: JoinHandle<()>,
+}
+
+impl BroadcastHandle {
+    pub fn send(&self, message_body: MessageBody) -> () {
+        self.message_tx.send (message_body).expect ("Message send failed")
+    }
+
+    pub fn stop(self) -> () {
+        self.stop_tx.send (()).expect ("Stop send failed");
+        let join_result = self.stopper.join();
+        match join_result {
+            Ok (_) => (),
+            Err (e) => panic! ("{:?}", e),
+        }
+    }
+}
+
+pub struct BroadcastHandler {
+    message_rx: Receiver<MessageBody>,
+    stop_rx: Receiver<()>,
+}
+
+impl BroadcastHandler {
+    pub fn start (stream_factory: Box<dyn StreamFactory>) -> BroadcastHandle {
+        let (message_tx, message_rx) = unbounded();
+        let (stop_tx, stop_rx) = unbounded();
+        let stopper = thread::spawn (move || {
+            let (mut stdout, mut stderr) = stream_factory.make();
+            while Self::thread_loop_guts(&message_rx, &stop_rx, stdout.as_mut(), stderr.as_mut()) {
+            }
+        });
+        BroadcastHandle { message_tx, stop_tx, stopper }
+    }
+
+    fn thread_loop_guts(message_rx: &Receiver<MessageBody>, stop_rx: &Receiver<()>, stdout: &mut dyn Write, stderr: &mut dyn Write) -> bool {
+        let mut retflag = true;
+        select! {
+            recv(message_rx) -> message_body_result => {
+                Self::handle_message_body (message_body_result, stdout, stderr);
+            },
+            recv(stop_rx) -> _ => {
+                retflag = false;
+            },
+        }
+        retflag
+    }
+
+    fn handle_message_body (message_body_result: Result<MessageBody, RecvError>, stdout: &mut dyn Write, stderr: &mut dyn Write) {
+        let message_body = message_body_result.expect ("Message from beyond the grave");
+        match message_body.opcode.as_str() {
+            "setup" => {
+                SetupCommand::handle_broadcast (message_body, stdout, stderr)
+            },
+            opcode => {
+                write! (stderr, "Discarding unrecognized broadcast with opcode '{}'\n\nmasq> ", opcode).expect ("write! failed");
+            },
+        }
+    }
+}
+
+pub trait BroadcastHandlerOld: Send {
     fn handle(&self, message_body: MessageBody) -> ();
 }
 
@@ -11,7 +80,7 @@ pub struct BroadcastHandlerReal {
     stream_factory: Box<dyn StreamFactory>,
 }
 
-impl BroadcastHandler for BroadcastHandlerReal {
+impl BroadcastHandlerOld for BroadcastHandlerReal {
     fn handle(&self, message_body: MessageBody) -> () {
         panic! ("No provision made for receiving '{}' message as broadcast", message_body.opcode)
     }
@@ -25,10 +94,11 @@ impl BroadcastHandlerReal {
     }
 }
 
-pub trait StreamFactory: Send {
+pub trait StreamFactory: Send + Debug {
     fn make (&self) -> (Box<dyn Write>, Box<dyn Write>);
 }
 
+#[derive (Clone, PartialEq, Debug)]
 pub struct StreamFactoryReal {}
 
 impl StreamFactory for StreamFactoryReal {
@@ -47,122 +117,58 @@ impl StreamFactoryReal {
 mod tests {
     use super::*;
     use std::io;
-    use crossbeam_channel::{Receiver, Sender, unbounded};
     use std::cell::RefCell;
     use masq_lib::ui_gateway::MessagePath;
     use masq_lib::messages::UiSetupBroadcast;
     use masq_lib::messages::ToMessageBody;
-
-    struct TestWrite {
-        write_tx: Sender<String>
-    }
-
-    impl Write for TestWrite {
-        fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-            let len = buf.len();
-            let string = String::from_utf8(buf.to_vec()).unwrap();
-            self.write_tx.send(string).unwrap();
-            Ok(len)
-        }
-
-        fn flush(&mut self) -> Result<(), io::Error> {
-            Ok(())
-        }
-    }
-
-    impl TestWrite {
-        fn new (write_tx: Sender<String>) -> Self {
-            Self {
-                write_tx,
-            }
-        }
-    }
-
-    struct TestStreamFactory {
-        stdout_opt: RefCell<Option<TestWrite>>,
-        stderr_opt: RefCell<Option<TestWrite>>,
-    }
-
-    impl StreamFactory for TestStreamFactory {
-        fn make(&self) -> (Box<dyn Write>, Box<dyn Write>) {
-            let stdout = self.stdout_opt.borrow_mut().take().unwrap();
-            let stderr = self.stderr_opt.borrow_mut().take().unwrap();
-            (Box::new (stdout), Box::new (stderr))
-        }
-    }
-
-    impl TestStreamFactory {
-        fn new () -> (TestStreamFactory, TestStreamFactoryHandle) {
-            let (stdout_tx, stdout_rx) = unbounded();
-            let (stderr_tx, stderr_rx) = unbounded();
-            let stdout = TestWrite::new (stdout_tx);
-            let stderr = TestWrite::new (stderr_tx);
-            let factory = TestStreamFactory {
-                stdout_opt: RefCell::new (Some (stdout)),
-                stderr_opt: RefCell::new (Some (stderr)),
-            };
-            let handle = TestStreamFactoryHandle {
-                stdout_rx,
-                stderr_rx,
-            };
-            (factory, handle)
-        }
-    }
-
-    struct TestStreamFactoryHandle {
-        stdout_rx: Receiver<String>,
-        stderr_rx: Receiver<String>,
-    }
-
-    impl TestStreamFactoryHandle {
-        pub fn stdout_so_far (&self) -> String {
-            Self::text_so_far(&self.stdout_rx)
-        }
-
-        pub fn stderr_so_far (&self) -> String {
-            Self::text_so_far(&self.stderr_rx)
-        }
-
-        fn text_so_far (rx: &Receiver<String>) -> String {
-            let mut accum = String::new();
-            loop {
-                match rx.try_recv() {
-                    Ok (s) => accum.extend (s.chars()),
-                    Err (_) => break,
-                }
-            }
-            accum
-        }
-    }
-
-    #[test]
-    #[should_panic (expected = "No provision made for receiving 'unrecognized' message as broadcast")]
-    fn broadcasts_without_handlers_cause_panics() {
-        let (factory, handle) = TestStreamFactory::new();
-        let subject = BroadcastHandlerReal::new (Box::new (factory));
-        let message = MessageBody {
-            opcode: "unrecognized".to_string(),
-            path: MessagePath::FireAndForget,
-            payload: (Ok("".to_string())),
-        };
-
-        subject.handle (message);
-    }
+    use crossbeam_channel::TryRecvError;
+    use std::time::Duration;
+    use crate::test_utils::mocks::TestStreamFactory;
 
     #[test]
     fn broadcast_of_setup_triggers_correct_handler() {
         let (factory, handle) = TestStreamFactory::new();
-        let subject = BroadcastHandlerReal::new (Box::new (factory));
+        let subject = BroadcastHandler::start (Box::new (factory));
         let message = UiSetupBroadcast{
             running: true,
             values: vec![],
             errors: vec![]
         }.tmb(0);
 
-        subject.handle (message);
+        subject.send (message);
 
         let stdout = handle.stdout_so_far();
-        assert_eq! (stdout.contains ("the Node is currently running."), true);
-        assert_eq! (stdout.contains ("masq> "), true);
+        subject.stop();
+        assert_eq! (stdout.contains ("the Node is currently running"), true, "stdout: '{}' doesn't contain 'the Node is currently running'", stdout);
+        assert_eq! (stdout.contains ("masq> "), true, "stdout: '{}' doesn't contain 'masq> '", stdout);
+        assert_eq! (handle.stderr_so_far(), "".to_string(), "stderr: '{}'", stdout);
+    }
+
+    #[test]
+    fn unexpected_broadcasts_are_ineffectual_but_dont_kill_the_handler () {
+        let (factory, handle) = TestStreamFactory::new();
+        let subject = BroadcastHandler::start (Box::new (factory));
+        let bad_message = MessageBody {
+            opcode: "unrecognized".to_string(),
+            path: MessagePath::FireAndForget,
+            payload: (Ok("".to_string())),
+        };
+        let good_message = UiSetupBroadcast{
+            running: true,
+            values: vec![],
+            errors: vec![]
+        }.tmb(0);
+
+        subject.send (bad_message);
+
+        assert_eq! (handle.stdout_so_far(), String::new());
+        assert_eq! (handle.stderr_so_far(), ("Discarding unrecognized broadcast with opcode 'unrecognized'\n\nmasq> "));
+
+        subject.send (good_message);
+
+        let stdout = handle.stdout_so_far();
+        assert_eq! (stdout.contains ("the Node is currently running"), true, "stdout: '{}' doesn't contain 'the Node is currently running'", stdout);
+        assert_eq! (handle.stderr_so_far(), String::new());
+        subject.stop();
     }
 }
