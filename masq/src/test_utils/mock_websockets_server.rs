@@ -168,8 +168,8 @@ mod tests {
     use masq_lib::test_utils::ui_connection::UiConnection;
     use masq_lib::utils::find_free_port;
 
-    #[ignore]
     #[test]
+    #[ignore]
     fn two_in_two_out() {
         let port = find_free_port();
         let first_expected_response = UiSetupResponse {
