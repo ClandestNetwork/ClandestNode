@@ -5,15 +5,15 @@ use crate::command_factory::{CommandFactory, CommandFactoryError};
 use crate::command_processor::{CommandProcessor, CommandProcessorFactory};
 use crate::commands::commands_common::CommandError::Transmission;
 use crate::commands::commands_common::{Command, CommandError};
+use crate::communications::broadcast_handler::StreamFactory;
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, ByteArrayWriterInner};
 use masq_lib::ui_gateway::MessageBody;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
-use crate::communications::broadcast_handler::StreamFactory;
-use crossbeam_channel::{Sender, unbounded, Receiver, TryRecvError};
-use std::{io, thread};
 use std::time::Duration;
+use std::{io, thread};
 
 #[derive(Default)]
 pub struct CommandFactoryMock {
@@ -177,7 +177,11 @@ pub struct CommandProcessorFactoryMock {
 }
 
 impl CommandProcessorFactory for CommandProcessorFactoryMock {
-    fn make(&self, _broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
+    fn make(
+        &self,
+        _broadcast_stream_factory: Box<dyn StreamFactory>,
+        args: &[String],
+    ) -> Result<Box<dyn CommandProcessor>, CommandError> {
         self.make_params.lock().unwrap().push(args.to_vec());
         self.make_results.borrow_mut().remove(0)
     }
@@ -235,9 +239,9 @@ impl MockCommand {
     }
 }
 
-#[derive (Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TestWrite {
-    write_tx: Sender<String>
+    write_tx: Sender<String>,
 }
 
 impl Write for TestWrite {
@@ -254,10 +258,8 @@ impl Write for TestWrite {
 }
 
 impl TestWrite {
-    pub fn new (write_tx: Sender<String>) -> Self {
-        Self {
-            write_tx,
-        }
+    pub fn new(write_tx: Sender<String>) -> Self {
+        Self { write_tx }
     }
 }
 
@@ -271,19 +273,19 @@ impl StreamFactory for TestStreamFactory {
     fn make(&self) -> (Box<dyn Write>, Box<dyn Write>) {
         let stdout = self.stdout_opt.borrow_mut().take().unwrap();
         let stderr = self.stderr_opt.borrow_mut().take().unwrap();
-        (Box::new (stdout), Box::new (stderr))
+        (Box::new(stdout), Box::new(stderr))
     }
 }
 
 impl TestStreamFactory {
-    pub fn new () -> (TestStreamFactory, TestStreamFactoryHandle) {
+    pub fn new() -> (TestStreamFactory, TestStreamFactoryHandle) {
         let (stdout_tx, stdout_rx) = unbounded();
         let (stderr_tx, stderr_rx) = unbounded();
-        let stdout = TestWrite::new (stdout_tx);
-        let stderr = TestWrite::new (stderr_tx);
+        let stdout = TestWrite::new(stdout_tx);
+        let stderr = TestWrite::new(stderr_tx);
         let factory = TestStreamFactory {
-            stdout_opt: RefCell::new (Some (stdout)),
-            stderr_opt: RefCell::new (Some (stderr)),
+            stdout_opt: RefCell::new(Some(stdout)),
+            stderr_opt: RefCell::new(Some(stderr)),
         };
         let handle = TestStreamFactoryHandle {
             stdout_rx,
@@ -293,38 +295,38 @@ impl TestStreamFactory {
     }
 }
 
-#[derive (Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TestStreamFactoryHandle {
     stdout_rx: Receiver<String>,
     stderr_rx: Receiver<String>,
 }
 
 impl TestStreamFactoryHandle {
-    pub fn stdout_so_far (&self) -> String {
+    pub fn stdout_so_far(&self) -> String {
         Self::text_so_far(&self.stdout_rx)
     }
 
-    pub fn stderr_so_far (&self) -> String {
+    pub fn stderr_so_far(&self) -> String {
         Self::text_so_far(&self.stderr_rx)
     }
 
-    fn text_so_far (rx: &Receiver<String>) -> String {
+    fn text_so_far(rx: &Receiver<String>) -> String {
         let mut accum = String::new();
         let mut retries_left = 5;
         loop {
             match rx.try_recv() {
-                Ok (s) => {
-                    accum.push_str (&s);
+                Ok(s) => {
+                    accum.push_str(&s);
                     retries_left = 5;
-                },
-                Err (TryRecvError::Empty) => {
-                    retries_left -= 1;
-                    if retries_left <= 0 {break;}
-                    thread::sleep (Duration::from_millis(100));
                 }
-                Err (_) => {
-                    break
-                },
+                Err(TryRecvError::Empty) => {
+                    retries_left -= 1;
+                    if retries_left <= 0 {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+                Err(_) => break,
             }
         }
         accum

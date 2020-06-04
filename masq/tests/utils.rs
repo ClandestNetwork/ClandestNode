@@ -111,11 +111,11 @@ impl ControlHandle {
     }
 
     pub fn get_stdout(&mut self) -> String {
-        Self::read_chunk (&mut self.stdout)
+        Self::read_chunk(&mut self.stdout)
     }
 
     pub fn get_stderr(&mut self) -> String {
-        Self::read_chunk (&mut self.stderr)
+        Self::read_chunk(&mut self.stderr)
     }
 
     // NOTE: Only reads first few bytes

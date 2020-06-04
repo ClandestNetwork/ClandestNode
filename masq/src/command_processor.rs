@@ -3,19 +3,27 @@
 use crate::command_context::CommandContextReal;
 use crate::command_context::{CommandContext, ContextError};
 use crate::commands::commands_common::{Command, CommandError};
+use crate::communications::broadcast_handler::StreamFactory;
 use crate::schema::app;
 use clap::value_t;
-use crate::communications::broadcast_handler::StreamFactory;
 
 pub trait CommandProcessorFactory {
-    fn make(&self, broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError>;
+    fn make(
+        &self,
+        broadcast_stream_factory: Box<dyn StreamFactory>,
+        args: &[String],
+    ) -> Result<Box<dyn CommandProcessor>, CommandError>;
 }
 
 #[derive(Default)]
 pub struct CommandProcessorFactoryReal {}
 
 impl CommandProcessorFactory for CommandProcessorFactoryReal {
-    fn make(&self, broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
+    fn make(
+        &self,
+        broadcast_stream_factory: Box<dyn StreamFactory>,
+        args: &[String],
+    ) -> Result<Box<dyn CommandProcessor>, CommandError> {
         let matches = app().get_matches_from(args);
         let ui_port = value_t!(matches, "ui-port", u16).expect("ui-port is not properly defaulted");
         match CommandContextReal::new(ui_port, broadcast_stream_factory) {
@@ -56,11 +64,11 @@ impl CommandProcessor for CommandProcessorReal {
 mod tests {
     use super::*;
     use crate::command_context::CommandContext;
+    use crate::communications::broadcast_handler::StreamFactoryReal;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse};
     use masq_lib::utils::find_free_port;
-    use crate::communications::broadcast_handler::StreamFactoryReal;
 
     #[derive(Debug)]
     struct TestCommand {}
@@ -84,7 +92,7 @@ mod tests {
         ];
         let subject = CommandProcessorFactoryReal::new();
 
-        let result = subject.make(Box::new (StreamFactoryReal::new()), &args);
+        let result = subject.make(Box::new(StreamFactoryReal::new()), &args);
 
         match result {
             Ok(_) => panic!("Success! Was hoping for failure."),
@@ -105,7 +113,9 @@ mod tests {
         let server = MockWebSocketsServer::new(port).queue_response(UiShutdownResponse {}.tmb(1));
         let stop_handle = server.start();
 
-        let mut result = subject.make(Box::new (StreamFactoryReal::new()), &args).unwrap();
+        let mut result = subject
+            .make(Box::new(StreamFactoryReal::new()), &args)
+            .unwrap();
 
         let command = TestCommand {};
         result.process(Box::new(command)).unwrap();

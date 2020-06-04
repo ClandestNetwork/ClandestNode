@@ -96,15 +96,13 @@ impl NodeConversation {
                     Ok(Err(NodeConversationTermination::Graceful)) => {
                         Err(ClientError::ConnectionDropped)
                     }
-                    Ok(Err(NodeConversationTermination::Resend)) => {
-                        self.transact(outgoing_msg)
-                    }
+                    Ok(Err(NodeConversationTermination::Resend)) => self.transact(outgoing_msg),
                     Ok(Err(NodeConversationTermination::Fatal)) => {
                         Err(ClientError::ConnectionDropped)
                     }
-                    Ok(Err(NodeConversationTermination::FiredAndForgotten)) => panic!(
-                        "Conversation messages should never produce FiredAndForgotten error"
-                    ),
+                    Ok(Err(NodeConversationTermination::FiredAndForgotten)) => {
+                        panic!("Conversation messages should never produce FiredAndForgotten error")
+                    }
                     Err(_) => Err(ClientError::ConnectionDropped),
                 }
             }

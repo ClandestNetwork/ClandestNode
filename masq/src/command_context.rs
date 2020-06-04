@@ -1,7 +1,9 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::ContextError::ConnectionRefused;
-use crate::communications::broadcast_handler::{BroadcastHandlerReal, StreamFactory, BroadcastHandler};
+use crate::communications::broadcast_handler::{
+    BroadcastHandler, BroadcastHandlerReal, StreamFactory,
+};
 use crate::communications::connection_manager::ConnectionManager;
 use crate::communications::node_conversation::ClientError;
 use masq_lib::ui_gateway::MessageBody;
@@ -73,10 +75,13 @@ impl CommandContext for CommandContextReal {
 }
 
 impl CommandContextReal {
-    pub fn new(daemon_ui_port: u16, broadcast_stream_factory: Box<dyn StreamFactory>) -> Result<Self, ContextError> {
+    pub fn new(
+        daemon_ui_port: u16,
+        broadcast_stream_factory: Box<dyn StreamFactory>,
+    ) -> Result<Self, ContextError> {
         let mut connection = ConnectionManager::new();
         let broadcast_handler = BroadcastHandlerReal::new();
-        let broadcast_handle = broadcast_handler.start (broadcast_stream_factory);
+        let broadcast_handle = broadcast_handler.start(broadcast_stream_factory);
         match connection.connect(daemon_ui_port, broadcast_handle) {
             Ok(_) => Ok(Self {
                 connection,
@@ -95,6 +100,7 @@ mod tests {
     use crate::command_context::ContextError::{
         ConnectionDropped, ConnectionRefused, PayloadError,
     };
+    use crate::communications::broadcast_handler::StreamFactoryReal;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::{FromMessageBody, UiSetupRequest};
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
@@ -102,7 +108,6 @@ mod tests {
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::utils::find_free_port;
-    use crate::communications::broadcast_handler::StreamFactoryReal;
 
     #[test]
     fn sets_active_port_correctly_initially() {
@@ -110,7 +115,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let handle = server.start();
 
-        let subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
+        let subject = CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
         assert_eq!(subject.active_port(), port);
         handle.kill();
@@ -126,7 +131,8 @@ mod tests {
         let stderr_arc = stderr.inner_arc();
         let server = MockWebSocketsServer::new(port).queue_response(UiShutdownResponse {}.tmb(1));
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
+        let mut subject =
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
         subject.stdin = Box::new(stdin);
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
@@ -157,7 +163,7 @@ mod tests {
     fn works_when_server_isnt_present() {
         let port = find_free_port();
 
-        let result = CommandContextReal::new(port, Box::new (StreamFactoryReal::new()));
+        let result = CommandContextReal::new(port, Box::new(StreamFactoryReal::new()));
 
         match result {
             Err(ConnectionRefused(_)) => (),
@@ -175,7 +181,8 @@ mod tests {
             payload: Err((101, "booga".to_string())),
         });
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
+        let mut subject =
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 
@@ -188,7 +195,8 @@ mod tests {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();
-        let mut subject = CommandContextReal::new(port, Box::new (StreamFactoryReal::new())).unwrap();
+        let mut subject =
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
 

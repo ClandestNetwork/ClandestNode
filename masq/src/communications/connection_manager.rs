@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
+use crate::communications::broadcast_handler::{
+    BroadcastHandle, BroadcastHandler, StreamFactory, StreamFactoryReal,
+};
 use crate::communications::client_listener_thread::{ClientListener, ClientListenerError};
 use crate::communications::node_conversation::{NodeConversation, NodeConversationTermination};
 use crossbeam_channel::unbounded;
@@ -16,7 +19,6 @@ use websocket::sender::Writer;
 use websocket::ws::sender::Sender as WsSender;
 use websocket::ClientBuilder;
 use websocket::OwnedMessage;
-use crate::communications::broadcast_handler::{BroadcastHandler, BroadcastHandle, StreamFactory, StreamFactoryReal};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
@@ -86,7 +88,7 @@ impl ConnectionManager {
             conversations_to_manager_rx: unbounded().1,
             listener_to_manager_rx,
             talker_half,
-            broadcast_handle: redirect_broadcast_handler.start (Box::new (StreamFactoryReal::new())),
+            broadcast_handle: redirect_broadcast_handler.start(Box::new(StreamFactoryReal::new())),
             redirect_order_rx,
             redirect_response_tx,
             active_port_response_tx,
@@ -308,8 +310,7 @@ impl ConnectionManagerThread {
         inner.conversations_waiting.iter().for_each(|context_id| {
             let error = if *context_id == redirecting_context_id {
                 NodeConversationTermination::Resend
-            }
-            else {
+            } else {
                 NodeConversationTermination::Graceful
             };
             let _ = inner
@@ -414,7 +415,7 @@ struct RedirectBroadcastHandler {
 
 impl BroadcastHandler for RedirectBroadcastHandler {
     fn start(self, _stream_factory: Box<dyn StreamFactory>) -> Box<dyn BroadcastHandle> {
-        Box::new (BroadcastHandleRedirect {
+        Box::new(BroadcastHandleRedirect {
             next_handle: self.next_handle,
             redirect_order_tx: self.redirect_order_tx,
         })
@@ -436,6 +437,7 @@ impl RedirectBroadcastHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::communications::broadcast_handler::{BroadcastHandler, StreamFactoryReal};
     use crate::communications::node_conversation::ClientError;
     use crate::test_utils::client_utils::make_client;
     use crate::test_utils::mock_websockets_server::{
@@ -453,22 +455,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use crate::communications::broadcast_handler::{BroadcastHandler, StreamFactoryReal};
 
     struct BroadcastHandleMock {
-        send_params: Arc<Mutex<Vec<MessageBody>>>
+        send_params: Arc<Mutex<Vec<MessageBody>>>,
     }
 
     impl BroadcastHandle for BroadcastHandleMock {
         fn send(&self, message_body: MessageBody) -> () {
-            self.send_params.lock().unwrap().push (message_body);
+            self.send_params.lock().unwrap().push(message_body);
         }
     }
 
     impl BroadcastHandleMock {
         pub fn new() -> Self {
             Self {
-                send_params: Arc::new (Mutex::new (vec![]))
+                send_params: Arc::new(Mutex::new(vec![])),
             }
         }
 
@@ -900,10 +901,9 @@ mod tests {
         let mut inner = make_inner();
         inner.conversations.insert(4, conversation_tx);
         inner.conversations_waiting.insert(4);
-        inner.broadcast_handle = RedirectBroadcastHandler::new(
-            Box::new(broadcast_handler),
-            unbounded().0,
-        ).start(Box::new (StreamFactoryReal::new()));
+        inner.broadcast_handle =
+            RedirectBroadcastHandler::new(Box::new(broadcast_handler), unbounded().0)
+                .start(Box::new(StreamFactoryReal::new()));
 
         let inner = ConnectionManagerThread::handle_incoming_message_body(
             inner,
