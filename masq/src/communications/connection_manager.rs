@@ -16,7 +16,7 @@ use websocket::sender::Writer;
 use websocket::ws::sender::Sender as WsSender;
 use websocket::ClientBuilder;
 use websocket::OwnedMessage;
-use crate::communications::broadcast_handler::BroadcastHandlerOld;
+use crate::communications::broadcast_handler::{BroadcastHandler, BroadcastHandle, StreamFactory, StreamFactoryReal};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
@@ -39,6 +39,12 @@ pub struct ConnectionManager {
     active_port_response_rx: Receiver<u16>,
 }
 
+impl Default for ConnectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionManager {
     pub fn new() -> ConnectionManager {
         ConnectionManager {
@@ -52,7 +58,7 @@ impl ConnectionManager {
     pub fn connect(
         &mut self,
         port: u16,
-        broadcast_handler: Box<dyn BroadcastHandlerOld>,
+        broadcast_handle: Box<dyn BroadcastHandle>,
     ) -> Result<(), ClientListenerError> {
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
@@ -62,7 +68,7 @@ impl ConnectionManager {
         let (redirect_response_tx, redirect_response_rx) = unbounded();
         let (active_port_response_tx, active_port_response_rx) = unbounded();
         let redirect_broadcast_handler =
-            RedirectBroadcastHandler::new(broadcast_handler, redirect_order_tx);
+            RedirectBroadcastHandler::new(broadcast_handle, redirect_order_tx);
         self.demand_tx = demand_tx;
         self.conversation_return_rx = conversation_return_rx;
         self.redirect_response_rx = redirect_response_rx;
@@ -80,7 +86,7 @@ impl ConnectionManager {
             conversations_to_manager_rx: unbounded().1,
             listener_to_manager_rx,
             talker_half,
-            broadcast_handler: Box::new(redirect_broadcast_handler),
+            broadcast_handle: redirect_broadcast_handler.start (Box::new (StreamFactoryReal::new())),
             redirect_order_rx,
             redirect_response_tx,
             active_port_response_tx,
@@ -144,7 +150,7 @@ struct CmsInner {
     conversations_to_manager_rx: Receiver<OutgoingMessageType>,
     listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     talker_half: Writer<TcpStream>,
-    broadcast_handler: Box<dyn BroadcastHandlerOld>,
+    broadcast_handle: Box<dyn BroadcastHandle>,
     redirect_order_rx: Receiver<(u16, u64)>,
     redirect_response_tx: Sender<Result<(), ClientListenerError>>,
     active_port_response_tx: Sender<u16>,
@@ -153,7 +159,7 @@ struct CmsInner {
 pub struct ConnectionManagerThread {}
 
 impl ConnectionManagerThread {
-    fn start(mut inner: CmsInner) -> () {
+    fn start(mut inner: CmsInner) {
         let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
         inner.conversations_to_manager_tx = conversations_to_manager_tx;
         inner.conversations_to_manager_rx = conversations_to_manager_rx;
@@ -213,8 +219,8 @@ impl ConnectionManagerThread {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
                     MessagePath::Conversation(context_id) => {
-                        match inner.conversations.get(&context_id) {
-                            Some(sender) => match sender.send(Ok(message_body)) {
+                        if let Some(sender) = inner.conversations.get(&context_id) {
+                            match sender.send(Ok(message_body)) {
                                 Ok(_) => {
                                     inner.conversations_waiting.remove(&context_id);
                                 }
@@ -223,15 +229,10 @@ impl ConnectionManagerThread {
                                     let _ = inner.conversations.remove(&context_id);
                                     let _ = inner.conversations_waiting.remove(&context_id);
                                 }
-                            },
-                            None => {
-                                // The conversation waiting for this message is missing
-                                // Should we print something to stderr here? We don't have a stderr handy...
-                                ()
                             }
                         }
                     }
-                    MessagePath::FireAndForget => inner.broadcast_handler.handle(message_body),
+                    MessagePath::FireAndForget => inner.broadcast_handle.send(message_body),
                 },
                 Err(e) => {
                     if e.is_fatal() {
@@ -241,7 +242,6 @@ impl ConnectionManagerThread {
                         // Non-fatal connection error: connection to server is still up, but we have
                         // no idea which conversation the message was meant for
                         // Should we print something to stderr here? We don't have a stderr handy...
-                        ()
                     }
                 }
             },
@@ -258,26 +258,22 @@ impl ConnectionManagerThread {
             OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
                 MessagePath::Conversation(context_id) => {
                     let conversation_result = inner.conversations.get(&context_id);
-                    match conversation_result {
-                        Some(_) => {
-                            let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
-                            match send_message_result {
-                                Ok(_) => {inner.conversations_waiting.insert(context_id);},
-                                Err(_) => inner = Self::fallback(inner),
-                            }
-                        },
-                        None => () // conversation mentioned in message doesn't exist,
-                    }
+                    if conversation_result.is_some() {
+                        let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
+                        match send_message_result {
+                            Ok(_) => {inner.conversations_waiting.insert(context_id);},
+                            Err(_) => inner = Self::fallback(inner),
+                        }
+                    };
                 },
                 MessagePath::FireAndForget => panic!("NodeConversation should have prevented sending a FireAndForget message with transact()"),
             },
             OutgoingMessageType::FireAndForgetMessage(message_body, context_id) => match message_body.path {
-                MessagePath::FireAndForget => match inner.conversations.get (&context_id) {
-                    Some (conversation_tx) => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
+                MessagePath::FireAndForget => if let Some (conversation_tx) = inner.conversations.get (&context_id) {
+                    match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
                         Ok (_) => {let _ = conversation_tx.send(Err(NodeConversationTermination::FiredAndForgotten));},
                         Err (_) => inner = Self::fallback(inner),
-                    },
-                    None => () // conversation mentioned in message doesn't exist,
+                    }
                 }
                 MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
             },
@@ -310,9 +306,11 @@ impl ConnectionManagerThread {
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
         inner.conversations_waiting.iter().for_each(|context_id| {
-            let error = match *context_id == redirecting_context_id {
-                true => NodeConversationTermination::Resend,
-                false => NodeConversationTermination::Graceful,
+            let error = if *context_id == redirecting_context_id {
+                NodeConversationTermination::Resend
+            }
+            else {
+                NodeConversationTermination::Graceful
             };
             let _ = inner
                 .conversations
@@ -353,7 +351,7 @@ impl ConnectionManagerThread {
         inner.listener_to_manager_rx = listener_to_manager_rx;
         let talker_half = match make_client_listener(inner.active_port, listener_to_manager_tx) {
             Ok(th) => th,
-            Err(_) => panic!("Lost connection, couldn't fall back to Daemon"),
+            Err(e) => panic!("Lost connection, couldn't fall back to Daemon: {:?}", e),
         };
         inner.talker_half = talker_half;
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
@@ -388,13 +386,13 @@ impl ConnectionManagerThread {
     }
 }
 
-struct RedirectBroadcastHandler {
-    next_handler: Box<dyn BroadcastHandlerOld>,
+struct BroadcastHandleRedirect {
+    next_handle: Box<dyn BroadcastHandle>,
     redirect_order_tx: Sender<(u16, u64)>,
 }
 
-impl BroadcastHandlerOld for RedirectBroadcastHandler {
-    fn handle(&self, message_body: MessageBody) -> () {
+impl BroadcastHandle for BroadcastHandleRedirect {
+    fn send(&self, message_body: MessageBody) {
         match UiRedirect::fmb(message_body.clone()) {
             Ok((redirect, _)) => {
                 let context_id = redirect.context_id.unwrap_or(0);
@@ -403,19 +401,33 @@ impl BroadcastHandlerOld for RedirectBroadcastHandler {
                     .expect("ConnectionManagerThread is dead");
             }
             Err(_) => {
-                self.next_handler.handle(message_body);
+                self.next_handle.send(message_body);
             }
         };
     }
 }
 
+struct RedirectBroadcastHandler {
+    next_handle: Box<dyn BroadcastHandle>,
+    redirect_order_tx: Sender<(u16, u64)>,
+}
+
+impl BroadcastHandler for RedirectBroadcastHandler {
+    fn start(self, _stream_factory: Box<dyn StreamFactory>) -> Box<dyn BroadcastHandle> {
+        Box::new (BroadcastHandleRedirect {
+            next_handle: self.next_handle,
+            redirect_order_tx: self.redirect_order_tx,
+        })
+    }
+}
+
 impl RedirectBroadcastHandler {
     pub fn new(
-        next_handler: Box<dyn BroadcastHandlerOld>,
+        next_handle: Box<dyn BroadcastHandle>,
         redirect_order_tx: Sender<(u16, u64)>,
     ) -> Self {
         Self {
-            next_handler,
+            next_handle,
             redirect_order_tx,
         }
     }
@@ -441,27 +453,27 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use crate::communications::broadcast_handler::BroadcastHandlerOld;
+    use crate::communications::broadcast_handler::{BroadcastHandler, StreamFactoryReal};
 
-    struct MockBroadcastHandler {
-        handle_params: Arc<Mutex<Vec<MessageBody>>>,
+    struct BroadcastHandleMock {
+        send_params: Arc<Mutex<Vec<MessageBody>>>
     }
 
-    impl BroadcastHandlerOld for MockBroadcastHandler {
-        fn handle(&self, message_body: MessageBody) -> () {
-            self.handle_params.lock().unwrap().push(message_body);
+    impl BroadcastHandle for BroadcastHandleMock {
+        fn send(&self, message_body: MessageBody) -> () {
+            self.send_params.lock().unwrap().push (message_body);
         }
     }
 
-    impl MockBroadcastHandler {
+    impl BroadcastHandleMock {
         pub fn new() -> Self {
             Self {
-                handle_params: Arc::new(Mutex::new(vec![])),
+                send_params: Arc::new (Mutex::new (vec![]))
             }
         }
 
-        pub fn handle_params(mut self, params: &Arc<Mutex<Vec<MessageBody>>>) -> Self {
-            self.handle_params = params.clone();
+        pub fn send_params(mut self, params: &Arc<Mutex<Vec<MessageBody>>>) -> Self {
+            self.send_params = params.clone();
             self
         }
     }
@@ -473,7 +485,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(MockBroadcastHandler::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()))
             .unwrap();
         (subject, stop_handle)
     }
@@ -883,15 +895,15 @@ mod tests {
         }
         .tmb(0);
         let (conversation_tx, conversation_rx) = unbounded();
-        let recording_arc = Arc::new(Mutex::new(vec![]));
-        let broadcast_handler = MockBroadcastHandler::new().handle_params(&recording_arc);
+        let send_params_arc = Arc::new(Mutex::new(vec![]));
+        let broadcast_handler = BroadcastHandleMock::new().send_params(&send_params_arc);
         let mut inner = make_inner();
         inner.conversations.insert(4, conversation_tx);
         inner.conversations_waiting.insert(4);
-        inner.broadcast_handler = Box::new(RedirectBroadcastHandler::new(
+        inner.broadcast_handle = RedirectBroadcastHandler::new(
             Box::new(broadcast_handler),
             unbounded().0,
-        ));
+        ).start(Box::new (StreamFactoryReal::new()));
 
         let inner = ConnectionManagerThread::handle_incoming_message_body(
             inner,
@@ -900,8 +912,8 @@ mod tests {
 
         assert_eq!(conversation_rx.try_recv().is_err(), true); // no message to any conversation
         assert_eq!(inner.conversations_waiting.is_empty(), false);
-        let recording = recording_arc.lock().unwrap();
-        assert_eq!(*recording, vec![incoming_message]);
+        let send_params = send_params_arc.lock().unwrap();
+        assert_eq!(*send_params, vec![incoming_message]);
     }
 
     #[test]
@@ -933,8 +945,8 @@ mod tests {
             receivable_maximum_age: 45,
         }
         .tmb(1);
-        let handle_params_arc = Arc::new(Mutex::new(vec![]));
-        let broadcast_handler = MockBroadcastHandler::new().handle_params(&handle_params_arc);
+        let send_params_arc = Arc::new(Mutex::new(vec![]));
+        let broadcast_handler = BroadcastHandleMock::new().send_params(&send_params_arc);
         let mut subject = ConnectionManager::new();
         subject
             .connect(daemon_port, Box::new(broadcast_handler))
@@ -965,8 +977,8 @@ mod tests {
             }
         );
         assert_eq!(context_id, 1);
-        let handle_params = handle_params_arc.lock().unwrap();
-        assert_eq!(*handle_params, vec![]);
+        let send_params = send_params_arc.lock().unwrap();
+        assert_eq!(*send_params, vec![]);
     }
 
     #[test]
@@ -1209,7 +1221,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(MockBroadcastHandler::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()))
             .unwrap();
         let conversation1 = subject.start_conversation();
         let conversation2 = subject.start_conversation();
@@ -1243,7 +1255,7 @@ mod tests {
             conversations_to_manager_rx: unbounded().1,
             listener_to_manager_rx: unbounded().1,
             talker_half: make_broken_talker_half(),
-            broadcast_handler: Box::new(MockBroadcastHandler::new()),
+            broadcast_handle: Box::new(BroadcastHandleMock::new()),
             redirect_order_rx: unbounded().1,
             redirect_response_tx: unbounded().0,
             active_port_response_tx: unbounded().0,

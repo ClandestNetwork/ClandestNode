@@ -177,7 +177,7 @@ pub struct CommandProcessorFactoryMock {
 }
 
 impl CommandProcessorFactory for CommandProcessorFactoryMock {
-    fn make(&self, broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
+    fn make(&self, _broadcast_stream_factory: Box<dyn StreamFactory>, args: &[String]) -> Result<Box<dyn CommandProcessor>, CommandError> {
         self.make_params.lock().unwrap().push(args.to_vec());
         self.make_results.borrow_mut().remove(0)
     }
@@ -314,7 +314,7 @@ impl TestStreamFactoryHandle {
         loop {
             match rx.try_recv() {
                 Ok (s) => {
-                    accum.extend (s.chars());
+                    accum.push_str (&s);
                     retries_left = 5;
                 },
                 Err (TryRecvError::Empty) => {
@@ -322,7 +322,7 @@ impl TestStreamFactoryHandle {
                     if retries_left <= 0 {break;}
                     thread::sleep (Duration::from_millis(100));
                 }
-                Err (e) => {
+                Err (_) => {
                     break
                 },
             }

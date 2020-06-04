@@ -28,7 +28,7 @@ impl Command for SetupCommand {
         };
         let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context);
         match result {
-            Ok(mut response) => {
+            Ok(response) => {
                 Self::dump_setup(UiSetupInner::from (response), context.stdout());
                 Ok(())
             }
@@ -70,9 +70,10 @@ impl SetupCommand {
 
     pub fn handle_broadcast(msg: MessageBody, stdout: &mut dyn Write, _stderr: &mut dyn Write) {
         let (response, _) = UiSetupBroadcast::fmb (msg).expect ("Bad UiSetupBroadcast");
-        writeln! (stdout, "Daemon setup has changed:\n").expect ("writeln! failed");
+        writeln! (stdout, "\nDaemon setup has changed:\n").expect ("writeln! failed");
         Self::dump_setup (UiSetupInner::from (response), stdout);
         write! (stdout, "\nmasq> ").expect ("write! failed");
+        stdout.flush().expect ("flush failed");
     }
 
     fn has_value(pieces: &[String], piece: &str) -> bool {
@@ -128,8 +129,7 @@ mod tests {
     use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Default, Set};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
     use std::sync::{Arc, Mutex};
-    use crossbeam_channel::unbounded;
-    use crate::communications::broadcast_handler::{StreamFactoryReal, StreamFactory};
+    use crate::communications::broadcast_handler::{StreamFactory};
 
     #[test]
     fn setup_command_with_syntax_error() {
@@ -275,7 +275,8 @@ NOTE: no changes were made to the setup because the Node is currently running.\n
         SetupCommand::handle_broadcast (message, &mut stdout, &mut stderr);
 
         assert_eq! (handle.stdout_so_far(),
-"Daemon setup has changed:\n\
+"\n\
+Daemon setup has changed:\n\
 \n\
 NAME                      VALUE                                                            STATUS\n\
 chain                     ropsten                                                          Set\n\

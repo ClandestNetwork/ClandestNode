@@ -95,8 +95,8 @@ impl MockWebSocketsServer {
                 };
                 if let Some(incoming) = incoming_opt {
                     requests.push(incoming.clone());
-                    match incoming {
-                        Ok(message_body) => match message_body.path {
+                    if let Ok(message_body) = incoming {
+                        match message_body.path {
                             MessagePath::Conversation(_) => match inner_responses_arc
                                 .lock()
                                 .unwrap()
@@ -115,8 +115,7 @@ impl MockWebSocketsServer {
                                 om => client.send_message(&om).unwrap(),
                             },
                             MessagePath::FireAndForget => (),
-                        },
-                        Err(_) => (),
+                        }
                     }
                 }
                 if let Ok(kill) = stop_rx.try_recv() {

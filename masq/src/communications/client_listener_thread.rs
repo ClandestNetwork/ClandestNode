@@ -18,11 +18,11 @@ pub enum ClientListenerError {
 }
 
 impl ClientListenerError {
-    pub fn is_fatal(&self) -> bool {
+    pub fn is_fatal(self) -> bool {
         match self {
-            &ClientListenerError::Closed => true,
-            &ClientListenerError::Broken => true,
-            &ClientListenerError::UnexpectedPacket => false,
+            ClientListenerError::Closed => true,
+            ClientListenerError::Broken => true,
+            ClientListenerError::UnexpectedPacket => false,
         }
     }
 }

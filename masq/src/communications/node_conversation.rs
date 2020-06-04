@@ -73,9 +73,9 @@ impl NodeConversation {
                 Ok(Err(NodeConversationTermination::Resend)) => self.send(outgoing_msg),
                 Ok(Err(NodeConversationTermination::Fatal)) => Err(ClientError::ConnectionDropped),
                 Ok(Err(NodeConversationTermination::FiredAndForgotten)) => Ok(()),
-                Err(_) => panic!("ConnectionManager is dead"),
+                Err(e) => panic!("ConnectionManager is dead: {:?}", e),
             },
-            Err(_) => panic!("ConnectionManager is dead"),
+            Err(e) => panic!("ConnectionManager is dead: {:?}", e),
         }
     }
 
@@ -84,34 +84,32 @@ impl NodeConversation {
             panic! ("Cannot use NodeConversation::transact() to send message with MessagePath::FireAndForget. Use NodeCoversation::send() instead.")
         }
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
-        let result =
-            match self
-                .conversations_to_manager_tx
-                .send(OutgoingMessageType::ConversationMessage(
-                    outgoing_msg.clone(),
-                )) {
-                Ok(_) => {
-                    let recv_result = self.manager_to_conversation_rx.recv();
-                    match recv_result {
-                        Ok(Ok(body)) => Ok(body),
-                        Ok(Err(NodeConversationTermination::Graceful)) => {
-                            Err(ClientError::ConnectionDropped)
-                        }
-                        Ok(Err(NodeConversationTermination::Resend)) => {
-                            return self.transact(outgoing_msg)
-                        }
-                        Ok(Err(NodeConversationTermination::Fatal)) => {
-                            Err(ClientError::ConnectionDropped)
-                        }
-                        Ok(Err(NodeConversationTermination::FiredAndForgotten)) => panic!(
-                            "Conversation messages should never produce FiredAndForgotten error"
-                        ),
-                        Err(_) => Err(ClientError::ConnectionDropped),
+        match self
+            .conversations_to_manager_tx
+            .send(OutgoingMessageType::ConversationMessage(
+                outgoing_msg.clone(),
+            )) {
+            Ok(_) => {
+                let recv_result = self.manager_to_conversation_rx.recv();
+                match recv_result {
+                    Ok(Ok(body)) => Ok(body),
+                    Ok(Err(NodeConversationTermination::Graceful)) => {
+                        Err(ClientError::ConnectionDropped)
                     }
+                    Ok(Err(NodeConversationTermination::Resend)) => {
+                        self.transact(outgoing_msg)
+                    }
+                    Ok(Err(NodeConversationTermination::Fatal)) => {
+                        Err(ClientError::ConnectionDropped)
+                    }
+                    Ok(Err(NodeConversationTermination::FiredAndForgotten)) => panic!(
+                        "Conversation messages should never produce FiredAndForgotten error"
+                    ),
+                    Err(_) => Err(ClientError::ConnectionDropped),
                 }
-                Err(_) => Err(ClientError::ConnectionDropped),
-            };
-        result
+            }
+            Err(_) => Err(ClientError::ConnectionDropped),
+        }
     }
 
     #[cfg(test)]

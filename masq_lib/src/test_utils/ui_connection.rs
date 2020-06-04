@@ -54,12 +54,11 @@ impl UiConnection {
             .expect("Deserialization problem");
         let opcode = incoming_msg.body.opcode.clone();
         let result: Result<(T, u64), UiMessageError> = T::fmb(incoming_msg.body);
-        let retval = match result {
+        match result {
             Ok((payload, _)) => Ok(payload),
             Err(UiMessageError::PayloadError(code, message)) => Err((code, message)),
             Err(e) => panic!("Deserialization problem for {}: {:?}", opcode, e),
-        };
-        retval
+        }
     }
 
     pub fn transact<S: ToMessageBody, R: FromMessageBody>(

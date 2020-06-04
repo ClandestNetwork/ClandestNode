@@ -7,7 +7,6 @@ use crate::commands::commands_common::CommandError::{
 use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError};
 use masq_lib::ui_gateway::MessageBody;
 use std::fmt::Debug;
-use std::io::Write;
 
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
