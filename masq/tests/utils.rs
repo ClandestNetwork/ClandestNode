@@ -110,26 +110,24 @@ impl ControlHandle {
         writeln!(self.stdin, "{}", command).unwrap();
     }
 
-    pub fn get_response(&mut self) -> (String, String) {
-        let stdout = Self::read_chunk(&mut self.stdout);
-        let stderr = Self::read_chunk(&mut self.stderr);
-        (stdout, stderr)
+    pub fn get_stdout(&mut self) -> String {
+        Self::read_chunk (&mut self.stdout)
     }
 
+    pub fn get_stderr(&mut self) -> String {
+        Self::read_chunk (&mut self.stderr)
+    }
+
+    // NOTE: Only reads first few bytes
     fn read_chunk(source: &mut dyn Read) -> String {
         let mut all_bytes: Vec<u8> = vec![];
-        let mut buf = [0u8; 1024];
-        loop {
-            match source.read(&mut buf) {
-                Err(e) => panic!("Read failed: {:?}", e),
-                Ok(len) => {
-                    all_bytes.extend(&buf[0..len]);
-                    if len < buf.len() {
-                        break;
-                    }
-                }
-            };
-        }
+        let mut buf = [0u8; 65536];
+        match source.read(&mut buf) {
+            Err(e) => panic!("Read failed: {:?}", e),
+            Ok(len) => {
+                all_bytes.extend(&buf[0..len]);
+            }
+        };
         return String::from_utf8(all_bytes).unwrap();
     }
 }
