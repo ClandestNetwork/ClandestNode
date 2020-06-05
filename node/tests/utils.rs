@@ -185,7 +185,7 @@ impl MASQNode {
     #[cfg(target_os = "windows")]
     pub fn kill(&mut self) {
         let mut command = process::Command::new("taskkill");
-        command.args(&vec!["/IM", "MASQNode.exe", "/F"]);
+        command.args(&["/IM", "MASQNode.exe", "/F"]);
         let _ = command.output().expect("Couldn't kill MASQNode.exe");
         self.child.take();
         // Be nice if we could figure out how to populate self.output here

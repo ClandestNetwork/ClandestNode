@@ -363,7 +363,7 @@ where
     }
 }
 
-pub fn assert_contains<T>(haystack: &Vec<T>, needle: &T)
+pub fn assert_contains<T>(haystack: &[T], needle: &T)
 where
     T: Debug + PartialEq,
 {
@@ -604,7 +604,7 @@ mod tests {
             handle.join().unwrap();
             let mutex_guard = check_log.as_ref().lock().unwrap();
             let log: &Vec<&str> = mutex_guard.deref();
-            assert_eq!(log, &vec!("signaler", "waiter"));
+            assert_eq!(log, &("signaler", "waiter"));
         }
     }
 

@@ -139,7 +139,7 @@ impl MASQCoresServer {
             public_key: self.main_cryptde.public_key().clone(),
             node_addr_opt: Some(NodeAddr::new(
                 &self.socket_addr.ip(),
-                &vec![self.socket_addr.port()],
+                &[self.socket_addr.port()],
             )),
         }
     }

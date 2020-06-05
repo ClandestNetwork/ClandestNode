@@ -32,7 +32,7 @@ pub struct NodeConfiguratorGenerateWallet {
 impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorGenerateWallet {
     fn configure(
         &self,
-        args: &Vec<String>,
+        args: &[String],
         streams: &mut StdStreams<'_>,
     ) -> Result<WalletCreationConfig, ConfiguratorError> {
         let (multi_config, persistent_config_box) =
@@ -458,7 +458,8 @@ mod tests {
             .param("--word-count", "15")
             .param("--mnemonic-passphrase", "Mortimer")
             .param("--real-user", "123:456:/home/booga")
-            .into();
+            .into()
+            .as_slice();
         let mut subject = NodeConfiguratorGenerateWallet::new();
         let make_parameters_arc = Arc::new(Mutex::new(vec![]));
         let expected_mnemonic = Mnemonic::new(MnemonicType::Words15, Language::Spanish);

@@ -21,7 +21,7 @@ use std::path::PathBuf;
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";
 
-pub fn dump_config(args: &Vec<String>, streams: &mut StdStreams) -> Result<i32, ConfiguratorError> {
+pub fn dump_config(args: &[String], streams: &mut StdStreams) -> Result<i32, ConfiguratorError> {
     let (real_user, data_directory, chain_id) = distill_args(&RealDirsWrapper {}, args)?;
     PrivilegeDropperReal::new().drop_privileges(&real_user);
     let config_dao = make_config_dao(&data_directory, chain_id);
@@ -72,7 +72,7 @@ fn make_config_dao(data_directory: &PathBuf, chain_id: u8) -> ConfigDaoReal {
 
 fn distill_args(
     dirs_wrapper: &dyn DirsWrapper,
-    args: &Vec<String>,
+    args: &[String],
 ) -> Result<(RealUser, PathBuf, u8), ConfiguratorError> {
     let app = app_head()
         .arg(
@@ -86,7 +86,7 @@ fn distill_args(
         .arg(data_directory_arg())
         .arg(real_user_arg());
     let vcls: Vec<Box<dyn VirtualCommandLine>> = vec![
-        Box::new(CommandLineVcl::new(args.clone())),
+        Box::new(CommandLineVcl::new(args.to_vec())),
         Box::new(EnvironmentVcl::new(&app)),
     ];
     let multi_config = MultiConfig::try_new(&app, vcls)?;

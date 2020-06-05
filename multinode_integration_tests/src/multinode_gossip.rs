@@ -75,7 +75,7 @@ impl MultinodeGossip for SingleNode {
     }
 
     fn nodes_of_degree(&self, degree: usize) -> Vec<PublicKey> {
-        nodes_of_degree(&vec![self.node.clone()], degree)
+        nodes_of_degree(&[self.node.clone()], degree)
     }
 
     fn gnr(&self, key: &PublicKey) -> Option<GossipNodeRecord> {
@@ -160,7 +160,7 @@ impl MultinodeGossip for Introduction {
 
     fn nodes_of_degree(&self, degree: usize) -> Vec<PublicKey> {
         nodes_of_degree(
-            &vec![self.introducer.clone(), self.introducee.clone()],
+            &[self.introducer.clone(), self.introducee.clone()],
             degree,
         )
     }

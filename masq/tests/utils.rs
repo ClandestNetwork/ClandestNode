@@ -91,7 +91,7 @@ impl StopHandle {
         #[cfg(target_os = "windows")]
         {
             let mut command = Command::new("taskkill");
-            command.args(&vec!["/IM", "MASQNode.exe", "/F", "/T"]);
+            command.args(&["/IM", "MASQNode.exe", "/F", "/T"]);
             let _ = command.output().expect("Couldn't kill MASQNode.exe");
         }
     }

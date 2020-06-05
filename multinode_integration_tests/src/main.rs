@@ -361,7 +361,7 @@ mod tests {
         let mut holder = FakeStreamHolder::new();
         let mut subject = MockNode::new();
 
-        let result = subject.go(&mut holder.streams(), &vec![String::from("binary")]);
+        let result = subject.go(&mut holder.streams(), &[String::from("binary")]);
 
         assert_eq!(result, 1);
         let stderr = holder.stderr;
@@ -375,7 +375,7 @@ mod tests {
 
         let result = subject.go(
             &mut holder.streams(),
-            &vec![String::from("binary"), String::from("Booga")],
+            &[String::from("binary"), String::from("Booga")],
         );
 
         assert_eq!(result, 1);
@@ -402,7 +402,7 @@ mod tests {
             };
             subject.go(
                 &mut streams,
-                &vec![
+                &[
                     String::from("binary"),
                     format!("127.0.0.1:{}", clandestine_port),
                 ],
@@ -445,7 +445,7 @@ mod tests {
             };
             subject.go(
                 &mut streams,
-                &vec![
+                &[
                     String::from("binary"),
                     format!("127.0.0.1:{}", clandestine_port),
                 ],

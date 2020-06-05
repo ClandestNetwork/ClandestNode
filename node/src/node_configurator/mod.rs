@@ -37,7 +37,7 @@ use tiny_hderive::bip44::DerivationPath;
 pub trait NodeConfigurator<T> {
     fn configure(
         &self,
-        args: &Vec<String>,
+        args: &[String],
         streams: &mut StdStreams<'_>,
     ) -> Result<T, ConfiguratorError>;
 }
@@ -126,7 +126,7 @@ pub fn mnemonic_passphrase_arg<'a>() -> Arg<'a, 'a> {
 pub fn determine_config_file_path(
     dirs_wrapper: &dyn DirsWrapper,
     app: &App,
-    args: &Vec<String>,
+    args: &[String],
 ) -> Result<(PathBuf, bool), ConfiguratorError> {
     let orientation_schema = App::new("MASQNode")
         .arg(chain_arg())
@@ -135,7 +135,7 @@ pub fn determine_config_file_path(
         .arg(config_file_arg());
     let orientation_args: Vec<Box<dyn VclArg>> = merge(
         Box::new(EnvironmentVcl::new(app)),
-        Box::new(CommandLineVcl::new(args.clone())),
+        Box::new(CommandLineVcl::new(args.to_vec())),
     )
     .vcl_args()
     .into_iter()
@@ -252,7 +252,7 @@ pub fn data_directory_from_context(
                 wrong_local_data_dir.replace(&wrong_home_dir, &right_home_dir);
             PathBuf::from(right_local_data_dir)
                 .join("MASQ")
-                .join(chain_name.clone())
+                .join(chain_name)
         }
     }
 }
@@ -260,12 +260,12 @@ pub fn data_directory_from_context(
 pub fn prepare_initialization_mode<'a>(
     dirs_wrapper: &dyn DirsWrapper,
     app: &'a App,
-    args: &Vec<String>,
+    args: &[String],
 ) -> Result<(MultiConfig<'a>, Box<dyn PersistentConfiguration>), ConfiguratorError> {
     let multi_config = MultiConfig::try_new(
         &app,
         vec![
-            Box::new(CommandLineVcl::new(args.clone())),
+            Box::new(CommandLineVcl::new(args.to_vec())),
             Box::new(EnvironmentVcl::new(&app)),
         ],
     )?;
@@ -609,7 +609,7 @@ pub trait WalletCreationConfigMaker {
                         20 => Either::Left(value),
                         _ => panic!("--earning-wallet not properly validated by clap"),
                     },
-                    Err(_) => panic!("--earning-wallet not properly validated by clap"),
+                    Err(e) => panic!("--earning-wallet not properly validated by clap: {:?}", e),
                 },
             },
             None => self.make_earning_wallet_info(streams),
@@ -936,7 +936,7 @@ mod tests {
             .param("--data-directory", data_dir.to_str().unwrap())
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
 
-        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, &args.into())
+        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, args.into().as_slice())
             .err()
             .unwrap();
 
@@ -987,7 +987,7 @@ mod tests {
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args.into().as_slice(),
         )
         .unwrap();
 
@@ -1009,7 +1009,7 @@ mod tests {
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args.into().as_slice(),
         )
         .unwrap();
 
@@ -1032,7 +1032,7 @@ mod tests {
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args.into().as_slice(),
         )
         .unwrap();
 

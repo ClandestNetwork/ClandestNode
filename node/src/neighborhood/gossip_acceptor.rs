@@ -45,7 +45,7 @@ trait GossipHandler: NamedType + Send /* Send because lazily-written tests requi
     fn qualifies(
         &self,
         database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification;
     fn handle(
@@ -74,7 +74,7 @@ impl GossipHandler for DebutHandler {
     fn qualifies(
         &self,
         database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification {
         if agrs.len() != 1 {
@@ -457,7 +457,7 @@ impl GossipHandler for PassHandler {
     fn qualifies(
         &self,
         _database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification {
         if agrs.len() != 1 {
@@ -532,7 +532,7 @@ impl GossipHandler for IntroductionHandler {
     fn qualifies(
         &self,
         database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification {
         if let Some(qual) = Self::verify_size(agrs) {
@@ -589,7 +589,7 @@ impl IntroductionHandler {
         IntroductionHandler { logger }
     }
 
-    fn verify_size(agrs: &Vec<AccessibleGossipRecord>) -> Option<Qualification> {
+    fn verify_size(agrs: &[AccessibleGossipRecord]) -> Option<Qualification> {
         if agrs.len() != 2 {
             return Some(Qualification::Unmatched);
         }
@@ -597,7 +597,7 @@ impl IntroductionHandler {
     }
 
     fn order_is_introducee_introducer(
-        agrs_ref: &Vec<AccessibleGossipRecord>,
+        agrs_ref: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Result<bool, Qualification> {
         let first_agr = &agrs_ref[0];
@@ -719,8 +719,8 @@ impl IntroductionHandler {
         cryptde: &dyn CryptDE,
         introducer: AccessibleGossipRecord,
     ) -> Result<bool, String> {
-        let introducer_key = &introducer.inner.public_key.clone();
-        match database.node_by_key_mut(introducer_key) {
+        let introducer_key = introducer.inner.public_key.clone();
+        match database.node_by_key_mut(&introducer_key) {
             Some(existing_introducer_ref) => {
                 if existing_introducer_ref.version() < introducer.inner.version {
                     debug!(
@@ -753,7 +753,7 @@ impl IntroductionHandler {
             }
         }
         if database
-            .add_half_neighbor(introducer_key)
+            .add_half_neighbor(&introducer_key)
             .expect("introducer not in database")
         {
             database.root_mut().increment_version();
@@ -780,7 +780,7 @@ impl GossipHandler for StandardGossipHandler {
     fn qualifies(
         &self,
         database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification {
         // must-not-be-debut-pass-or-introduction is assured by StandardGossipHandler's placement in the gossip_handlers list
@@ -873,7 +873,7 @@ impl StandardGossipHandler {
     fn identify_and_add_non_introductory_new_nodes(
         &self,
         database: &mut NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> bool {
         let all_keys = database
@@ -993,7 +993,7 @@ impl GossipHandler for RejectHandler {
     fn qualifies(
         &self,
         _database: &NeighborhoodDatabase,
-        agrs: &Vec<AccessibleGossipRecord>,
+        agrs: &[AccessibleGossipRecord],
         gossip_source: SocketAddr,
     ) -> Qualification {
         Qualification::Malformed(format!(
@@ -1282,7 +1282,7 @@ mod tests {
         let subject = DebutHandler::new(Logger::new("test"));
         gossip.node_records[0].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("1.2.3.4").unwrap(),
-            &vec![1234],
+            &[1234],
         ));
 
         let result = subject.qualifies(
@@ -1324,7 +1324,7 @@ mod tests {
         let (mut gossip, _, gossip_source) = make_debut(2345, Mode::Standard);
         gossip.node_records[0].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("1.2.3.4").unwrap(),
-            &vec![],
+            &[],
         ));
         let subject = DebutHandler::new(Logger::new("test"));
 
@@ -1441,7 +1441,7 @@ mod tests {
         let (mut gossip, _, gossip_source) = make_pass(2345);
         gossip.node_records[0].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("1.2.3.4").unwrap(),
-            &vec![],
+            &[],
         ));
         let subject = PassHandler::new();
 
@@ -1507,7 +1507,7 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[0].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("2.3.4.5").unwrap(),
-            &vec![],
+            &[],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
         let agrs = gossip.try_into().unwrap();
@@ -1527,9 +1527,9 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[1].node_addr_opt = None;
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs = gossip.try_into().unwrap().as_slice();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs, gossip_source);
 
         assert_eq!(Qualification::Unmatched, result);
     }
@@ -1541,12 +1541,12 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[1].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("3.4.5.6").unwrap(),
-            &vec![],
+            &[],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs = gossip.try_into().unwrap().as_slice();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs, gossip_source);
 
         assert_eq!(
             Qualification::Malformed(
@@ -1564,12 +1564,12 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[0].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("4.5.6.7").unwrap(),
-            &vec![4567],
+            &[4567],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs = gossip.try_into().unwrap().as_slice();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs, gossip_source);
 
         assert_eq!(Qualification::Malformed("In Introduction, neither AgMEBQ from 4.5.6.7 nor AwQFBg from 3.4.5.6 claims the source IP 2.3.4.5".to_string()), result);
     }
@@ -1581,12 +1581,12 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[1].node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("2.3.4.5").unwrap(),
-            &vec![2345],
+            &[2345],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs = gossip.try_into().unwrap().as_slice();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs, gossip_source);
 
         assert_eq!(
             Qualification::Malformed(
@@ -1862,7 +1862,11 @@ mod tests {
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
 
-        let result = subject.qualifies(&mut dest_db, &gossip.try_into().unwrap(), gossip_source);
+        let result = subject.qualifies(
+            &mut dest_db,
+            gossip.try_into().unwrap().as_slice(),
+            gossip_source,
+        );
 
         assert_eq!(result, Qualification::Matched,);
     }
@@ -1887,7 +1891,11 @@ mod tests {
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
 
-        let result = subject.qualifies(&mut dest_db, &gossip.try_into().unwrap(), gossip_source);
+        let result = subject.qualifies(
+            &mut dest_db,
+            gossip.try_into().unwrap().as_slice(),
+            gossip_source,
+        );
 
         assert_eq!(
             result,
@@ -1920,7 +1928,11 @@ mod tests {
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
 
-        let result = subject.qualifies(&mut dest_db, &gossip.try_into().unwrap(), gossip_source);
+        let result = subject.qualifies(
+            &mut dest_db,
+            gossip.try_into().unwrap().as_slice(),
+            gossip_source,
+        );
 
         assert_eq!(
             result,
@@ -1952,12 +1964,16 @@ mod tests {
             .build();
         gossip.node_records[2].node_addr_opt = Some(NodeAddr::new(
             &node_a.node_addr_opt().unwrap().ip_addr(),
-            &vec![4567],
+            &[4567],
         ));
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
 
-        let result = subject.qualifies(&mut dest_db, &gossip.try_into().unwrap(), gossip_source);
+        let result = subject.qualifies(
+            &mut dest_db,
+            gossip.try_into().unwrap().as_slice(),
+            gossip_source,
+        );
 
         assert_eq!(
             result,
@@ -1986,11 +2002,11 @@ mod tests {
             .build();
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let cryptde = CryptDENull::from(dest_db.root().public_key(), DEFAULT_CHAIN_ID);
-        let agrs = gossip.try_into().unwrap();
+        let agrs = gossip.try_into().unwrap().as_slice();
         let gossip_source: SocketAddr = src_root.node_addr_opt().unwrap().into();
 
         let qualifies_result = subject.qualifies(&dest_db, &agrs, gossip_source);
-        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs, gossip_source);
+        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs.to_vec(), gossip_source);
 
         assert_eq!(Qualification::Matched, qualifies_result);
         assert_eq!(GossipAcceptanceResult::Accepted, handle_result);
@@ -2057,18 +2073,21 @@ mod tests {
         let (introduction, introduction_gossip_source) = make_introduction(3456, 4567);
         let (standard_gossip, _, standard_gossip_source) = make_debut(9898, Mode::Standard);
 
-        let debut_result =
-            reject_handler.qualifies(&db, &debut.try_into().unwrap(), debut_gossip_source);
+        let debut_result = reject_handler.qualifies(
+            &db,
+            debut.try_into().unwrap().as_slice(),
+            debut_gossip_source,
+        );
         let pass_result =
-            reject_handler.qualifies(&db, &pass.try_into().unwrap(), pass_gossip_source);
+            reject_handler.qualifies(&db, pass.try_into().unwrap().as_slice(), pass_gossip_source);
         let introduction_result = reject_handler.qualifies(
             &db,
-            &introduction.try_into().unwrap(),
+            introduction.try_into().unwrap().as_slice(),
             introduction_gossip_source,
         );
         let standard_gossip_result = reject_handler.qualifies(
             &db,
-            &standard_gossip.try_into().unwrap(),
+            standard_gossip.try_into().unwrap().as_slice(),
             standard_gossip_source,
         );
 
@@ -2247,7 +2266,7 @@ mod tests {
         let debut_key = debut_node.public_key().clone();
         let debut_node_addr = debut_node.node_addr_opt().as_ref().unwrap().clone();
         assert_contains(
-            &vec![
+            &[
                 GossipAcceptanceResult::Reply(
                     expected_acceptance_gossip_1,
                     debut_key.clone(),
@@ -2331,7 +2350,7 @@ mod tests {
             .node(existing_node_3_key, true)
             .build();
         assert_contains(
-            &vec![
+            &[
                 GossipAcceptanceResult::Reply(
                     expected_acceptance_gossip_2,
                     debut_node.public_key().clone(),
@@ -2853,7 +2872,7 @@ mod tests {
         let mut neighbor = make_node_record(2345, true);
         neighbor.metadata.node_addr_opt = Some(NodeAddr::new(
             &IpAddr::from_str("2.3.4.5").unwrap(),
-            &vec![],
+            &[],
         ));
         let agr = AccessibleGossipRecord::from(&neighbor);
 

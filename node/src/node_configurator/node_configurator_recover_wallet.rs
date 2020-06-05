@@ -27,7 +27,7 @@ pub struct NodeConfiguratorRecoverWallet {
 impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorRecoverWallet {
     fn configure(
         &self,
-        args: &Vec<String>,
+        args: &[String],
         streams: &mut StdStreams<'_>,
     ) -> Result<WalletCreationConfig, ConfiguratorError> {
         let (multi_config, persistent_config_box) =
@@ -410,7 +410,8 @@ mod tests {
             .param("--mnemonic", phrase)
             .param("--mnemonic-passphrase", "Mortimer")
             .param("--real-user", "123:456:/home/booga")
-            .into();
+            .into()
+            .as_slice();
         let subject = NodeConfiguratorRecoverWallet::new();
 
         let config = subject

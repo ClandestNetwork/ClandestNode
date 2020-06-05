@@ -201,7 +201,7 @@ mod tests {
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
         subject
-            .initialize_as_privileged(&vec![], &mut FakeStreamHolder::new().streams())
+            .initialize_as_privileged(&[], &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         let unwrapped_guts = socket_wrapper.guts.lock().unwrap();
@@ -265,7 +265,7 @@ mod tests {
             let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
             subject
-                .initialize_as_unprivileged(&vec![], &mut holder.streams())
+                .initialize_as_unprivileged(&[], &mut holder.streams())
                 .unwrap();
             tokio::run(subject);
 
@@ -280,7 +280,7 @@ mod tests {
 
         assert_eq!(
             &log,
-            &vec!(
+            &(
                 String::from("recv_from (Ok(Ready((12, V4(0.0.0.0:0)))))"),
                 String::from("send_to (buf, V4(0.0.0.0:0))"),
                 String::from("recv_from (Ok(Ready((12, V4(1.0.0.0:0)))))"),
@@ -313,7 +313,7 @@ mod tests {
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
         subject
-            .initialize_as_unprivileged(&vec![], &mut holder.streams())
+            .initialize_as_unprivileged(&[], &mut holder.streams())
             .unwrap();
 
         let result = subject.poll();
@@ -347,7 +347,7 @@ mod tests {
         let mut subject = make_instrumented_subject(socket_wrapper.clone());
 
         subject
-            .initialize_as_unprivileged(&vec![], &mut holder.streams())
+            .initialize_as_unprivileged(&[], &mut holder.streams())
             .unwrap();
 
         let result = subject.poll();

@@ -443,7 +443,7 @@ mod tests {
         let changed = node_with_no_ports
             .set_node_addr(&NodeAddr::new(
                 &IpAddr::from_str("2.3.4.5").unwrap(),
-                &vec![],
+                &[],
             ))
             .unwrap();
         node_with_no_ports.resign();

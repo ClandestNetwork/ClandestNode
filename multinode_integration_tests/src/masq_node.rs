@@ -354,7 +354,7 @@ mod tests {
             result.node_addr_opt,
             Some(NodeAddr::new(
                 &IpAddr::from_str("12.34.56.78").unwrap(),
-                &vec!(1234, 2345)
+                &(1234, 2345)
             ))
         );
     }
@@ -371,7 +371,7 @@ mod tests {
             result.node_addr_opt,
             Some(NodeAddr::new(
                 &IpAddr::from_str("12.34.56.78").unwrap(),
-                &vec!()
+                &()
             ))
         );
     }
