@@ -1621,10 +1621,7 @@ mod tests {
                         NodeAddr::new(&IpAddr::from_str("5.4.3.2").unwrap(), &[5678]),
                         vec![NodeDescriptor::from((
                             &PublicKey::new(&b"booga"[..]),
-                            &NodeAddr::new(
-                                &IpAddr::from_str("1.2.3.4").unwrap(),
-                                &[1234, 2345],
-                            ),
+                            &NodeAddr::new(&IpAddr::from_str("1.2.3.4").unwrap(), &[1234, 2345]),
                             DEFAULT_CHAIN_ID == chain_id_from_name("mainnet"),
                             cryptde,
                         ))],
@@ -1711,10 +1708,7 @@ mod tests {
                         NodeAddr::new(&IpAddr::from_str("5.4.3.2").unwrap(), &[5678]),
                         vec![NodeDescriptor::from((
                             &PublicKey::new(&b"booga"[..]),
-                            &NodeAddr::new(
-                                &IpAddr::from_str("1.2.3.4").unwrap(),
-                                &[1234, 2345],
-                            ),
+                            &NodeAddr::new(&IpAddr::from_str("1.2.3.4").unwrap(), &[1234, 2345]),
                             DEFAULT_CHAIN_ID == chain_id_from_name("mainnet"),
                             cryptde,
                         ))],

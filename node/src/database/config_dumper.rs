@@ -126,11 +126,7 @@ mod tests {
             .opt("--dump-config")
             .into();
 
-        let result = dump_config(
-            args_vec.as_slice(),
-            &mut holder.streams(),
-        )
-        .unwrap();
+        let result = dump_config(args_vec.as_slice(), &mut holder.streams()).unwrap();
 
         assert_eq!(result, 0);
         let output = holder.stdout.get_string();
@@ -180,11 +176,7 @@ mod tests {
             .opt("--dump-config")
             .into();
 
-        let result = dump_config(
-            args_vec.as_slice(),
-            &mut holder.streams(),
-        )
-        .unwrap();
+        let result = dump_config(args_vec.as_slice(), &mut holder.streams()).unwrap();
 
         assert_eq!(result, 0);
         let output = holder.stdout.get_string();

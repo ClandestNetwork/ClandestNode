@@ -41,7 +41,8 @@ use masq_lib::crash_point::CrashPoint;
 use masq_lib::shared_schema::ConfiguratorError;
 use std::collections::HashMap;
 use std::env::var;
-use std::fmt::{Debug, Error, Formatter, Display};
+use std::fmt;
+use std::fmt::{Debug, Display, Error, Formatter};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -51,7 +52,6 @@ use tokio::prelude::stream::futures_unordered::FuturesUnordered;
 use tokio::prelude::Async;
 use tokio::prelude::Future;
 use tokio::prelude::Stream;
-use std::fmt;
 
 static mut MAIN_CRYPTDE_BOX_OPT: Option<Box<dyn CryptDE>> = None;
 static mut ALIAS_CRYPTDE_BOX_OPT: Option<Box<dyn CryptDE>> = None;
@@ -247,7 +247,8 @@ impl RealUser {
 
 impl Display for RealUser {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f,
+        write!(
+            f,
             "{}:{}:{}",
             match self.uid {
                 Some(uid) => format!("{}", uid),

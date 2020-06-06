@@ -992,19 +992,13 @@ mod tests {
         assert_eq!(first_record.get_resource_type(), 0x0001);
         assert_eq!(first_record.get_resource_class(), 0x0001);
         assert_eq!(first_record.get_time_to_live(), 0x456789AB);
-        assert_eq!(
-            first_record.get_rdata(),
-            u8vec(&[0xCD, 0xEF, 0x01, 0x23])
-        );
+        assert_eq!(first_record.get_rdata(), u8vec(&[0xCD, 0xEF, 0x01, 0x23]));
         let second_record = &records[1];
         assert_eq!(second_record.get_name(), "xyz.fiddles.org");
         assert_eq!(second_record.get_resource_type(), 0x2345);
         assert_eq!(second_record.get_resource_class(), 0x3456);
         assert_eq!(second_record.get_time_to_live(), 0xFEDCBA98);
-        assert_eq!(
-            second_record.get_rdata(),
-            u8vec(&[0x56, 0x78, 0x9A, 0xBC])
-        );
+        assert_eq!(second_record.get_rdata(), u8vec(&[0x56, 0x78, 0x9A, 0xBC]));
 
         assert_eq!(subject.get_length(), length);
     }
@@ -1054,19 +1048,13 @@ mod tests {
         assert_eq!(first_record.get_resource_type(), 0x0001);
         assert_eq!(first_record.get_resource_class(), 0x0001);
         assert_eq!(first_record.get_time_to_live(), 0x456789AB);
-        assert_eq!(
-            first_record.get_rdata(),
-            u8vec(&[0xCD, 0xEF, 0x01, 0x23])
-        );
+        assert_eq!(first_record.get_rdata(), u8vec(&[0xCD, 0xEF, 0x01, 0x23]));
         let second_record = &records[1];
         assert_eq!(second_record.get_name(), "xyz.fiddles.org");
         assert_eq!(second_record.get_resource_type(), 0x2345);
         assert_eq!(second_record.get_resource_class(), 0x3456);
         assert_eq!(second_record.get_time_to_live(), 0xFEDCBA98);
-        assert_eq!(
-            second_record.get_rdata(),
-            u8vec(&[0x56, 0x78, 0x9A, 0xBC])
-        );
+        assert_eq!(second_record.get_rdata(), u8vec(&[0x56, 0x78, 0x9A, 0xBC]));
 
         assert_eq!(subject.get_length(), length);
     }
@@ -1119,19 +1107,13 @@ mod tests {
         assert_eq!(first_record.get_resource_type(), 0x0001);
         assert_eq!(first_record.get_resource_class(), 0x0001);
         assert_eq!(first_record.get_time_to_live(), 0x456789AB);
-        assert_eq!(
-            first_record.get_rdata(),
-            u8vec(&[0xCD, 0xEF, 0x01, 0x23])
-        );
+        assert_eq!(first_record.get_rdata(), u8vec(&[0xCD, 0xEF, 0x01, 0x23]));
         let second_record = &records[1];
         assert_eq!(second_record.get_name(), "xyz.fiddles.org");
         assert_eq!(second_record.get_resource_type(), 0x2345);
         assert_eq!(second_record.get_resource_class(), 0x3456);
         assert_eq!(second_record.get_time_to_live(), 0xFEDCBA98);
-        assert_eq!(
-            second_record.get_rdata(),
-            u8vec(&[0x56, 0x78, 0x9A, 0xBC])
-        );
+        assert_eq!(second_record.get_rdata(), u8vec(&[0x56, 0x78, 0x9A, 0xBC]));
 
         assert_eq!(subject.get_length(), length);
     }
@@ -1681,14 +1663,8 @@ mod tests {
         let mut buf: [u8; 100] = [0; 100];
         let mut subject = PacketFacade::new(&mut buf, 12);
 
-        let result = subject.write_resource_record(
-            12,
-            "booga",
-            0x1234,
-            0x5678,
-            0x9ABCDEF0,
-            &[0x24, 0x36],
-        );
+        let result =
+            subject.write_resource_record(12, "booga", 0x1234, 0x5678, 0x9ABCDEF0, &[0x24, 0x36]);
 
         assert_eq!(result, Some(19));
         assert_eq!(subject.length, 31);
@@ -1699,8 +1675,7 @@ mod tests {
         let mut buf: [u8; 14] = [0; 14];
         let mut subject = PacketFacade::new(&mut buf, 100);
 
-        let result =
-            subject.write_resource_record(12, "x", 0x1234, 0x5678, 0x9ABCDEF0, &[0x48]);
+        let result = subject.write_resource_record(12, "x", 0x1234, 0x5678, 0x9ABCDEF0, &[0x48]);
 
         assert_eq!(result, None);
     }

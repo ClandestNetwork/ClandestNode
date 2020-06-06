@@ -2279,10 +2279,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
     }
 
@@ -2300,10 +2297,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
     }
 
@@ -2316,10 +2310,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         assert_eq!(
@@ -2337,10 +2328,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         assert_eq!(
@@ -2356,10 +2344,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         assert_eq!(
@@ -2377,10 +2362,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let bootstrapper_config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
         assert_eq!(
             bootstrapper_config.blockchain_bridge_config.chain_id,
@@ -2403,10 +2385,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         assert_eq!(config.blockchain_bridge_config.gas_price, 57);
@@ -2425,10 +2404,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let config = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         assert_eq!(config.blockchain_bridge_config.gas_price, 1);
@@ -2441,10 +2417,7 @@ mod tests {
         let args_vec: Vec<String> = args.into();
 
         let result = subject
-            .configure(
-                args_vec.as_slice(),
-                &mut FakeStreamHolder::new().streams(),
-            )
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .err()
             .unwrap();
 

@@ -143,7 +143,7 @@ impl MockNode {
             .into_iter()
             .map(|port| self.open_port(port))
             .filter(|r| r.is_err())
-            .map(|r| format!("{}", r.err().unwrap()))
+            .map(|r| r.err().unwrap())
             .collect::<Vec<String>>();
         if !open_err_msgs.is_empty() {
             writeln!(stderr, "{}", open_err_msgs.join("\n")).unwrap();
@@ -175,9 +175,9 @@ impl MockNode {
                             };
                             write_streams.insert(
                                 data_hunk.to,
-                                stream
-                                    .try_clone()
-                                    .expect(&format!("Cloning stream to {} failed", data_hunk.to)),
+                                stream.try_clone().unwrap_or_else(|_| {
+                                    panic!("Cloning stream to {} failed", data_hunk.to)
+                                }),
                             );
                             Self::start_stream_reader(
                                 stream,
@@ -185,10 +185,10 @@ impl MockNode {
                                 data_hunk.to,
                             );
                         }
-                        let write_stream = write_streams.get_mut(&data_hunk.to).expect(&format!(
-                            "Couldn't find write stream keyed by {}",
-                            data_hunk.to
-                        ));
+                        let write_stream =
+                            write_streams.get_mut(&data_hunk.to).unwrap_or_else(|| {
+                                panic!("Couldn't find write stream keyed by {}", data_hunk.to)
+                            });
                         if !Self::write_with_retry(write_stream, &data_hunk.data[..], data_hunk.to)
                         {
                             return 1;
@@ -228,7 +228,7 @@ impl MockNode {
             LOWEST_USABLE_INSECURE_PORT,
             HIGHEST_USABLE_PORT,
         ).unwrap ();
-        return 1;
+        1
     }
 
     fn interpret_args(args: &[String], stderr: &mut dyn Write) -> Result<NodeAddr, String> {
@@ -269,7 +269,7 @@ impl MockNode {
                     peer_addr,
                     stream
                         .try_clone()
-                        .expect(&format!("Error cloning stream to {}", peer_addr)),
+                        .unwrap_or_else(|_| panic!("Error cloning stream to {}", peer_addr)),
                 );
             }
             Self::start_stream_reader(stream, write_control_stream_arc.clone(), peer_addr);

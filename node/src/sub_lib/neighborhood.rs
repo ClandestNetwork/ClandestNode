@@ -547,10 +547,7 @@ mod tests {
     fn node_descriptor_from_key_node_addr_and_mainnet_flag_works() {
         let cryptde: &dyn CryptDE = main_cryptde();
         let public_key = PublicKey::new(&[1, 2, 3, 4, 5, 6, 7, 8]);
-        let node_addr = NodeAddr::new(
-            &IpAddr::from_str("123.45.67.89").unwrap(),
-            &[2345, 3456],
-        );
+        let node_addr = NodeAddr::new(&IpAddr::from_str("123.45.67.89").unwrap(), &[2345, 3456]);
 
         let result = NodeDescriptor::from((&public_key, &node_addr, true, cryptde));
 
@@ -606,10 +603,7 @@ mod tests {
     fn node_descriptor_to_string_works_for_mainnet() {
         let cryptde: &dyn CryptDE = main_cryptde();
         let public_key = PublicKey::new(&[1, 2, 3, 4, 5, 6, 7, 8]);
-        let node_addr = NodeAddr::new(
-            &IpAddr::from_str("123.45.67.89").unwrap(),
-            &[2345, 3456],
-        );
+        let node_addr = NodeAddr::new(&IpAddr::from_str("123.45.67.89").unwrap(), &[2345, 3456]);
         let subject = NodeDescriptor::from((&public_key, &node_addr, true, cryptde));
 
         let result = subject.to_string(main_cryptde());
@@ -621,10 +615,7 @@ mod tests {
     fn node_descriptor_to_string_works_for_not_mainnet() {
         let cryptde: &dyn CryptDE = main_cryptde();
         let public_key = PublicKey::new(&[1, 2, 3, 4, 5, 6, 7, 8]);
-        let node_addr = NodeAddr::new(
-            &IpAddr::from_str("123.45.67.89").unwrap(),
-            &[2345, 3456],
-        );
+        let node_addr = NodeAddr::new(&IpAddr::from_str("123.45.67.89").unwrap(), &[2345, 3456]);
         let subject = NodeDescriptor::from((&public_key, &node_addr, false, cryptde));
 
         let result = subject.to_string(main_cryptde());

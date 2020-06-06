@@ -158,8 +158,7 @@ mod tests {
             0x00, 0x0D, // server_name_list_length
             0x00, // server_name_type
             0x00, 0x0A, // server_name_length
-            b's', b'e', b'r', b'v', b'e', b'r', b'.', b'c',
-            b'o', b'm', // server_name
+            b's', b'e', b'r', b'v', b'e', b'r', b'.', b'c', b'o', b'm', // server_name
         ]);
         let ibcd = InboundClientData {
             peer_addr: SocketAddr::from_str("1.2.3.4:5678").unwrap(),

@@ -169,8 +169,7 @@ mod tests {
             .for_each(|content_type| {
                 let mut subject = TlsFramer::new();
 
-                subject
-                    .add_data(&[*content_type, 0x03, 0x03, 0x00, 0x03, 0x01, 0x02, 0x03][..]);
+                subject.add_data(&[*content_type, 0x03, 0x03, 0x00, 0x03, 0x01, 0x02, 0x03][..]);
                 let result = subject.take_frame();
 
                 assert_eq!(
