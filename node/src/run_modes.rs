@@ -266,37 +266,37 @@ mod tests {
     impl Runner for RunnerMock {
         fn run_service(
             &self,
-            args: &Vec<String>,
+            args: &[String],
             _streams: &mut StdStreams<'_>,
         ) -> Result<i32, ConfiguratorError> {
-            self.run_service_params.lock().unwrap().push(args.clone());
+            self.run_service_params.lock().unwrap().push(args.to_vec());
             self.run_service_results.borrow_mut().remove(0)
         }
 
         fn dump_config(
             &self,
-            args: &Vec<String>,
+            args: &[String],
             _streams: &mut StdStreams<'_>,
         ) -> Result<i32, ConfiguratorError> {
-            self.dump_config_params.lock().unwrap().push(args.clone());
+            self.dump_config_params.lock().unwrap().push(args.to_vec());
             self.dump_config_results.borrow_mut().remove(0)
         }
 
         fn initialization(
             &self,
-            args: &Vec<String>,
+            args: &[String],
             _streams: &mut StdStreams<'_>,
         ) -> Result<i32, ConfiguratorError> {
             self.initialization_params
                 .lock()
                 .unwrap()
-                .push(args.clone());
+                .push(args.to_vec());
             self.initialization_results.borrow_mut().remove(0)
         }
 
         fn configuration_run(
             &self,
-            args: &Vec<String>,
+            args: &[String],
             _streams: &mut StdStreams<'_>,
             _configurator: &dyn NodeConfigurator<WalletCreationConfig>,
             _privilege_dropper: &dyn PrivilegeDropper,
@@ -304,7 +304,7 @@ mod tests {
             self.configuration_run_params
                 .lock()
                 .unwrap()
-                .push(args.clone());
+                .push(args.to_vec());
             self.configuration_run_results.borrow_mut().remove(0)
         }
     }

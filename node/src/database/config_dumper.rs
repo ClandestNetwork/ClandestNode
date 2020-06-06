@@ -119,14 +119,15 @@ mod tests {
         .join("Substratum")
         .join(TEST_DEFAULT_CHAIN_NAME);
         let mut holder = FakeStreamHolder::new();
+        let args_vec: Vec<String> = ArgsBuilder::new()
+            .param("--data-directory", data_dir.to_str().unwrap())
+            .param("--real-user", "123::")
+            .param("--chain", TEST_DEFAULT_CHAIN_NAME)
+            .opt("--dump-config")
+            .into();
 
         let result = dump_config(
-            &ArgsBuilder::new()
-                .param("--data-directory", data_dir.to_str().unwrap())
-                .param("--real-user", "123::")
-                .param("--chain", TEST_DEFAULT_CHAIN_NAME)
-                .opt("--dump-config")
-                .into(),
+            args_vec.as_slice(),
             &mut holder.streams(),
         )
         .unwrap();
@@ -172,14 +173,15 @@ mod tests {
                 .set_earning_wallet_address("0x0123456789012345678901234567890123456789");
             persistent_config.set_clandestine_port(3456);
         }
+        let args_vec: Vec<String> = ArgsBuilder::new()
+            .param("--data-directory", data_dir.to_str().unwrap())
+            .param("--real-user", "123::")
+            .param("--chain", TEST_DEFAULT_CHAIN_NAME)
+            .opt("--dump-config")
+            .into();
 
         let result = dump_config(
-            &ArgsBuilder::new()
-                .param("--data-directory", data_dir.to_str().unwrap())
-                .param("--real-user", "123::")
-                .param("--chain", TEST_DEFAULT_CHAIN_NAME)
-                .opt("--dump-config")
-                .into(),
+            args_vec.as_slice(),
             &mut holder.streams(),
         )
         .unwrap();

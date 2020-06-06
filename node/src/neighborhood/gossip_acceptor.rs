@@ -1148,11 +1148,11 @@ mod tests {
         let neighbor_key = &db.add_node(make_node_record(3456, true)).unwrap();
         db.add_arbitrary_full_neighbor(root_node.public_key(), neighbor_key);
         let cryptde = CryptDENull::from(db.root().public_key(), DEFAULT_CHAIN_ID);
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let subject = DebutHandler::new(Logger::new("test"));
 
-        let qualifies_result = subject.qualifies(&db, &agrs, gossip_source_opt.clone());
-        let handle_result = subject.handle(&cryptde, &mut db, agrs, gossip_source_opt);
+        let qualifies_result = subject.qualifies(&db, &agrs_vec.as_slice(), gossip_source_opt.clone());
+        let handle_result = subject.handle(&cryptde, &mut db, agrs_vec, gossip_source_opt);
 
         assert_eq!(Qualification::Matched, qualifies_result);
         let introduction = GossipBuilder::new(&db)
@@ -1177,11 +1177,11 @@ mod tests {
         let neighbor_key = &db.add_node(make_node_record(3456, true)).unwrap();
         db.add_arbitrary_full_neighbor(root_node.public_key(), neighbor_key);
         let cryptde = CryptDENull::from(db.root().public_key(), DEFAULT_CHAIN_ID);
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let subject = DebutHandler::new(Logger::new("test"));
 
-        let qualifies_result = subject.qualifies(&db, &agrs, gossip_source.clone());
-        let handle_result = subject.handle(&cryptde, &mut db, agrs, gossip_source);
+        let qualifies_result = subject.qualifies(&db, agrs_vec.as_slice(), gossip_source.clone());
+        let handle_result = subject.handle(&cryptde, &mut db, agrs_vec, gossip_source);
 
         assert_eq!(Qualification::Matched, qualifies_result);
         let introduction = GossipBuilder::new(&db)
@@ -1225,13 +1225,13 @@ mod tests {
         let gossip = GossipBuilder::new(&src_db)
             .node(src_db.root().public_key(), true)
             .build();
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let subject = DebutHandler::new(Logger::new("test"));
 
         let result = subject.handle(
             &cryptde,
             &mut dest_db,
-            agrs,
+            agrs_vec,
             src_root.node_addr_opt().unwrap().into(),
         );
 
@@ -1256,13 +1256,13 @@ mod tests {
         let gossip = GossipBuilder::new(&src_db)
             .node(src_db.root().public_key(), true)
             .build();
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let subject = DebutHandler::new(Logger::new("test"));
 
         let result = subject.handle(
             &cryptde,
             &mut dest_db,
-            agrs,
+            agrs_vec,
             src_root.node_addr_opt().unwrap().into(),
         );
 
@@ -1284,10 +1284,11 @@ mod tests {
             &IpAddr::from_str("1.2.3.4").unwrap(),
             &[1234],
         ));
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &make_meaningless_db(),
-            &gossip.try_into().unwrap(),
+            agrs_vec.as_slice(),
             gossip_source,
         );
 
@@ -1304,10 +1305,11 @@ mod tests {
         let (mut gossip, _j, gossip_source) = make_debut(2345, Mode::Standard);
         gossip.node_records[0].node_addr_opt = None;
         let subject = DebutHandler::new(Logger::new("test"));
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &make_meaningless_db(),
-            &gossip.try_into().unwrap(),
+            agrs_vec.as_slice(),
             gossip_source,
         );
 
@@ -1327,10 +1329,11 @@ mod tests {
             &[],
         ));
         let subject = DebutHandler::new(Logger::new("test"));
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &make_meaningless_db(),
-            &gossip.try_into().unwrap(),
+            agrs_vec.as_slice(),
             gossip_source,
         );
 
@@ -1350,10 +1353,10 @@ mod tests {
         let neighbor_key = &db.add_node(make_node_record(3456, true)).unwrap();
         db.add_arbitrary_full_neighbor(root_node.public_key(), neighbor_key);
         db.add_node(new_node.clone()).unwrap();
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let subject = DebutHandler::new(Logger::new("test"));
 
-        let result = subject.qualifies(&db, &agrs, gossip_source);
+        let result = subject.qualifies(&db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(result, Qualification::Unmatched);
     }
@@ -1374,7 +1377,7 @@ mod tests {
         dest_db.add_arbitrary_full_neighbor(dest_root.public_key(), common_neighbor.public_key());
         dest_db.add_node(dest_neighbor.clone()).unwrap();
         dest_db.add_arbitrary_full_neighbor(dest_root.public_key(), dest_neighbor.public_key());
-        let agrs = GossipBuilder::new(&src_db)
+        let agrs_vec: Vec<AccessibleGossipRecord> = GossipBuilder::new(&src_db)
             .node(src_root.public_key(), true)
             .build()
             .try_into()
@@ -1384,7 +1387,7 @@ mod tests {
         let result = subject.handle(
             &dest_cryptde,
             &mut dest_db,
-            agrs,
+            agrs_vec,
             dest_root.node_addr_opt().clone().unwrap().into(),
         );
 
@@ -1397,10 +1400,10 @@ mod tests {
         let subject = PassHandler::new();
         let mut dest_db = make_meaningless_db();
         let cryptde = CryptDENull::from(dest_db.root().public_key(), DEFAULT_CHAIN_ID);
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let qualifies_result = subject.qualifies(&dest_db, &agrs, gossip_source);
-        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs, gossip_source);
+        let qualifies_result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
+        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs_vec, gossip_source);
 
         assert_eq!(Qualification::Matched, qualifies_result);
         let debut = GossipBuilder::new(&dest_db)
@@ -1421,10 +1424,11 @@ mod tests {
         let (mut gossip, _, gossip_source) = make_pass(2345);
         gossip.node_records[0].node_addr_opt = None;
         let subject = PassHandler::new();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &make_meaningless_db(),
-            &gossip.try_into().unwrap(),
+            agrs_vec.as_slice(),
             gossip_source,
         );
 
@@ -1444,10 +1448,11 @@ mod tests {
             &[],
         ));
         let subject = PassHandler::new();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &make_meaningless_db(),
-            &gossip.try_into().unwrap(),
+            agrs_vec.as_slice(),
             gossip_source,
         );
 
@@ -1464,9 +1469,9 @@ mod tests {
     fn gossip_containing_other_than_two_records_is_not_an_introduction() {
         let (gossip, _, gossip_source) = make_debut(2345, Mode::Standard);
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&make_meaningless_db(), &agrs, gossip_source);
+        let result = subject.qualifies(&make_meaningless_db(), agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(Qualification::Unmatched, result);
     }
@@ -1479,9 +1484,9 @@ mod tests {
         let mut dest_db = db_from_node(&dest_root);
         dest_db.add_node(not_introducee.clone()).unwrap();
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(Qualification::Unmatched, result);
     }
@@ -1493,9 +1498,9 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[0].node_addr_opt = None;
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(Qualification::Unmatched, result);
     }
@@ -1510,9 +1515,9 @@ mod tests {
             &[],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, &agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(
             Qualification::Malformed("Introducer AgMEBQ from 2.3.4.5 has no ports".to_string()),
@@ -1527,9 +1532,9 @@ mod tests {
         let dest_db = db_from_node(&dest_root);
         gossip.node_records[1].node_addr_opt = None;
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap().as_slice();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(Qualification::Unmatched, result);
     }
@@ -1544,9 +1549,9 @@ mod tests {
             &[],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap().as_slice();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(
             Qualification::Malformed(
@@ -1567,9 +1572,9 @@ mod tests {
             &[4567],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap().as_slice();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(Qualification::Malformed("In Introduction, neither AgMEBQ from 4.5.6.7 nor AwQFBg from 3.4.5.6 claims the source IP 2.3.4.5".to_string()), result);
     }
@@ -1584,9 +1589,9 @@ mod tests {
             &[2345],
         ));
         let subject = IntroductionHandler::new(Logger::new("test"));
-        let agrs = gossip.try_into().unwrap().as_slice();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
-        let result = subject.qualifies(&dest_db, agrs, gossip_source);
+        let result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
 
         assert_eq!(
             Qualification::Malformed(
@@ -1861,10 +1866,11 @@ mod tests {
             .build();
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
+        let gossip_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &mut dest_db,
-            gossip.try_into().unwrap().as_slice(),
+            gossip_vec.as_slice(),
             gossip_source,
         );
 
@@ -1890,10 +1896,11 @@ mod tests {
             .build();
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
+        let gossip_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &mut dest_db,
-            gossip.try_into().unwrap().as_slice(),
+            gossip_vec.as_slice(),
             gossip_source,
         );
 
@@ -1927,10 +1934,11 @@ mod tests {
             .build();
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
+        let gossip_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &mut dest_db,
-            gossip.try_into().unwrap().as_slice(),
+            gossip_vec.as_slice(),
             gossip_source,
         );
 
@@ -1968,10 +1976,11 @@ mod tests {
         ));
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let gossip_source: SocketAddr = src_node.node_addr_opt().unwrap().into();
+        let gossip_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
 
         let result = subject.qualifies(
             &mut dest_db,
-            gossip.try_into().unwrap().as_slice(),
+            gossip_vec.as_slice(),
             gossip_source,
         );
 
@@ -2002,11 +2011,11 @@ mod tests {
             .build();
         let subject = StandardGossipHandler::new(Logger::new("test"));
         let cryptde = CryptDENull::from(dest_db.root().public_key(), DEFAULT_CHAIN_ID);
-        let agrs = gossip.try_into().unwrap().as_slice();
+        let agrs_vec: Vec<AccessibleGossipRecord> = gossip.try_into().unwrap();
         let gossip_source: SocketAddr = src_root.node_addr_opt().unwrap().into();
 
-        let qualifies_result = subject.qualifies(&dest_db, &agrs, gossip_source);
-        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs.to_vec(), gossip_source);
+        let qualifies_result = subject.qualifies(&dest_db, agrs_vec.as_slice(), gossip_source);
+        let handle_result = subject.handle(&cryptde, &mut dest_db, agrs_vec, gossip_source);
 
         assert_eq!(Qualification::Matched, qualifies_result);
         assert_eq!(GossipAcceptanceResult::Accepted, handle_result);
@@ -2072,22 +2081,26 @@ mod tests {
         let (pass, _, pass_gossip_source) = make_pass(2345);
         let (introduction, introduction_gossip_source) = make_introduction(3456, 4567);
         let (standard_gossip, _, standard_gossip_source) = make_debut(9898, Mode::Standard);
+        let debut_vec: Vec<AccessibleGossipRecord> = debut.try_into().unwrap();
+        let pass_vec: Vec<AccessibleGossipRecord> = pass.try_into().unwrap();
+        let introduction_vec: Vec<AccessibleGossipRecord> = introduction.try_into().unwrap();
+        let standard_gossip_vec: Vec<AccessibleGossipRecord> = standard_gossip.try_into().unwrap();
 
         let debut_result = reject_handler.qualifies(
             &db,
-            debut.try_into().unwrap().as_slice(),
+            debut_vec.as_slice(),
             debut_gossip_source,
         );
         let pass_result =
-            reject_handler.qualifies(&db, pass.try_into().unwrap().as_slice(), pass_gossip_source);
+            reject_handler.qualifies(&db, pass_vec.as_slice(), pass_gossip_source);
         let introduction_result = reject_handler.qualifies(
             &db,
-            introduction.try_into().unwrap().as_slice(),
+            introduction_vec.as_slice(),
             introduction_gossip_source,
         );
         let standard_gossip_result = reject_handler.qualifies(
             &db,
-            standard_gossip.try_into().unwrap().as_slice(),
+            standard_gossip_vec.as_slice(),
             standard_gossip_source,
         );
 

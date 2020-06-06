@@ -279,8 +279,8 @@ mod tests {
         };
 
         assert_eq!(
-            &log,
-            &(
+            log,
+            vec![
                 String::from("recv_from (Ok(Ready((12, V4(0.0.0.0:0)))))"),
                 String::from("send_to (buf, V4(0.0.0.0:0))"),
                 String::from("recv_from (Ok(Ready((12, V4(1.0.0.0:0)))))"),
@@ -288,7 +288,7 @@ mod tests {
                 String::from("recv_from (Ok(Ready((12, V4(2.0.0.0:0)))))"),
                 String::from("send_to (buf, V4(2.0.0.0:0))"),
                 String::from("recv_from (Err(Kind(BrokenPipe)))")
-            )
+            ]
         );
         let facade = PacketFacade::new(&mut buf, 12);
         assert_eq!(Some(0x1234), facade.get_transaction_id());

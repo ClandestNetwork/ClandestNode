@@ -2276,10 +2276,11 @@ mod tests {
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
+        let args_vec: Vec<String> = args.into();
 
         subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2296,10 +2297,11 @@ mod tests {
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
+        let args_vec: Vec<String> = args.into();
 
         subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2311,10 +2313,11 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", "dev");
+        let args_vec: Vec<String> = args.into();
 
         let config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2331,10 +2334,11 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", "ropsten");
+        let args_vec: Vec<String> = args.into();
 
         let config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2349,10 +2353,11 @@ mod tests {
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
+        let args_vec: Vec<String> = args.into();
 
         let config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2369,10 +2374,11 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
+        let args_vec: Vec<String> = args.into();
 
         let bootstrapper_config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2394,10 +2400,11 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--gas-price", "57");
+        let args_vec: Vec<String> = args.into();
 
         let config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2415,10 +2422,11 @@ mod tests {
         subject.privileged_config = BootstrapperConfig::new();
         subject.privileged_config.data_directory = data_dir;
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
+        let args_vec: Vec<String> = args.into();
 
         let config = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .unwrap();
@@ -2430,10 +2438,11 @@ mod tests {
     fn privileged_configuration_rejects_invalid_gas_price() {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
+        let args_vec: Vec<String> = args.into();
 
         let result = subject
             .configure(
-                args.into().as_slice(),
+                args_vec.as_slice(),
                 &mut FakeStreamHolder::new().streams(),
             )
             .err()

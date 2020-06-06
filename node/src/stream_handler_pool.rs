@@ -860,7 +860,7 @@ mod tests {
             .lock()
             .expect("is this really the poison error? NO!");
         assert_eq!(poll_write_params.len(), 1);
-        assert_eq!(poll_write_params.deref(), &(vec!(0x12, 0x34)));
+        assert_eq!(*poll_write_params, vec![vec![0x12, 0x34]]);
 
         subject_subs
             .transmit_sub
@@ -1127,8 +1127,8 @@ mod tests {
         let connect_pair_params = connect_pair_params_arc_a.lock().unwrap();
         let connect_pair_params_vec: &Vec<SocketAddr> = connect_pair_params.as_ref();
         assert_eq!(
-            connect_pair_params_vec,
-            &(SocketAddr::from_str("1.2.3.5:7000").unwrap())
+            *connect_pair_params_vec,
+            vec![SocketAddr::from_str("1.2.3.5:7000").unwrap()]
         );
     }
 

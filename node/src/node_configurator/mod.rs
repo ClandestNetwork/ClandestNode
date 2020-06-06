@@ -935,8 +935,9 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", data_dir.to_str().unwrap())
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
+        let args_vec: Vec<String> = args.into();
 
-        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, args.into().as_slice())
+        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, args_vec.as_slice())
             .err()
             .unwrap();
 
@@ -983,11 +984,12 @@ mod tests {
             .param("--clandestine-port", "2345")
             .param("--data-directory", "data-dir")
             .param("--config-file", "booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            args.into().as_slice(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1003,13 +1005,14 @@ mod tests {
     fn determine_config_file_path_finds_path_in_environment() {
         let _guard = EnvironmentGuard::new();
         let args = ArgsBuilder::new();
+        let args_vec: Vec<String> = args.into();
         std::env::set_var("SUB_DATA_DIRECTORY", "data_dir");
         std::env::set_var("SUB_CONFIG_FILE", "booga.toml");
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            args.into().as_slice(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1028,11 +1031,12 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", "data-dir")
             .param("--config-file", "/tmp/booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            args.into().as_slice(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1050,11 +1054,12 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", "data-dir")
             .param("--config-file", r"\tmp\booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1072,11 +1077,12 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", "data-dir")
             .param("--config-file", r"c:\tmp\booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1094,11 +1100,12 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", "data-dir")
             .param("--config-file", r"\\TMP\booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args_vec.as_slice(),
         )
         .unwrap();
 
@@ -1117,11 +1124,12 @@ mod tests {
         let args = ArgsBuilder::new()
             .param("--data-directory", "data-dir")
             .param("--config-file", r"c:tmp\booga.toml");
+        let args_vec: Vec<String> = args.into();
 
         let (config_file_path, user_specified) = determine_config_file_path(
             &RealDirsWrapper {},
             &determine_config_file_path_app(),
-            &args.into(),
+            args_vec.as_slice(),
         )
         .unwrap();
 

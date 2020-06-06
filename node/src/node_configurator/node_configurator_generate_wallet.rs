@@ -447,7 +447,7 @@ mod tests {
         let password = "secret-db-password";
         let consuming_path = "m/44'/60'/0'/77/78";
         let earning_path = "m/44'/60'/0'/78/77";
-        let args = ArgsBuilder::new()
+        let args_vec: Vec<String> = ArgsBuilder::new()
             .opt("--generate-wallet")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME)
             .param("--data-directory", home_dir.to_str().unwrap())
@@ -458,8 +458,7 @@ mod tests {
             .param("--word-count", "15")
             .param("--mnemonic-passphrase", "Mortimer")
             .param("--real-user", "123:456:/home/booga")
-            .into()
-            .as_slice();
+            .into();
         let mut subject = NodeConfiguratorGenerateWallet::new();
         let make_parameters_arc = Arc::new(Mutex::new(vec![]));
         let expected_mnemonic = Mnemonic::new(MnemonicType::Words15, Language::Spanish);
@@ -469,7 +468,7 @@ mod tests {
         subject.mnemonic_factory = Box::new(mnemonic_factory);
 
         let config = subject
-            .configure(&args, &mut FakeStreamHolder::new().streams())
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         let persistent_config = initialize_database(&home_dir, DEFAULT_CHAIN_ID);

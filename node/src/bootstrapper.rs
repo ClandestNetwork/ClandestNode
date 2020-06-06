@@ -1053,10 +1053,10 @@ mod tests {
         let mut holder = FakeStreamHolder::new();
 
         subject
-            .initialize_as_privileged(&args, &mut holder.streams())
+            .initialize_as_privileged(args, &mut holder.streams())
             .unwrap();
         subject
-            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .initialize_as_unprivileged(args, &mut holder.streams())
             .unwrap();
 
         let config = subject.config;
@@ -1100,19 +1100,19 @@ mod tests {
             .build();
 
         subject
-            .initialize_as_privileged(&args, &mut holder.streams())
+            .initialize_as_privileged(args, &mut holder.streams())
             .unwrap();
         subject
-            .initialize_as_unprivileged(&args, &mut holder.streams())
+            .initialize_as_unprivileged(args, &mut holder.streams())
             .unwrap();
 
         let dns_servers_guard = dns_servers_arc.lock().unwrap();
         assert_eq!(
             dns_servers_guard.as_ref().unwrap(),
-            &(
+            &vec![
                 SocketAddr::from_str("1.2.3.4:53").unwrap(),
                 SocketAddr::from_str("2.3.4.5:53").unwrap()
-            )
+            ]
         )
     }
 

@@ -399,7 +399,7 @@ mod tests {
         let phrase = "llanto elipse chaleco factor setenta dental moneda rasgo gala rostro taco nudillo orador temor puesto";
         let consuming_path = "m/44'/60'/0'/77/78";
         let earning_path = "m/44'/60'/0'/78/77";
-        let args = ArgsBuilder::new()
+        let args_vec: Vec<String> = ArgsBuilder::new()
             .opt("--recover-wallet")
             .param("--chain", TEST_DEFAULT_CHAIN_NAME)
             .param("--data-directory", home_dir.to_str().unwrap())
@@ -410,12 +410,11 @@ mod tests {
             .param("--mnemonic", phrase)
             .param("--mnemonic-passphrase", "Mortimer")
             .param("--real-user", "123:456:/home/booga")
-            .into()
-            .as_slice();
+            .into();
         let subject = NodeConfiguratorRecoverWallet::new();
 
         let config = subject
-            .configure(&args, &mut FakeStreamHolder::new().streams())
+            .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .unwrap();
 
         let persistent_config = initialize_database(&home_dir, DEFAULT_CHAIN_ID);

@@ -266,7 +266,7 @@ mod tests {
             result,
             Ok(NodeAddr::new(
                 &IpAddr::from_str("1.2.3.4").unwrap(),
-                &(1234, 2345, 3456)
+                &[1234, 2345, 3456]
             ))
         );
     }

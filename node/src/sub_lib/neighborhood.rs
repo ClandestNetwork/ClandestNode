@@ -506,7 +506,7 @@ mod tests {
                 mainnet: false,
                 node_addr_opt: Some(NodeAddr::new(
                     &IpAddr::from_str("1.2.3.4").unwrap(),
-                    &(1234, 2345, 3456),
+                    &[1234, 2345, 3456],
                 ))
             },
         )
@@ -537,7 +537,7 @@ mod tests {
                 mainnet: true,
                 node_addr_opt: Some(NodeAddr::new(
                     &IpAddr::from_str("1.2.3.4").unwrap(),
-                    &(1234, 2345, 3456),
+                    &[1234, 2345, 3456],
                 ))
             },
         )
