@@ -9,6 +9,7 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use web3::types::H256;
+use crate::accountant::PaymentError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PayableAccount {
@@ -38,9 +39,9 @@ impl Payment {
 }
 
 pub trait PayableDao: Debug + Send {
-    fn more_money_payable(&self, wallet: &Wallet, amount: u64);
+    fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
-    fn payment_sent(&self, sent_payment: &Payment);
+    fn payment_sent(&self, sent_payment: &Payment) -> Result<(), PaymentError>;
 
     fn payment_confirmed(
         &self,
@@ -48,13 +49,13 @@ pub trait PayableDao: Debug + Send {
         amount: u64,
         confirmation_noticed_timestamp: SystemTime,
         transaction_hash: H256,
-    );
+    ) -> Result<(), PaymentError>;
 
     fn account_status(&self, wallet: &Wallet) -> Option<PayableAccount>;
 
     fn non_pending_payables(&self) -> Vec<PayableAccount>;
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount>;
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError>;
 
     fn total(&self) -> u64;
 }
@@ -65,21 +66,21 @@ pub struct PayableDaoReal {
 }
 
 impl PayableDao for PayableDaoReal {
-    fn more_money_payable(&self, wallet: &Wallet, amount: u64) {
+    fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
         match self.try_increase_balance(wallet, amount) {
-            Ok(_) => (),
+            Ok(_) => Ok(()),
             Err(e) => panic!("Database is corrupt: {}", e),
-        };
+        }
     }
 
-    fn payment_sent(&self, payment: &Payment) {
+    fn payment_sent(&self, payment: &Payment) -> Result<(), PaymentError> {
         match self.try_decrease_balance(
             &payment.to,
             payment.amount,
             payment.timestamp,
             payment.transaction,
         ) {
-            Ok(_) => (),
+            Ok(_) => Ok (()),
             Err(e) => panic!("Database is corrupt: {}", e),
         }
     }
@@ -90,7 +91,7 @@ impl PayableDao for PayableDaoReal {
         _amount: u64,
         _confirmation_noticed_timestamp: SystemTime,
         _transaction_hash: H256,
-    ) {
+    ) -> Result<(), PaymentError> {
         unimplemented!("SC-925: TODO")
     }
 
@@ -156,7 +157,7 @@ impl PayableDao for PayableDaoReal {
         .collect()
     }
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount> {
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError> {
         let min_amt = match i64::try_from(minimum_amount) {
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
@@ -258,6 +259,7 @@ impl PayableDaoReal {
         PayableDaoReal { conn }
     }
 
+    // TODO: Change to accept i64 rather than u64
     fn try_increase_balance(&self, wallet: &Wallet, amount: u64) -> Result<bool, String> {
         let mut stmt = self
             .conn
@@ -278,6 +280,7 @@ impl PayableDaoReal {
         }
     }
 
+    // TODO: Change to accept i64 rather than u64
     fn try_decrease_balance(
         &self,
         wallet: &Wallet,
@@ -637,7 +640,7 @@ mod tests {
 
         let subject = PayableDaoReal::new(conn);
 
-        let top_records = subject.top_records(1_000_000_000, 86400);
+        let top_records = subject.top_records(1_000_000_000, 86400).unwrap();
         let total = subject.total();
 
         assert_eq!(

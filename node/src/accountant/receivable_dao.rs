@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
-use crate::accountant::PaymentCurves;
+use crate::accountant::{PaymentCurves, PaymentError};
 use crate::blockchain::blockchain_interface::Transaction;
 use crate::database::dao_utils;
 use crate::database::dao_utils::to_time_t;
@@ -22,13 +22,13 @@ pub struct ReceivableAccount {
 }
 
 pub trait ReceivableDao: Send {
-    fn more_money_receivable(&self, wallet: &Wallet, amount: u64);
+    fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
     fn more_money_received(
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         transactions: Vec<Transaction>,
-    );
+    ) -> Result<(), PaymentError>;
 
     fn account_status(&self, wallet: &Wallet) -> Option<ReceivableAccount>;
 
@@ -42,7 +42,7 @@ pub trait ReceivableDao: Send {
 
     fn paid_delinquencies(&self, payment_curves: &PaymentCurves) -> Vec<ReceivableAccount>;
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<ReceivableAccount>;
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<ReceivableAccount>, PaymentError>;
 
     fn total(&self) -> u64;
 }
@@ -53,7 +53,7 @@ pub struct ReceivableDaoReal {
 }
 
 impl ReceivableDao for ReceivableDaoReal {
-    fn more_money_receivable(&self, wallet: &Wallet, amount: u64) {
+    fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
         match self.try_update(wallet, amount) {
             Ok(true) => (),
             Ok(false) => match self.try_insert(wallet, amount) {
@@ -72,7 +72,7 @@ impl ReceivableDao for ReceivableDaoReal {
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         payments: Vec<Transaction>,
-    ) {
+    ) -> Result<(), PaymentError> {
         self.try_multi_insert_payment(persistent_configuration, payments)
             .unwrap_or_else(|e| {
                 warning!(self.logger, "Transaction failed, rolling back: {}", e);
@@ -172,12 +172,12 @@ impl ReceivableDao for ReceivableDaoReal {
         .collect()
     }
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<ReceivableAccount> {
-        let min_amt = match i64::try_from(minimum_amount) {
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<ReceivableAccount>, PaymentError> {
+        let min_amt = match i64::try_from(minimum_amount) { // TODO: This is bad
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
-        let max_age = match i64::try_from(maximum_age) {
+        let max_age = match i64::try_from(maximum_age) { // TODO: This is bad
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
@@ -202,7 +202,7 @@ impl ReceivableDao for ReceivableDaoReal {
             )
             .expect("Internal error");
         let params: &[&dyn ToSql] = &[&min_amt, &min_timestamp];
-        stmt.query_map(params, |row| {
+        let receivable_accounts = stmt.query_map(params, |row| {
             let balance_result = row.get(0);
             let last_paid_timestamp_result = row.get(1);
             let wallet_result: Result<Wallet, rusqlite::Error> = row.get(2);
@@ -217,7 +217,8 @@ impl ReceivableDao for ReceivableDaoReal {
         })
         .expect("Database is corrupt")
         .flatten()
-        .collect()
+        .collect();
+        Ok(receivable_accounts)
     }
 
     fn total(&self) -> u64 {
@@ -258,6 +259,7 @@ impl ReceivableDaoReal {
         }
     }
 
+    // TODO: Change to accept i64 rather than u64
     fn try_update(&self, wallet: &Wallet, amount: u64) -> Result<bool, String> {
         let mut stmt = self
             .conn
@@ -271,6 +273,7 @@ impl ReceivableDaoReal {
         }
     }
 
+    // TODO: Change to accept i64 rather than u64
     fn try_insert(&self, wallet: &Wallet, amount: u64) -> Result<(), String> {
         let timestamp = dao_utils::to_time_t(SystemTime::now());
         let mut stmt = self.conn.prepare ("insert into receivable (wallet_address, balance, last_received_timestamp) values (?, ?, ?)").expect ("Internal error");
@@ -285,7 +288,7 @@ impl ReceivableDaoReal {
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         payments: Vec<Transaction>,
-    ) -> Result<(), String> {
+    ) -> Result<(), String> { // TODO: May have to jigger this return value some
         let tx = match self.conn.transaction() {
             Ok(t) => t,
             Err(e) => return Err(e.to_string()),
@@ -304,8 +307,8 @@ impl ReceivableDaoReal {
             for transaction in payments {
                 let timestamp = dao_utils::now_time_t();
                 let params: &[&dyn ToSql] = &[
-                    &(transaction.gwei_amount as i64),
-                    &(timestamp as i64),
+                    &(transaction.gwei_amount as i64), // TODO: This is bad
+                    &(timestamp as i64), // TODO: This is bad
                     &transaction.from,
                 ];
                 stmt.execute(params).map_err(|e| e.to_string())?;
@@ -928,7 +931,7 @@ mod tests {
 
         let subject = ReceivableDaoReal::new(conn);
 
-        let top_records = subject.top_records(1_000_000_000, 86400);
+        let top_records = subject.top_records(1_000_000_000, 86400).unwrap();
         let total = subject.total();
 
         assert_eq!(

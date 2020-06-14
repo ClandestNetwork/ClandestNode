@@ -61,6 +61,11 @@ lazy_static! {
     };
 }
 
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum PaymentError {
+    SignedConversion(u64)
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct PaymentCurves {
     pub payment_suggested_after_sec: i64,
@@ -175,7 +180,10 @@ impl Handler<SentPayments> for Accountant {
             .payments
             .iter()
             .for_each(|payment| match payment {
-                Ok(payment) => self.payable_dao.as_mut().payment_sent(payment),
+                Ok(payment) => match self.payable_dao.as_mut().payment_sent(payment) {
+                    Ok(()) => (),
+                    Err(e) => unimplemented! ("{:?}", e),
+                },
                 Err(e) => warning!(
                     self.logger,
                     "{} Please check your blockchain service URL configuration.",
@@ -645,6 +653,13 @@ impl Accountant {
             })
             .expect("UiGateway is dead");
     }
+
+    // At the time of this writing, Rust 1.44.0 was unpredictably producing
+    // segfaults on the Mac when using u64::try_from (i64). This is an attempt to
+    // work around that.
+    pub fn jackass_unsigned_to_signed(unsigned: u64) -> Result<i64, PaymentError> {
+        unimplemented!("Test-drive me");
+    }
 }
 
 #[cfg(test)]
@@ -699,11 +714,12 @@ pub mod tests {
     }
 
     impl PayableDao for PayableDaoMock {
-        fn more_money_payable(&self, wallet: &Wallet, amount: u64) {
+        fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
             self.more_money_payable_parameters
                 .lock()
                 .unwrap()
                 .push((wallet.clone(), amount));
+            self.more_money_payable_results.borrow_mut().remove (0)
         }
 
         fn payment_sent(&self, sent_payment: &Payment) {
@@ -719,7 +735,7 @@ pub mod tests {
             _amount: u64,
             _confirmation_noticed_timestamp: SystemTime,
             _transaction_hash: H256,
-        ) {
+        ) -> Result<(), PaymentError> {
             unimplemented!("SC-925: TODO")
         }
 
@@ -739,7 +755,7 @@ pub mod tests {
             }
         }
 
-        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount> {
+        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError> {
             self.top_records_parameters
                 .lock()
                 .unwrap()
@@ -808,22 +824,24 @@ pub mod tests {
     }
 
     impl ReceivableDao for ReceivableDaoMock {
-        fn more_money_receivable(&self, wallet: &Wallet, amount: u64) {
+        fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
             self.more_money_receivable_parameters
                 .lock()
                 .unwrap()
                 .push((wallet.clone(), amount));
+            self.more_money_receivable_results.borrow_mut().remove(0)
         }
 
         fn more_money_received(
             &mut self,
             _persistent_configuration: &dyn PersistentConfiguration,
             transactions: Vec<Transaction>,
-        ) {
+        ) -> Result<(), PaymentError> {
             self.more_money_received_parameters
                 .lock()
                 .unwrap()
                 .push(transactions);
+            self.more_money_received_results.borrow_mut().remove(0)
         }
 
         fn account_status(&self, wallet: &Wallet) -> Option<ReceivableAccount> {
@@ -867,7 +885,7 @@ pub mod tests {
             }
         }
 
-        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<ReceivableAccount> {
+        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<ReceivableAccount>, PaymentError> {
             self.top_records_parameters
                 .lock()
                 .unwrap()
