@@ -63,7 +63,7 @@ lazy_static! {
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum PaymentError {
-    SignedConversion(u64)
+    SignConversion(u64)
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -290,16 +290,16 @@ impl Handler<NodeFromUiMessage> for Accountant {
 
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
         let client_id = msg.client_id;
-        let opcode = msg.body.opcode.clone();
         let result: Result<(UiFinancialsRequest, u64), UiMessageError> =
             UiFinancialsRequest::fmb(msg.body);
         match result {
             Ok((payload, context_id)) => self.handle_financials(client_id, context_id, payload),
-            Err(UnexpectedMessage(_, _)) => (),
-            Err(e) => error!(
+            Err(UnexpectedMessage(opcode, path)) => error! (
                 &self.logger,
-                "Bad {} request from client {}: {:?}", opcode, client_id, e
+                "Bad {:?} request from client {} with opcode '{}'",
+                path, client_id, opcode
             ),
+            Err(e) => unimplemented! ("Received obsolete error: {:?}", e),
         }
     }
 }
@@ -563,9 +563,12 @@ impl Accountant {
         let byte_charge = byte_rate * (payload_size as u64);
         let total_charge = service_rate + byte_charge;
         if !self.our_wallet(wallet) {
-            self.receivable_dao
+            match self.receivable_dao
                 .as_ref()
-                .more_money_receivable(wallet, total_charge);
+                .more_money_receivable(wallet, total_charge) {
+                Ok(_) => (),
+                Err(e) => unimplemented! ("{:?}", e),
+            };
         } else {
             info!(
                 self.logger,
@@ -584,9 +587,12 @@ impl Accountant {
         let byte_charge = byte_rate * (payload_size as u64);
         let total_charge = service_rate + byte_charge;
         if !self.our_wallet(wallet) {
-            self.payable_dao
+            match self.payable_dao
                 .as_ref()
-                .more_money_payable(wallet, total_charge);
+                .more_money_payable(wallet, total_charge) {
+                Ok(_) => (),
+                Err(e) => unimplemented! ("{:?}", e),
+            };
         } else {
             info!(
                 self.logger,
@@ -659,7 +665,12 @@ impl Accountant {
 // segfaults on the Mac when using u64::try_from (i64). This is an attempt to
 // work around that.
 pub fn jackass_unsigned_to_signed(unsigned: u64) -> Result<i64, PaymentError> {
-    unimplemented!("Test-drive me");
+    if unsigned <= (i64::MAX as u64) {
+        Ok(unsigned as i64)
+    }
+    else {
+        Err (PaymentError::SignConversion(unsigned))
+    }
 }
 
 #[cfg(test)]
@@ -784,6 +795,11 @@ pub mod tests {
             self
         }
 
+        fn more_money_payable_result(self, result: Result<(), PaymentError>) -> Self {
+            self.more_money_payable_results.borrow_mut().push (result);
+            self
+        }
+
         fn non_pending_payables_result(self, result: Vec<PayableAccount>) -> Self {
             self.non_pending_payables_results.borrow_mut().push(result);
             self
@@ -791,6 +807,11 @@ pub mod tests {
 
         fn payment_sent_parameters(mut self, parameters: Arc<Mutex<Vec<Payment>>>) -> Self {
             self.payment_sent_parameters = parameters;
+            self
+        }
+
+        fn payment_sent_result(self, result: Result<(), PaymentError>) -> Self {
+            self.payment_sent_results.borrow_mut().push (result);
             self
         }
 
@@ -841,12 +862,11 @@ pub mod tests {
             &mut self,
             _persistent_configuration: &dyn PersistentConfiguration,
             transactions: Vec<Transaction>,
-        ) -> Result<(), PaymentError> {
+        ) {
             self.more_money_received_parameters
                 .lock()
                 .unwrap()
                 .push(transactions);
-            self.more_money_received_results.borrow_mut().remove(0)
         }
 
         fn account_status(&self, wallet: &Wallet) -> Option<ReceivableAccount> {
@@ -910,17 +930,27 @@ pub mod tests {
 
         fn more_money_receivable_parameters(
             mut self,
-            parameters: Arc<Mutex<Vec<(Wallet, u64)>>>,
+            parameters: &Arc<Mutex<Vec<(Wallet, u64)>>>,
         ) -> Self {
-            self.more_money_receivable_parameters = parameters;
+            self.more_money_receivable_parameters = parameters.clone();
             self
         }
 
-        fn _more_money_received_parameters(
+        fn more_money_receivable_result(self, result: Result<(), PaymentError>) -> Self {
+            self.more_money_receivable_results.borrow_mut().push (result);
+            self
+        }
+
+        fn more_money_received_parameters(
             mut self,
-            parameters: Arc<Mutex<Vec<Vec<Transaction>>>>,
+            parameters: &Arc<Mutex<Vec<Vec<Transaction>>>>,
         ) -> Self {
-            self.more_money_received_parameters = parameters;
+            self.more_money_received_parameters = parameters.clone();
+            self
+        }
+
+        fn more_money_received_result(self, result: Result<(), PaymentError>) -> Self {
+            self.more_money_received_results.borrow_mut().push (result);
             self
         }
 
@@ -1181,7 +1211,7 @@ pub mod tests {
         let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
         assert_eq!(ui_gateway_recording.len(), 0);
         TestLogHandler::new().exists_log_containing(
-            "ERROR: Accountant: Bad booga request from client 1234: BadOpcode",
+            "ERROR: Accountant: Bad FireAndForget request from client 1234 with opcode 'booga'",
         );
     }
 
@@ -1193,7 +1223,8 @@ pub mod tests {
         let payable_dao = Box::new(
             PayableDaoMock::new()
                 .non_pending_payables_result(vec![])
-                .payment_sent_parameters(payment_sent_parameters_inner),
+                .payment_sent_parameters(payment_sent_parameters_inner)
+                .payment_sent_result(Ok(())),
         );
         let receivable_dao = Box::new(ReceivableDaoMock::new());
         let banned_dao = Box::new(BannedDaoMock::new());
@@ -1708,24 +1739,12 @@ pub mod tests {
             from: wallet.clone(),
             gwei_amount,
         };
-        let more_money_received_mock = Arc::new(Mutex::new(vec![]));
-        let receivable_dao = Box::new(ReceivableDaoMock {
-            account_status_parameters: Default::default(),
-            account_status_results: Default::default(),
-            more_money_receivable_parameters: Default::default(),
-            more_money_receivable_results: Default::default(),
-            more_money_received_parameters: more_money_received_mock.clone(),
-            more_money_received_results: Default::default(),
-            receivables_results: Default::default(),
-            new_delinquencies_parameters: Default::default(),
-            new_delinquencies_results: Default::default(),
-            paid_delinquencies_parameters: Default::default(),
-            paid_delinquencies_results: Default::default(),
-            top_records_parameters: Default::default(),
-            top_records_results: Default::default(),
-            total_results: Default::default(),
-        });
-        let banned_dao = Box::new(BannedDaoMock::new());
+        let more_money_received_params_arc = Arc::new(Mutex::new(vec![]));
+        let receivable_dao = ReceivableDaoMock::new()
+            .more_money_received_parameters (&more_money_received_params_arc)
+            .more_money_received_result(Ok(()))
+            .more_money_received_result(Ok(()));
+        let banned_dao = BannedDaoMock::new();
         let accountant = Accountant::new(
             &bc_from_ac_plus_earning_wallet(
                 AccountantConfig {
@@ -1735,8 +1754,8 @@ pub mod tests {
                 earning_wallet.clone(),
             ),
             Box::new(PayableDaoMock::new().non_pending_payables_result(vec![])),
-            receivable_dao,
-            banned_dao,
+            Box::new (receivable_dao),
+            Box::new (banned_dao),
             null_config(),
         );
 
@@ -1750,10 +1769,10 @@ pub mod tests {
             .expect("unexpected actix error");
         System::current().stop();
         system.run();
-        let more_money_received_calls = more_money_received_mock.lock().unwrap();
-        assert_eq!(1, more_money_received_calls.len());
+        let more_money_received_params = more_money_received_params_arc.lock().unwrap();
+        assert_eq!(1, more_money_received_params.len());
 
-        let more_money_received_params = more_money_received_calls.get(0).unwrap();
+        let more_money_received_params = more_money_received_params.get(0).unwrap();
         assert_eq!(2, more_money_received_params.len());
 
         let first_payment = more_money_received_params.get(0).unwrap();
@@ -2144,7 +2163,8 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc)
+                .more_money_receivable_result(Ok(())),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2201,7 +2221,7 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2256,7 +2276,7 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2310,7 +2330,8 @@ pub mod tests {
         let payable_dao_mock = Box::new(
             PayableDaoMock::new()
                 .non_pending_payables_result(vec![])
-                .more_money_payable_parameters(more_money_payable_parameters_arc.clone()),
+                .more_money_payable_parameters(more_money_payable_parameters_arc.clone())
+                .more_money_payable_result(Ok(())),
         );
         let receivable_dao_mock = Box::new(ReceivableDaoMock::new());
         let banned_dao_mock = Box::new(BannedDaoMock::new());
@@ -2472,7 +2493,8 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc)
+                .more_money_receivable_result(Ok(())),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2529,7 +2551,7 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2584,7 +2606,7 @@ pub mod tests {
         let payable_dao_mock = Box::new(PayableDaoMock::new().non_pending_payables_result(vec![]));
         let receivable_dao_mock = Box::new(
             ReceivableDaoMock::new()
-                .more_money_receivable_parameters(more_money_receivable_parameters_arc.clone()),
+                .more_money_receivable_parameters(&more_money_receivable_parameters_arc),
         );
         let banned_dao_mock = Box::new(BannedDaoMock::new());
         let subject = Accountant::new(
@@ -2638,7 +2660,8 @@ pub mod tests {
         let payable_dao_mock = Box::new(
             PayableDaoMock::new()
                 .non_pending_payables_result(vec![])
-                .more_money_payable_parameters(more_money_payable_parameters_arc.clone()),
+                .more_money_payable_parameters(more_money_payable_parameters_arc.clone())
+                .more_money_payable_result(Ok (())),
         );
         let receivable_dao_mock = Box::new(ReceivableDaoMock::new());
         let banned_dao_mock = Box::new(BannedDaoMock::new());
@@ -2785,6 +2808,28 @@ pub mod tests {
             "INFO: Accountant: Not recording service consumed to our wallet {}",
             earning_wallet
         ));
+    }
+
+    #[test]
+    fn jackass_unsigned_to_signed_handles_zero () {
+        let result = jackass_unsigned_to_signed(0u64);
+
+        assert_eq! (result, Ok(0i64));
+    }
+
+    #[test]
+    fn jackass_unsigned_to_signed_handles_max_allowable () {
+        let result = jackass_unsigned_to_signed (i64::MAX as u64);
+
+        assert_eq! (result, Ok(i64::MAX));
+    }
+
+    #[test]
+    fn jackass_unsigned_to_signed_handles_max_plus_one () {
+        let attempt = (i64::MAX as u64) + 1;
+        let result = jackass_unsigned_to_signed ((i64::MAX as u64) + 1);
+
+        assert_eq! (result, Err(PaymentError::SignConversion(attempt)));
     }
 
     fn bc_from_ac_plus_earning_wallet(

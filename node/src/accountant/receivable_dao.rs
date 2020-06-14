@@ -11,7 +11,6 @@ use indoc::indoc;
 use rusqlite::named_params;
 use rusqlite::types::{ToSql, Type};
 use rusqlite::{OptionalExtension, Row, NO_PARAMS};
-use std::convert::TryFrom;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +20,7 @@ pub struct ReceivableAccount {
     pub last_received_timestamp: SystemTime,
 }
 
+// TODO: Make sure all overflow errors are handled
 pub trait ReceivableDao: Send {
     fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
@@ -28,7 +28,7 @@ pub trait ReceivableDao: Send {
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         transactions: Vec<Transaction>,
-    ) -> Result<(), PaymentError>;
+    );
 
     fn account_status(&self, wallet: &Wallet) -> Option<ReceivableAccount>;
 
@@ -73,10 +73,10 @@ impl ReceivableDao for ReceivableDaoReal {
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         payments: Vec<Transaction>,
-    ) -> Result<(), PaymentError> {
+    ) {
         self.try_multi_insert_payment(persistent_configuration, payments)
             .unwrap_or_else(|e| {
-                warning!(self.logger, "Transaction failed, rolling back: {}", e);
+                error!(self.logger, "Transaction failed, rolling back: {}", e);
             })
     }
 
@@ -174,11 +174,11 @@ impl ReceivableDao for ReceivableDaoReal {
     }
 
     fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<ReceivableAccount> {
-        let min_amt = match i64::try_from(minimum_amount) { // TODO: This is bad
+        let min_amt = match jackass_unsigned_to_signed(minimum_amount) {
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
-        let max_age = match i64::try_from(maximum_age) { // TODO: This is bad
+        let max_age = match jackass_unsigned_to_signed(maximum_age) {
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
@@ -304,9 +304,13 @@ impl ReceivableDaoReal {
             let mut stmt = tx.prepare("update receivable set balance = balance - ?, last_received_timestamp = ? where wallet_address = ?").expect("Internal error");
             for transaction in payments {
                 let timestamp = dao_utils::now_time_t();
+                let gwei_amount = match jackass_unsigned_to_signed(transaction.gwei_amount) {
+                    Ok (amount) => amount,
+                    Err (e) => return Err (format!("Amount too large: {:?}", e)),
+                };
                 let params: &[&dyn ToSql] = &[
-                    &(transaction.gwei_amount as i64), // TODO: This is bad
-                    &(timestamp as i64), // TODO: This is bad
+                    &gwei_amount,
+                    &timestamp,
                     &transaction.from,
                 ];
                 stmt.execute(params).map_err(|e| e.to_string())?;
@@ -364,7 +368,7 @@ mod tests {
                     .unwrap(),
             );
 
-            subject.more_money_receivable(&wallet, 1234);
+            subject.more_money_receivable(&wallet, 1234).unwrap();
             subject.account_status(&wallet).unwrap()
         };
 
@@ -399,7 +403,7 @@ mod tests {
                     .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                     .unwrap(),
             );
-            subject.more_money_receivable(&wallet, 1234);
+            subject.more_money_receivable(&wallet, 1234).unwrap();
             let mut flags = OpenFlags::empty();
             flags.insert(OpenFlags::SQLITE_OPEN_READ_WRITE);
             let conn =
@@ -414,7 +418,7 @@ mod tests {
         };
 
         let status = {
-            subject.more_money_receivable(&wallet, 2345);
+            subject.more_money_receivable(&wallet, 2345).unwrap();
             subject.account_status(&wallet).unwrap()
         };
 
@@ -438,8 +442,8 @@ mod tests {
                     .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                     .unwrap(),
             );
-            subject.more_money_receivable(&debtor1, 1234);
-            subject.more_money_receivable(&debtor2, 2345);
+            subject.more_money_receivable(&debtor1, 1234).unwrap();
+            subject.more_money_receivable(&debtor2, 2345).unwrap();
             let mut flags = OpenFlags::empty();
             flags.insert(OpenFlags::SQLITE_OPEN_READ_WRITE);
             subject
@@ -538,7 +542,7 @@ mod tests {
         receivable_dao.more_money_received(persistent_configuration.as_ref(), vec![]);
 
         TestLogHandler::new().exists_log_containing(&format!(
-            "WARN: ReceivableDaoReal: Transaction failed, rolling back: {}",
+            "ERROR: ReceivableDaoReal: Transaction failed, rolling back: {}",
             Error::InvalidQuery
         ));
     }
@@ -564,7 +568,7 @@ mod tests {
         receivable_dao.more_money_received(persistent_configuration.as_ref(), vec![]);
 
         TestLogHandler::new().exists_log_containing(
-            "WARN: ReceivableDaoReal: Transaction failed, rolling back: no payments given",
+            "ERROR: ReceivableDaoReal: Transaction failed, rolling back: no payments given",
         );
     }
 
@@ -598,7 +602,7 @@ mod tests {
         receivable_dao.more_money_received(persistent_configuration.as_ref(), payments);
 
         TestLogHandler::new().exists_log_containing(
-            r#"WARN: ReceivableDaoReal: Transaction failed, rolling back: BOOM"#,
+            r#"ERROR: ReceivableDaoReal: Transaction failed, rolling back: BOOM"#,
         );
     }
 
@@ -636,8 +640,8 @@ mod tests {
                 .unwrap(),
         );
 
-        subject.more_money_receivable(&wallet1, 1234);
-        subject.more_money_receivable(&wallet2, 2345);
+        subject.more_money_receivable(&wallet1, 1234).unwrap();
+        subject.more_money_receivable(&wallet2, 2345).unwrap();
 
         let accounts = subject
             .receivables()

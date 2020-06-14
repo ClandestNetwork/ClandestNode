@@ -5,11 +5,10 @@ use crate::sub_lib::wallet::Wallet;
 use rusqlite::types::{ToSql, Type};
 use rusqlite::{Error, OptionalExtension, NO_PARAMS};
 use serde_json::{self, json};
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use web3::types::H256;
-use crate::accountant::PaymentError;
+use crate::accountant::{PaymentError, jackass_unsigned_to_signed};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PayableAccount {
@@ -38,11 +37,15 @@ impl Payment {
     }
 }
 
+// TODO: Make sure all overflow errors are handled
 pub trait PayableDao: Debug + Send {
+    // TODO: Remember to drive error handling
     fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
+    // TODO: Remember to drive error handling
     fn payment_sent(&self, sent_payment: &Payment) -> Result<(), PaymentError>;
 
+    // TODO: Remember to drive error handling
     fn payment_confirmed(
         &self,
         wallet: &Wallet,
@@ -67,16 +70,18 @@ pub struct PayableDaoReal {
 
 impl PayableDao for PayableDaoReal {
     fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
-        match self.try_increase_balance(wallet, amount) {
+        let signed_amount = jackass_unsigned_to_signed(amount)?;
+        match self.try_increase_balance(wallet, signed_amount) {
             Ok(_) => Ok(()),
             Err(e) => panic!("Database is corrupt: {}", e),
         }
     }
 
     fn payment_sent(&self, payment: &Payment) -> Result<(), PaymentError> {
+        let signed_amount = jackass_unsigned_to_signed(payment.amount)?;
         match self.try_decrease_balance(
             &payment.to,
-            payment.amount,
+            signed_amount,
             payment.timestamp,
             payment.transaction,
         ) {
@@ -158,11 +163,11 @@ impl PayableDao for PayableDaoReal {
     }
 
     fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount> {
-        let min_amt = match i64::try_from(minimum_amount) { // TODO: This is bad
+        let min_amt = match jackass_unsigned_to_signed(minimum_amount) {
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
-        let max_age = match i64::try_from(maximum_age) { // TODO: This is bad
+        let max_age = match jackass_unsigned_to_signed(maximum_age) {
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
@@ -259,8 +264,7 @@ impl PayableDaoReal {
         PayableDaoReal { conn }
     }
 
-    // TODO: Change to accept i64 rather than u64
-    fn try_increase_balance(&self, wallet: &Wallet, amount: u64) -> Result<bool, String> {
+    fn try_increase_balance(&self, wallet: &Wallet, amount: i64) -> Result<bool, String> {
         let mut stmt = self
             .conn
             .prepare("insert into payable (wallet_address, balance, last_paid_timestamp, pending_payment_transaction) values (:address, :balance, strftime('%s','now'), null) on conflict (wallet_address) do update set balance = balance + :balance where wallet_address = :address")
@@ -269,8 +273,7 @@ impl PayableDaoReal {
             (":address", &wallet),
             (
                 ":balance",
-                &i64::try_from(amount)
-                    .unwrap_or_else(|_| panic!("Lost payable amount precision: {}", amount)),
+                &amount,
             ),
         ];
         match stmt.execute_named(params) {
@@ -284,7 +287,7 @@ impl PayableDaoReal {
     fn try_decrease_balance(
         &self,
         wallet: &Wallet,
-        amount: u64,
+        amount: i64,
         last_paid_timestamp: SystemTime,
         transaction_hash: H256,
     ) -> Result<bool, String> {
@@ -295,8 +298,7 @@ impl PayableDaoReal {
         let params: &[(&str, &dyn ToSql)] = &[
             (
                 ":balance",
-                &i64::try_from(amount)
-                    .unwrap_or_else(|_| panic!("Lost payable amount precision: {}", amount)),
+                &amount,
             ),
             (":last_paid", &dao_utils::to_time_t(last_paid_timestamp)),
             (":transaction", &format!("{:#x}", &transaction_hash)),
@@ -338,7 +340,7 @@ mod tests {
                     .unwrap(),
             );
 
-            subject.more_money_payable(&wallet, 1234);
+            subject.more_money_payable(&wallet, 1234).unwrap();
             subject.account_status(&wallet).unwrap()
         };
 
@@ -373,7 +375,7 @@ mod tests {
                     .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                     .unwrap(),
             );
-            subject.more_money_payable(&wallet, 1234);
+            subject.more_money_payable(&wallet, 1234).unwrap();
             let mut flags = OpenFlags::empty();
             flags.insert(OpenFlags::SQLITE_OPEN_READ_WRITE);
             let conn =
@@ -388,7 +390,7 @@ mod tests {
         };
 
         let status = {
-            subject.more_money_payable(&wallet, 2345);
+            subject.more_money_payable(&wallet, 2345).unwrap();
             subject.account_status(&wallet).unwrap()
         };
 
@@ -414,7 +416,7 @@ mod tests {
         let before_account_status = subject.account_status(&payment.to);
         assert!(before_account_status.is_none());
 
-        subject.payment_sent(&payment);
+        subject.payment_sent(&payment).unwrap();
 
         let after_account_status = subject.account_status(&payment.to).unwrap();
 
@@ -445,8 +447,8 @@ mod tests {
 
         let before_account_status = subject.account_status(&payment.to);
         assert!(before_account_status.is_none());
-        subject.more_money_payable(&wallet, 1);
-        subject.payment_sent(&payment);
+        subject.more_money_payable(&wallet, 1).unwrap();
+        subject.payment_sent(&payment).unwrap();
 
         let after_account_status = subject.account_status(&payment.to).unwrap();
 
@@ -558,8 +560,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Lost payable amount precision: 18446744073709551615")]
-    fn payable_amount_precision_loss_panics_on_insert() {
+    fn payable_amount_errors_on_insert_when_out_of_range() {
         let home_dir = ensure_node_home_directory_exists(
             "payable_dao",
             "payable_amount_precision_loss_panics_on_insert",
@@ -569,12 +570,14 @@ mod tests {
                 .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap(),
         );
-        subject.more_money_payable(&make_wallet("foobar"), std::u64::MAX);
+
+        let result = subject.more_money_payable(&make_wallet("foobar"), std::u64::MAX);
+
+        assert_eq! (result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]
-    #[should_panic(expected = "Lost payable amount precision: 18446744073709551615")]
-    fn payable_amount_precision_loss_panics_on_update_balance() {
+    fn payable_amount_errors_on_update_balance_when_out_of_range() {
         let home_dir = ensure_node_home_directory_exists(
             "payable_dao",
             "payable_amount_precision_loss_panics_on_update_balance",
@@ -584,11 +587,14 @@ mod tests {
                 .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
                 .unwrap(),
         );
-        subject.payment_sent(&Payment::new(
+
+        let result = subject.payment_sent(&Payment::new(
             make_wallet("foobar"),
             std::u64::MAX,
             H256::from_uint(&U256::from(123)),
         ));
+
+        assert_eq! (result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]
