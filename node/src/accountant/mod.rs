@@ -653,13 +653,13 @@ impl Accountant {
             })
             .expect("UiGateway is dead");
     }
+}
 
-    // At the time of this writing, Rust 1.44.0 was unpredictably producing
-    // segfaults on the Mac when using u64::try_from (i64). This is an attempt to
-    // work around that.
-    pub fn jackass_unsigned_to_signed(unsigned: u64) -> Result<i64, PaymentError> {
-        unimplemented!("Test-drive me");
-    }
+// At the time of this writing, Rust 1.44.0 was unpredictably producing
+// segfaults on the Mac when using u64::try_from (i64). This is an attempt to
+// work around that.
+pub fn jackass_unsigned_to_signed(unsigned: u64) -> Result<i64, PaymentError> {
+    unimplemented!("Test-drive me");
 }
 
 #[cfg(test)]
@@ -706,8 +706,10 @@ pub mod tests {
         account_status_parameters: Arc<Mutex<Vec<Wallet>>>,
         account_status_results: RefCell<Vec<Option<PayableAccount>>>,
         more_money_payable_parameters: Arc<Mutex<Vec<(Wallet, u64)>>>,
+        more_money_payable_results: RefCell<Vec<Result<(), PaymentError>>>,
         non_pending_payables_results: RefCell<Vec<Vec<PayableAccount>>>,
         payment_sent_parameters: Arc<Mutex<Vec<Payment>>>,
+        payment_sent_results: RefCell<Vec<Result<(), PaymentError>>>,
         top_records_parameters: Arc<Mutex<Vec<(u64, u64)>>>,
         top_records_results: RefCell<Vec<Vec<PayableAccount>>>,
         total_results: RefCell<Vec<u64>>,
@@ -722,11 +724,12 @@ pub mod tests {
             self.more_money_payable_results.borrow_mut().remove (0)
         }
 
-        fn payment_sent(&self, sent_payment: &Payment) {
+        fn payment_sent(&self, sent_payment: &Payment) -> Result<(), PaymentError> {
             self.payment_sent_parameters
                 .lock()
                 .unwrap()
                 .push(sent_payment.clone());
+            self.payment_sent_results.borrow_mut().remove(0)
         }
 
         fn payment_confirmed(
@@ -755,7 +758,7 @@ pub mod tests {
             }
         }
 
-        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError> {
+        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount> {
             self.top_records_parameters
                 .lock()
                 .unwrap()
@@ -812,7 +815,9 @@ pub mod tests {
         account_status_parameters: Arc<Mutex<Vec<Wallet>>>,
         account_status_results: RefCell<Vec<Option<ReceivableAccount>>>,
         more_money_receivable_parameters: Arc<Mutex<Vec<(Wallet, u64)>>>,
+        more_money_receivable_results: RefCell<Vec<Result<(), PaymentError>>>,
         more_money_received_parameters: Arc<Mutex<Vec<Vec<Transaction>>>>,
+        more_money_received_results: RefCell<Vec<Result<(), PaymentError>>>,
         receivables_results: RefCell<Vec<Vec<ReceivableAccount>>>,
         new_delinquencies_parameters: Arc<Mutex<Vec<(SystemTime, PaymentCurves)>>>,
         new_delinquencies_results: RefCell<Vec<Vec<ReceivableAccount>>>,
@@ -885,7 +890,7 @@ pub mod tests {
             }
         }
 
-        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<ReceivableAccount>, PaymentError> {
+        fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<ReceivableAccount> {
             self.top_records_parameters
                 .lock()
                 .unwrap()
@@ -1708,7 +1713,9 @@ pub mod tests {
             account_status_parameters: Default::default(),
             account_status_results: Default::default(),
             more_money_receivable_parameters: Default::default(),
+            more_money_receivable_results: Default::default(),
             more_money_received_parameters: more_money_received_mock.clone(),
+            more_money_received_results: Default::default(),
             receivables_results: Default::default(),
             new_delinquencies_parameters: Default::default(),
             new_delinquencies_results: Default::default(),

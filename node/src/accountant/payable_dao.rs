@@ -55,7 +55,7 @@ pub trait PayableDao: Debug + Send {
 
     fn non_pending_payables(&self) -> Vec<PayableAccount>;
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError>;
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount>;
 
     fn total(&self) -> u64;
 }
@@ -157,12 +157,12 @@ impl PayableDao for PayableDaoReal {
         .collect()
     }
 
-    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Result<Vec<PayableAccount>, PaymentError> {
-        let min_amt = match i64::try_from(minimum_amount) {
+    fn top_records(&self, minimum_amount: u64, maximum_age: u64) -> Vec<PayableAccount> {
+        let min_amt = match i64::try_from(minimum_amount) { // TODO: This is bad
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
-        let max_age = match i64::try_from(maximum_age) {
+        let max_age = match i64::try_from(maximum_age) { // TODO: This is bad
             Ok(n) => n,
             Err(_) => 0x7FFF_FFFF_FFFF_FFFF,
         };
@@ -640,7 +640,7 @@ mod tests {
 
         let subject = PayableDaoReal::new(conn);
 
-        let top_records = subject.top_records(1_000_000_000, 86400).unwrap();
+        let top_records = subject.top_records(1_000_000_000, 86400);
         let total = subject.total();
 
         assert_eq!(
