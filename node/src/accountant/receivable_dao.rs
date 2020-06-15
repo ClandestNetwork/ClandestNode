@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
-use crate::accountant::{PaymentCurves, PaymentError, jackass_unsigned_to_signed};
+use crate::accountant::{jackass_unsigned_to_signed, PaymentCurves, PaymentError};
 use crate::blockchain::blockchain_interface::Transaction;
 use crate::database::dao_utils;
 use crate::database::dao_utils::to_time_t;
@@ -20,7 +20,6 @@ pub struct ReceivableAccount {
     pub last_received_timestamp: SystemTime,
 }
 
-// TODO: Make sure all overflow errors are handled
 pub trait ReceivableDao: Send {
     fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
@@ -54,7 +53,7 @@ pub struct ReceivableDaoReal {
 
 impl ReceivableDao for ReceivableDaoReal {
     fn more_money_receivable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError> {
-        let signed_amount = jackass_unsigned_to_signed (amount)?;
+        let signed_amount = jackass_unsigned_to_signed(amount)?;
         match self.try_update(wallet, signed_amount) {
             Ok(true) => Ok(()),
             Ok(false) => match self.try_insert(wallet, signed_amount) {
@@ -286,7 +285,7 @@ impl ReceivableDaoReal {
         &mut self,
         persistent_configuration: &dyn PersistentConfiguration,
         payments: Vec<Transaction>,
-    ) -> Result<(), String> { // TODO: May have to jigger this return value some
+    ) -> Result<(), String> {
         let tx = match self.conn.transaction() {
             Ok(t) => t,
             Err(e) => return Err(e.to_string()),
@@ -305,14 +304,10 @@ impl ReceivableDaoReal {
             for transaction in payments {
                 let timestamp = dao_utils::now_time_t();
                 let gwei_amount = match jackass_unsigned_to_signed(transaction.gwei_amount) {
-                    Ok (amount) => amount,
-                    Err (e) => return Err (format!("Amount too large: {:?}", e)),
+                    Ok(amount) => amount,
+                    Err(e) => return Err(format!("Amount too large: {:?}", e)),
                 };
-                let params: &[&dyn ToSql] = &[
-                    &gwei_amount,
-                    &timestamp,
-                    &transaction.from,
-                ];
+                let params: &[&dyn ToSql] = &[&gwei_amount, &timestamp, &transaction.from];
                 stmt.execute(params).map_err(|e| e.to_string())?;
             }
         }
@@ -425,6 +420,23 @@ mod tests {
         assert_eq!(status.wallet, wallet);
         assert_eq!(status.balance, 3579);
         assert_eq!(status.last_received_timestamp, SystemTime::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn more_money_receivable_works_for_overflow() {
+        let home_dir = ensure_node_home_directory_exists(
+            "receivable_dao",
+            "more_money_receivable_works_for_overflow",
+        );
+        let subject = ReceivableDaoReal::new(
+            DbInitializerReal::new()
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+                .unwrap(),
+        );
+
+        let result = subject.more_money_receivable(&make_wallet("booga"), std::u64::MAX);
+
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]

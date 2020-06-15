@@ -63,7 +63,7 @@ lazy_static! {
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum PaymentError {
-    SignConversion(u64)
+    SignConversion(u64),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -176,20 +176,7 @@ impl Handler<SentPayments> for Accountant {
     type Result = ();
 
     fn handle(&mut self, sent_payments: SentPayments, _ctx: &mut Self::Context) -> Self::Result {
-        sent_payments
-            .payments
-            .iter()
-            .for_each(|payment| match payment {
-                Ok(payment) => match self.payable_dao.as_mut().payment_sent(payment) {
-                    Ok(()) => (),
-                    Err(e) => unimplemented! ("{:?}", e),
-                },
-                Err(e) => warning!(
-                    self.logger,
-                    "{} Please check your blockchain service URL configuration.",
-                    e
-                ),
-            })
+        self.handle_sent_payments(sent_payments);
     }
 }
 
@@ -294,12 +281,11 @@ impl Handler<NodeFromUiMessage> for Accountant {
             UiFinancialsRequest::fmb(msg.body);
         match result {
             Ok((payload, context_id)) => self.handle_financials(client_id, context_id, payload),
-            Err(UnexpectedMessage(opcode, path)) => error! (
+            Err(UnexpectedMessage(opcode, path)) => error!(
                 &self.logger,
-                "Bad {:?} request from client {} with opcode '{}'",
-                path, client_id, opcode
+                "Bad {:?} request from client {} with opcode '{}'", path, client_id, opcode
             ),
-            Err(e) => unimplemented! ("Received obsolete error: {:?}", e),
+            Err(e) => unimplemented!("Received obsolete error: {:?}", e),
         }
     }
 }
@@ -567,7 +553,14 @@ impl Accountant {
                 .as_ref()
                 .more_money_receivable(wallet, total_charge) {
                 Ok(_) => (),
-                Err(e) => unimplemented! ("{:?}", e),
+                Err(PaymentError::SignConversion(_)) => error! (
+                    self.logger,
+                    "Overflow error trying to record service provided to Node with consuming wallet {}: service rate {}, byte rate {}, payload size {}. Skipping",
+                    wallet,
+                    service_rate,
+                    byte_rate,
+                    payload_size
+                ),
             };
         } else {
             info!(
@@ -591,7 +584,14 @@ impl Accountant {
                 .as_ref()
                 .more_money_payable(wallet, total_charge) {
                 Ok(_) => (),
-                Err(e) => unimplemented! ("{:?}", e),
+                Err(PaymentError::SignConversion(_)) => error! (
+                    self.logger,
+                    "Overflow error trying to record service consumed from Node with earning wallet {}: service rate {}, byte rate {}, payload size {}. Skipping",
+                    wallet,
+                    service_rate,
+                    byte_rate,
+                    payload_size
+                ),
             };
         } else {
             info!(
@@ -606,6 +606,29 @@ impl Accountant {
             Some(ref consuming) if consuming.address() == wallet.address() => true,
             _ => wallet.address() == self.earning_wallet.address(),
         }
+    }
+
+    fn handle_sent_payments(&mut self, sent_payments: SentPayments) {
+        sent_payments
+            .payments
+            .iter()
+            .for_each(|payment| match payment {
+                Ok(payment) => match self.payable_dao.as_mut().payment_sent(payment) {
+                    Ok(()) => (),
+                    Err(PaymentError::SignConversion(_)) => error! (
+                        self.logger,
+                        "Overflow error trying to record payment of {} sent to earning wallet {} (transaction {}). Skipping",
+                        payment.amount,
+                        payment.to,
+                        payment.transaction,
+                    ),
+                },
+                Err(e) => warning!(
+                    self.logger,
+                    "{} Please check your blockchain service URL configuration.",
+                    e
+                ),
+            })
     }
 
     fn handle_financials(&mut self, client_id: u64, context_id: u64, request: UiFinancialsRequest) {
@@ -665,11 +688,10 @@ impl Accountant {
 // segfaults on the Mac when using u64::try_from (i64). This is an attempt to
 // work around that.
 pub fn jackass_unsigned_to_signed(unsigned: u64) -> Result<i64, PaymentError> {
-    if unsigned <= (i64::MAX as u64) {
+    if unsigned <= (std::i64::MAX as u64) {
         Ok(unsigned as i64)
-    }
-    else {
-        Err (PaymentError::SignConversion(unsigned))
+    } else {
+        Err(PaymentError::SignConversion(unsigned))
     }
 }
 
@@ -732,7 +754,7 @@ pub mod tests {
                 .lock()
                 .unwrap()
                 .push((wallet.clone(), amount));
-            self.more_money_payable_results.borrow_mut().remove (0)
+            self.more_money_payable_results.borrow_mut().remove(0)
         }
 
         fn payment_sent(&self, sent_payment: &Payment) -> Result<(), PaymentError> {
@@ -796,7 +818,7 @@ pub mod tests {
         }
 
         fn more_money_payable_result(self, result: Result<(), PaymentError>) -> Self {
-            self.more_money_payable_results.borrow_mut().push (result);
+            self.more_money_payable_results.borrow_mut().push(result);
             self
         }
 
@@ -811,7 +833,7 @@ pub mod tests {
         }
 
         fn payment_sent_result(self, result: Result<(), PaymentError>) -> Self {
-            self.payment_sent_results.borrow_mut().push (result);
+            self.payment_sent_results.borrow_mut().push(result);
             self
         }
 
@@ -937,7 +959,7 @@ pub mod tests {
         }
 
         fn more_money_receivable_result(self, result: Result<(), PaymentError>) -> Self {
-            self.more_money_receivable_results.borrow_mut().push (result);
+            self.more_money_receivable_results.borrow_mut().push(result);
             self
         }
 
@@ -950,7 +972,7 @@ pub mod tests {
         }
 
         fn more_money_received_result(self, result: Result<(), PaymentError>) -> Self {
-            self.more_money_received_results.borrow_mut().push (result);
+            self.more_money_received_results.borrow_mut().push(result);
             self
         }
 
@@ -1741,7 +1763,7 @@ pub mod tests {
         };
         let more_money_received_params_arc = Arc::new(Mutex::new(vec![]));
         let receivable_dao = ReceivableDaoMock::new()
-            .more_money_received_parameters (&more_money_received_params_arc)
+            .more_money_received_parameters(&more_money_received_params_arc)
             .more_money_received_result(Ok(()))
             .more_money_received_result(Ok(()));
         let banned_dao = BannedDaoMock::new();
@@ -1754,8 +1776,8 @@ pub mod tests {
                 earning_wallet.clone(),
             ),
             Box::new(PayableDaoMock::new().non_pending_payables_result(vec![])),
-            Box::new (receivable_dao),
-            Box::new (banned_dao),
+            Box::new(receivable_dao),
+            Box::new(banned_dao),
             null_config(),
         );
 
@@ -2661,7 +2683,7 @@ pub mod tests {
             PayableDaoMock::new()
                 .non_pending_payables_result(vec![])
                 .more_money_payable_parameters(more_money_payable_parameters_arc.clone())
-                .more_money_payable_result(Ok (())),
+                .more_money_payable_result(Ok(())),
         );
         let receivable_dao_mock = Box::new(ReceivableDaoMock::new());
         let banned_dao_mock = Box::new(BannedDaoMock::new());
@@ -2811,25 +2833,104 @@ pub mod tests {
     }
 
     #[test]
-    fn jackass_unsigned_to_signed_handles_zero () {
+    fn record_service_provided_handles_overflow() {
+        init_test_logging();
+        let wallet = make_wallet("booga");
+        let subject = Accountant::new(
+            &BootstrapperConfig::new(),
+            Box::new(PayableDaoMock::new()),
+            Box::new(
+                ReceivableDaoMock::new()
+                    .more_money_receivable_result(Err(PaymentError::SignConversion(1234))),
+            ),
+            Box::new(BannedDaoMock::new()),
+            null_config(),
+        );
+
+        subject.record_service_provided(std::i64::MAX as u64, 1, 2, &wallet);
+
+        TestLogHandler::new().exists_log_containing(&format!(
+            "ERROR: Accountant: Overflow error trying to record service provided to Node with consuming wallet {}: service rate {}, byte rate 1, payload size 2. Skipping",
+            wallet,
+            std::i64::MAX as u64
+        ));
+    }
+
+    #[test]
+    fn record_service_consumed_handles_overflow() {
+        init_test_logging();
+        let wallet = make_wallet("booga");
+        let subject = Accountant::new(
+            &BootstrapperConfig::new(),
+            Box::new(
+                PayableDaoMock::new()
+                    .more_money_payable_result(Err(PaymentError::SignConversion(1234))),
+            ),
+            Box::new(ReceivableDaoMock::new()),
+            Box::new(BannedDaoMock::new()),
+            null_config(),
+        );
+
+        subject.record_service_consumed(std::i64::MAX as u64, 1, 2, &wallet);
+
+        TestLogHandler::new().exists_log_containing(&format!(
+            "ERROR: Accountant: Overflow error trying to record service consumed from Node with earning wallet {}: service rate {}, byte rate 1, payload size 2. Skipping",
+            wallet,
+            std::i64::MAX as u64
+        ));
+    }
+
+    #[test]
+    fn handle_sent_payments_handles_overflow() {
+        init_test_logging();
+        let wallet = make_wallet("booga");
+        let payments = SentPayments {
+            payments: vec![Ok(Payment::new(
+                wallet.clone(),
+                std::u64::MAX,
+                H256::from_uint(&U256::from(1)),
+            ))],
+        };
+        let mut subject = Accountant::new(
+            &BootstrapperConfig::new(),
+            Box::new(
+                PayableDaoMock::new().payment_sent_result(Err(PaymentError::SignConversion(1234))),
+            ),
+            Box::new(ReceivableDaoMock::new()),
+            Box::new(BannedDaoMock::new()),
+            null_config(),
+        );
+
+        subject.handle_sent_payments(payments);
+
+        TestLogHandler::new().exists_log_containing(&format!(
+            "ERROR: Accountant: Overflow error trying to record payment of {} sent to earning wallet {} (transaction {}). Skipping",
+            std::u64::MAX,
+            wallet,
+            H256::from_uint(&U256::from(1))
+        ));
+    }
+
+    #[test]
+    fn jackass_unsigned_to_signed_handles_zero() {
         let result = jackass_unsigned_to_signed(0u64);
 
-        assert_eq! (result, Ok(0i64));
+        assert_eq!(result, Ok(0i64));
     }
 
     #[test]
-    fn jackass_unsigned_to_signed_handles_max_allowable () {
-        let result = jackass_unsigned_to_signed (i64::MAX as u64);
+    fn jackass_unsigned_to_signed_handles_max_allowable() {
+        let result = jackass_unsigned_to_signed(std::i64::MAX as u64);
 
-        assert_eq! (result, Ok(i64::MAX));
+        assert_eq!(result, Ok(std::i64::MAX));
     }
 
     #[test]
-    fn jackass_unsigned_to_signed_handles_max_plus_one () {
-        let attempt = (i64::MAX as u64) + 1;
-        let result = jackass_unsigned_to_signed ((i64::MAX as u64) + 1);
+    fn jackass_unsigned_to_signed_handles_max_plus_one() {
+        let attempt = (std::i64::MAX as u64) + 1;
+        let result = jackass_unsigned_to_signed((std::i64::MAX as u64) + 1);
 
-        assert_eq! (result, Err(PaymentError::SignConversion(attempt)));
+        assert_eq!(result, Err(PaymentError::SignConversion(attempt)));
     }
 
     fn bc_from_ac_plus_earning_wallet(

@@ -1,4 +1,5 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
+use crate::accountant::{jackass_unsigned_to_signed, PaymentError};
 use crate::database::dao_utils;
 use crate::database::db_initializer::ConnectionWrapper;
 use crate::sub_lib::wallet::Wallet;
@@ -8,7 +9,6 @@ use serde_json::{self, json};
 use std::fmt::Debug;
 use std::time::SystemTime;
 use web3::types::H256;
-use crate::accountant::{PaymentError, jackass_unsigned_to_signed};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PayableAccount {
@@ -37,15 +37,11 @@ impl Payment {
     }
 }
 
-// TODO: Make sure all overflow errors are handled
 pub trait PayableDao: Debug + Send {
-    // TODO: Remember to drive error handling
     fn more_money_payable(&self, wallet: &Wallet, amount: u64) -> Result<(), PaymentError>;
 
-    // TODO: Remember to drive error handling
     fn payment_sent(&self, sent_payment: &Payment) -> Result<(), PaymentError>;
 
-    // TODO: Remember to drive error handling
     fn payment_confirmed(
         &self,
         wallet: &Wallet,
@@ -85,7 +81,7 @@ impl PayableDao for PayableDaoReal {
             payment.timestamp,
             payment.transaction,
         ) {
-            Ok(_) => Ok (()),
+            Ok(_) => Ok(()),
             Err(e) => panic!("Database is corrupt: {}", e),
         }
     }
@@ -93,10 +89,11 @@ impl PayableDao for PayableDaoReal {
     fn payment_confirmed(
         &self,
         _wallet: &Wallet,
-        _amount: u64,
+        amount: u64,
         _confirmation_noticed_timestamp: SystemTime,
         _transaction_hash: H256,
     ) -> Result<(), PaymentError> {
+        let _signed_amount = jackass_unsigned_to_signed(amount)?;
         unimplemented!("SC-925: TODO")
     }
 
@@ -269,13 +266,7 @@ impl PayableDaoReal {
             .conn
             .prepare("insert into payable (wallet_address, balance, last_paid_timestamp, pending_payment_transaction) values (:address, :balance, strftime('%s','now'), null) on conflict (wallet_address) do update set balance = balance + :balance where wallet_address = :address")
             .expect("Internal error");
-        let params: &[(&str, &dyn ToSql)] = &[
-            (":address", &wallet),
-            (
-                ":balance",
-                &amount,
-            ),
-        ];
+        let params: &[(&str, &dyn ToSql)] = &[(":address", &wallet), (":balance", &amount)];
         match stmt.execute_named(params) {
             Ok(0) => Ok(false),
             Ok(_) => Ok(true),
@@ -283,7 +274,6 @@ impl PayableDaoReal {
         }
     }
 
-    // TODO: Change to accept i64 rather than u64
     fn try_decrease_balance(
         &self,
         wallet: &Wallet,
@@ -296,10 +286,7 @@ impl PayableDaoReal {
             .prepare("insert into payable (balance, last_paid_timestamp, pending_payment_transaction, wallet_address) values (0 - :balance, :last_paid, :transaction, :address) on conflict (wallet_address) do update set balance = balance - :balance, last_paid_timestamp = :last_paid, pending_payment_transaction = :transaction where wallet_address = :address")
             .expect("Internal error");
         let params: &[(&str, &dyn ToSql)] = &[
-            (
-                ":balance",
-                &amount,
-            ),
+            (":balance", &amount),
             (":last_paid", &dao_utils::to_time_t(last_paid_timestamp)),
             (":transaction", &format!("{:#x}", &transaction_hash)),
             (":address", &wallet),
@@ -400,6 +387,24 @@ mod tests {
     }
 
     #[test]
+    fn more_money_payable_works_for_overflow() {
+        let home_dir = ensure_node_home_directory_exists(
+            "payable_dao",
+            "more_money_payable_works_for_overflow",
+        );
+        let wallet = make_wallet("booga");
+        let subject = PayableDaoReal::new(
+            DbInitializerReal::new()
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+                .unwrap(),
+        );
+
+        let result = subject.more_money_payable(&wallet, std::u64::MAX);
+
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)));
+    }
+
+    #[test]
     fn payment_sent_records_a_pending_transaction_for_a_new_address() {
         let home_dir = ensure_node_home_directory_exists(
             "payable_dao",
@@ -461,6 +466,46 @@ mod tests {
                 pending_payment_transaction: Some(H256::from_uint(&U256::from(1))),
             }
         )
+    }
+
+    #[test]
+    fn payment_sent_works_for_overflow() {
+        let home_dir =
+            ensure_node_home_directory_exists("payable_dao", "payment_sent_works_for_overflow");
+        let wallet = make_wallet("booga");
+        let subject = PayableDaoReal::new(
+            DbInitializerReal::new()
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+                .unwrap(),
+        );
+        let payment = Payment::new(wallet, std::u64::MAX, H256::from_uint(&U256::from(1)));
+
+        let result = subject.payment_sent(&payment);
+
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)))
+    }
+
+    #[test]
+    fn payment_confirmed_works_for_overflow() {
+        let home_dir = ensure_node_home_directory_exists(
+            "payable_dao",
+            "payment_confirmed_works_for_overflow",
+        );
+        let wallet = make_wallet("booga");
+        let subject = PayableDaoReal::new(
+            DbInitializerReal::new()
+                .initialize(&home_dir, DEFAULT_CHAIN_ID, true)
+                .unwrap(),
+        );
+
+        let result = subject.payment_confirmed(
+            &wallet,
+            std::u64::MAX,
+            SystemTime::now(),
+            H256::from_uint(&U256::from(1)),
+        );
+
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]
@@ -573,7 +618,7 @@ mod tests {
 
         let result = subject.more_money_payable(&make_wallet("foobar"), std::u64::MAX);
 
-        assert_eq! (result, Err(PaymentError::SignConversion(std::u64::MAX)))
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]
@@ -594,7 +639,7 @@ mod tests {
             H256::from_uint(&U256::from(123)),
         ));
 
-        assert_eq! (result, Err(PaymentError::SignConversion(std::u64::MAX)))
+        assert_eq!(result, Err(PaymentError::SignConversion(std::u64::MAX)))
     }
 
     #[test]
