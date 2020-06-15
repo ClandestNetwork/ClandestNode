@@ -141,8 +141,8 @@ mod tests {
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse};
     use masq_lib::utils::find_free_port;
-    use websocket::ws::sender::Sender;
     use std::time::Duration;
+    use websocket::ws::sender::Sender;
 
     #[test]
     fn listens_and_passes_data_through() {
@@ -284,15 +284,15 @@ mod tests {
         assert_eq!(ClientListenerError::UnexpectedPacket.is_fatal(), false);
     }
 
-    fn wait_for_stop (listener: ClientListener) {
+    fn wait_for_stop(listener: ClientListener) {
         let mut retries = 10;
         while retries > 0 {
             retries -= 1;
             if !listener.is_running() {
-                return
+                return;
             }
-            thread::sleep (Duration::from_millis (100));
+            thread::sleep(Duration::from_millis(100));
         }
-        panic! ("ClientListener was supposed to stop but didn't");
+        panic!("ClientListener was supposed to stop but didn't");
     }
 }
