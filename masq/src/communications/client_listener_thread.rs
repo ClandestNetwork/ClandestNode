@@ -142,6 +142,7 @@ mod tests {
     use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse};
     use masq_lib::utils::find_free_port;
     use websocket::ws::sender::Sender;
+    use std::time::Duration;
 
     #[test]
     fn listens_and_passes_data_through() {
@@ -167,7 +168,8 @@ mod tests {
         assert_eq!(message_body, expected_message.tmb(1));
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
-        assert_eq!(subject.is_running(), false);
+        wait_for_stop(subject);
+        // assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -192,7 +194,8 @@ mod tests {
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq!(error, ClientListenerError::Closed);
-        assert_eq!(subject.is_running(), false);
+        wait_for_stop(subject);
+        // assert_eq!(subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -216,7 +219,8 @@ mod tests {
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq!(error, ClientListenerError::Broken);
-        assert_eq!(subject.is_running(), false);
+        wait_for_stop(subject);
+        // assert_eq!(subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -243,7 +247,8 @@ mod tests {
         assert_eq!(error, ClientListenerError::UnexpectedPacket);
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
-        assert_eq!(subject.is_running(), false);
+        wait_for_stop(subject);
+        // assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -268,6 +273,8 @@ mod tests {
         assert_eq!(error, ClientListenerError::UnexpectedPacket);
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
+        wait_for_stop(subject);
+        // assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -275,5 +282,17 @@ mod tests {
         assert_eq!(ClientListenerError::Closed.is_fatal(), true);
         assert_eq!(ClientListenerError::Broken.is_fatal(), true);
         assert_eq!(ClientListenerError::UnexpectedPacket.is_fatal(), false);
+    }
+
+    fn wait_for_stop (listener: ClientListener) {
+        let mut retries = 10;
+        while retries > 0 {
+            retries -= 1;
+            if !listener.is_running() {
+                return
+            }
+            thread::sleep (Duration::from_millis (100));
+        }
+        panic! ("ClientListener was supposed to stop but didn't");
     }
 }
