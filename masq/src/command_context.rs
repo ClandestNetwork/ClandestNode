@@ -190,7 +190,7 @@ mod tests {
         stop_handle.stop();
     }
 
-    #[test]
+    #[test] // TODO Segfaults on the Mac in Actions
     fn works_when_server_sends_connection_error() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
