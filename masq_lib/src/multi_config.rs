@@ -280,26 +280,40 @@ impl From<Vec<Box<dyn VclArg>>> for CommandLineVcl {
 
 impl CommandLineVcl {
     pub fn new(mut args: Vec<String>) -> CommandLineVcl {
+        eprintln!("--- A1 ---");
         args.remove(0); // remove command
+        eprintln!("--- A2 ---");
         let mut vcl_args = vec![];
+        eprintln!("--- A3 ---");
         while let Some(vcl_arg) = Self::next_vcl_arg(&mut args) {
+            eprintln!("--- A4 ---");
             vcl_args.push(vcl_arg);
         }
+        eprintln!("--- A5 ---");
         CommandLineVcl { vcl_args }
     }
 
     fn next_vcl_arg(args: &mut Vec<String>) -> Option<Box<dyn VclArg>> {
+        eprintln!("--- B1 ---");
         if args.is_empty() {
+            eprintln!("--- B2 ---");
             return None;
         }
+        eprintln!("--- B3 ---");
         let name = args.remove(0);
+        eprintln!("--- B4 ---");
         if !name.starts_with("--") {
+            eprintln!("--- B5 ---");
             panic!("Expected option beginning with '--', not {}", name)
         }
+        eprintln!("--- B6 ---");
         if args.is_empty() || args[0].starts_with("--") {
+            eprintln!("--- B7 ---");
             Some(Box::new(NameOnlyVclArg::new(&name)))
         } else {
+            eprintln!("--- B8 ---");
             let value = args.remove(0);
+            eprintln!("--- B9 ---");
             Some(Box::new(NameValueVclArg::new(&name, &value)))
         }
     }
@@ -823,7 +837,7 @@ pub(crate) mod tests {
         assert_eq!(subject.args(), command_line);
     }
 
-    #[test] // TODO: This one segfaults on the Mac in Actions
+    #[test] // TODO: Is it this one that segfaults on the Mac in Actions
     #[should_panic(expected = "Expected option beginning with '--', not value")]
     fn command_line_vcl_panics_when_given_value_without_name() {
         let command_line: Vec<String> = vec!["", "value"]
