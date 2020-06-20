@@ -441,7 +441,14 @@ impl WebSocketSupervisorReal {
                 .get_mut(&client_id)
                 .unwrap_or_else(|| panic!("Tried to send to a nonexistent client {}", client_id));
             match client.send(OwnedMessage::Text(json.clone())) {
-                Ok(_) => client.flush().expect("Flush error"),
+                Ok(_) => match client.flush() {
+                    Ok(_) => (),
+                    Err(_) => warning!(
+                        Logger::new("WebSocketSupervisor"),
+                        "Client {} dropped its connection before it could be flushed",
+                        client_id
+                    ),
+                },
                 Err(e) => error!(
                     Logger::new("WebSocketSupervisor"),
                     "Error sending to client {}: {:?}", client_id, e
@@ -1134,6 +1141,35 @@ mod tests {
                 }
             }
         );
+    }
+
+    #[test]
+    fn can_handle_flush_failure_after_send() {
+        init_test_logging();
+        let (ui_gateway, _, _) = make_recorder();
+        let (from_ui_message, from_ui_message_sub) = subs(ui_gateway);
+        let client = ClientWrapperMock::new()
+            .send_result(Ok(()))
+            .flush_result(Err(WebSocketError::NoDataAvailable));
+        let mut client_by_id: HashMap<u64, Box<dyn ClientWrapper>> = HashMap::new();
+        client_by_id.insert(1234, Box::new(client));
+        let inner_arc = Arc::new(Mutex::new(WebSocketSupervisorInner {
+            port: 0,
+            next_client_id: 0,
+            from_ui_message,
+            from_ui_message_sub,
+            client_id_by_socket_addr: Default::default(),
+            old_client_by_id: Default::default(),
+            client_by_id,
+        }));
+
+        WebSocketSupervisorReal::send_to_clients(
+            &mut inner_arc.lock().unwrap(),
+            vec![1234],
+            "json".to_string(),
+        );
+
+        TestLogHandler::new().exists_log_containing ("WARN: WebSocketSupervisor: Client 1234 dropped its connection before it could be flushed");
     }
 
     #[test]
