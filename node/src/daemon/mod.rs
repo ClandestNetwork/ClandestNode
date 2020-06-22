@@ -312,18 +312,19 @@ impl Daemon {
         context_id: u64,
     ) {
         let body_target_pairs = if new_setup != self.params {
+            let originally_empty = self.params.is_empty();
             self.params = new_setup;
-            vec![
-                (
-                    UiSetupResponse::new(false, self.params.clone(), errors.clone())
-                        .tmb(context_id),
-                    MessageTarget::ClientId(client_id),
-                ),
-                (
+            let mut pairs = vec![(
+                UiSetupResponse::new(false, self.params.clone(), errors.clone()).tmb(context_id),
+                MessageTarget::ClientId(client_id),
+            )];
+            if !originally_empty {
+                pairs.push((
                     UiSetupBroadcast::new(false, self.params.clone(), errors).tmb(0),
                     MessageTarget::AllExcept(client_id),
-                ),
-            ]
+                ));
+            };
+            pairs
         } else {
             vec![(
                 UiSetupResponse::new(false, self.params.clone(), errors).tmb(context_id),
@@ -636,26 +637,6 @@ mod tests {
             )),
             true
         );
-        let record = ui_gateway_recording
-            .get_record::<NodeToUiMessage>(1)
-            .clone();
-        assert_eq!(record.target, AllExcept(1234));
-        let (payload, context_id): (UiSetupBroadcast, u64) =
-            UiSetupBroadcast::fmb(record.body).unwrap();
-        assert_eq!(context_id, 0);
-        assert_eq!(payload.running, false);
-        let actual_pairs: Vec<(String, UiSetupResponseValue)> = payload
-            .values
-            .into_iter()
-            .map(|value| (value.name.clone(), value))
-            .collect();
-        assert_eq!(
-            actual_pairs.contains(&(
-                "chain".to_string(),
-                UiSetupResponseValue::new("chain", "ropsten", Set)
-            )),
-            true
-        );
     }
 
     #[test]
@@ -718,12 +699,6 @@ mod tests {
         assert_eq!(context_id, 4321);
         check_payload(payload.running, payload.values, payload.errors);
         let record = get_record(1);
-        assert_eq!(record.target, AllExcept(1234));
-        let (payload, context_id): (UiSetupBroadcast, u64) =
-            UiSetupBroadcast::fmb(record.body).unwrap();
-        assert_eq!(context_id, 0);
-        check_payload(payload.running, payload.values, payload.errors);
-        let record = get_record(2);
         assert_eq!(record.target, ClientId(1234));
         let (payload, context_id): (UiSetupResponse, u64) =
             UiSetupResponse::fmb(record.body).unwrap();
@@ -767,25 +742,61 @@ mod tests {
                 .tmb(74),
             }
         );
-        let message: &NodeToUiMessage = ui_gateway_recording.get_record(1);
+    }
+
+    #[test]
+    fn handle_setup_responds_but_does_not_broadcast_if_setup_changes_from_nothing() {
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let mut subject = Daemon::new(Box::new(LauncherMock::new()));
+        subject.params.clear(); // nothing
+        let existing_setup = subject.params.clone();
+        let modified_setup = {
+            let mut modified_setup = existing_setup.clone();
+            modified_setup.insert(
+                "additional-item".to_string(),
+                UiSetupResponseValue::new("additional-item", "booga", Set),
+            );
+            modified_setup
+        };
+        subject.setup_reporter = Box::new(
+            SetupReporterMock::new().get_modified_setup_result(Ok(modified_setup.clone())),
+        );
+        let system = System::new("test");
+        subject.ui_gateway_sub = Some(ui_gateway.start().recipient());
+
+        subject.handle_setup(47, 74, UiSetupRequest::new(vec![]));
+
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let message: &NodeToUiMessage = ui_gateway_recording.get_record(0);
         assert_eq!(
             *message,
             NodeToUiMessage {
-                target: MessageTarget::AllExcept(47),
-                body: UiSetupBroadcast {
+                target: MessageTarget::ClientId(47),
+                body: UiSetupResponse {
                     running: false,
-                    values: vec![UiSetupResponseValue::new("name", "value", Configured)],
-                    errors: vec![("parameter".to_string(), "message".to_string())]
+                    values: modified_setup
+                        .iter()
+                        .map(|(_, v)| v)
+                        .map(|v| v.clone())
+                        .collect(),
+                    errors: vec![]
                 }
-                .tmb(0),
+                .tmb(74),
             }
         );
+        assert_eq!(ui_gateway_recording.len(), 1);
     }
 
     #[test]
     fn handle_setup_responds_if_setup_is_not_changed() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
+        subject.params.insert(
+            "booga".to_string(),
+            UiSetupResponseValue::new("booga", "agoob", Configured),
+        ); // not nothing
         let existing_setup = subject.params.clone();
         subject.setup_reporter = Box::new(
             SetupReporterMock::new().get_modified_setup_result(Ok(existing_setup.clone())),
@@ -817,6 +828,10 @@ mod tests {
     fn handle_setup_responds_and_broadcasts_if_setup_is_changed() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
+        subject.params.insert(
+            "booga".to_string(),
+            UiSetupResponseValue::new("booga", "agoob", Configured),
+        ); // not nothing
         let existing_setup = subject.params.clone();
         let modified_setup = {
             let mut modified_setup = existing_setup.clone();
