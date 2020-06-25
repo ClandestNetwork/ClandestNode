@@ -14,6 +14,7 @@ use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
+use itertools::Itertools;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
@@ -27,7 +28,8 @@ use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{
     MessageBody, MessagePath, MessageTarget, NodeFromUiMessage, NodeToUiMessage,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Recipients {
@@ -311,25 +313,27 @@ impl Daemon {
         client_id: u64,
         context_id: u64,
     ) {
-        let body_target_pairs = if new_setup != self.params {
-            let originally_empty = self.params.is_empty();
-            self.params = new_setup;
-            let mut pairs = vec![(
-                UiSetupResponse::new(false, self.params.clone(), errors.clone()).tmb(context_id),
-                MessageTarget::ClientId(client_id),
-            )];
-            if !originally_empty {
-                pairs.push((
-                    UiSetupBroadcast::new(false, self.params.clone(), errors).tmb(0),
-                    MessageTarget::AllExcept(client_id),
-                ));
-            };
-            pairs
-        } else {
-            vec![(
+        let body_target_pairs = match Self::compare_setup_clusters(&self.params, &new_setup) {
+            Err(_) => {
+                let originally_empty = self.params.is_empty();
+                self.params = new_setup;
+                let mut pairs = vec![(
+                    UiSetupResponse::new(false, self.params.clone(), errors.clone())
+                        .tmb(context_id),
+                    MessageTarget::ClientId(client_id),
+                )];
+                if !originally_empty {
+                    pairs.push((
+                        UiSetupBroadcast::new(false, self.params.clone(), errors).tmb(0),
+                        MessageTarget::AllExcept(client_id),
+                    ));
+                };
+                pairs
+            }
+            Ok(_) => vec![(
                 UiSetupResponse::new(false, self.params.clone(), errors).tmb(context_id),
                 MessageTarget::ClientId(client_id),
-            )]
+            )],
         };
         body_target_pairs
             .into_iter()
@@ -342,6 +346,46 @@ impl Daemon {
             .expect("UiGateway is unbound")
             .try_send(NodeToUiMessage { target, body })
             .expect("UiGateway is dead")
+    }
+
+    fn compare_setup_clusters(left: &SetupCluster, right: &SetupCluster) -> Result<(), String> {
+        let mut left_not_right = HashSet::new();
+        let mut unequal = HashSet::new();
+        let mut right_not_left: HashSet<String> = HashSet::from_iter(right.keys().cloned());
+        left.iter().for_each(|(k, v_left)| match right.get(k) {
+            Some(v_right) => {
+                let _ = right_not_left.remove(k);
+                if v_right.value != v_left.value {
+                    unequal.insert(k);
+                }
+            }
+            None => {
+                left_not_right.insert(k);
+            }
+        });
+        if left_not_right.is_empty() && unequal.is_empty() && right_not_left.is_empty() {
+            Ok(())
+        } else {
+            let msg_parts = vec![
+                if left_not_right.is_empty() {
+                    None
+                } else {
+                    Some(format!("Keys in left but not right: {:?}", left_not_right))
+                },
+                if unequal.is_empty() {
+                    None
+                } else {
+                    Some(format!("Keys with unequal values: {:?}", unequal))
+                },
+                if right_not_left.is_empty() {
+                    None
+                } else {
+                    Some(format!("Keys in right but not left: {:?}", right_not_left))
+                },
+            ];
+            let msg = msg_parts.into_iter().flatten().join("; ");
+            Err(msg)
+        }
     }
 }
 
@@ -790,17 +834,22 @@ mod tests {
     }
 
     #[test]
-    fn handle_setup_responds_if_setup_is_not_changed() {
+    fn handle_setup_responds_but_does_not_broadcast_if_setup_is_not_changed() {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.params.insert(
             "booga".to_string(),
             UiSetupResponseValue::new("booga", "agoob", Configured),
         ); // not nothing
-        let existing_setup = subject.params.clone();
-        subject.setup_reporter = Box::new(
-            SetupReporterMock::new().get_modified_setup_result(Ok(existing_setup.clone())),
-        );
+           // Same value, different status
+        let incoming_setup = vec![(
+            "booga".to_string(),
+            UiSetupResponseValue::new("booga", "agoob", Set),
+        )]
+        .into_iter()
+        .collect();
+        subject.setup_reporter =
+            Box::new(SetupReporterMock::new().get_modified_setup_result(Ok(incoming_setup)));
         let system = System::new("test");
         subject.ui_gateway_sub = Some(ui_gateway.start().recipient());
 
@@ -816,12 +865,13 @@ mod tests {
                 target: MessageTarget::ClientId(47),
                 body: UiSetupResponse {
                     running: false,
-                    values: existing_setup.into_iter().map(|(_, v)| v).collect(),
+                    values: subject.params.into_iter().map(|(_, v)| v).collect(),
                     errors: vec![]
                 }
                 .tmb(74),
             }
         );
+        assert_eq!(ui_gateway_recording.len(), 1);
     }
 
     #[test]
