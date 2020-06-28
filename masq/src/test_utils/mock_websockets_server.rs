@@ -4,7 +4,6 @@ use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use masq_lib::utils::localhost;
 use std::net::SocketAddr;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -12,6 +11,7 @@ use std::time::Duration;
 use websocket::result::WebSocketError;
 use websocket::sync::Server;
 use websocket::OwnedMessage;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 
 pub struct MockWebSocketsServer {
     port: u16,
@@ -21,6 +21,7 @@ pub struct MockWebSocketsServer {
 
 pub struct MockWebSocketsServerStopHandle {
     requests_arc: Arc<Mutex<Vec<Result<MessageBody, String>>>>,
+    looping_rx: Receiver<()>,
     stop_tx: Sender<bool>,
     join_handle: JoinHandle<()>,
 }
@@ -58,9 +59,10 @@ impl MockWebSocketsServer {
         let requests_arc = Arc::new(Mutex::new(vec![]));
         let inner_requests_arc = requests_arc.clone();
         let inner_responses_arc = self.responses_arc.clone();
-        let stop_pair: (Sender<bool>, Receiver<bool>) = std::sync::mpsc::channel();
+        let stop_pair: (Sender<bool>, Receiver<bool>) = unbounded();
         let (stop_tx, stop_rx) = stop_pair;
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (ready_tx, ready_rx) = unbounded();
+        let (looping_tx, looping_rx) = unbounded();
         let join_handle = thread::spawn(move || {
             let mut server = server_arc.lock().unwrap();
             let mut requests = inner_requests_arc.lock().unwrap();
@@ -72,10 +74,11 @@ impl MockWebSocketsServer {
                 .find(|p| *p == &self.protocol)
                 .is_none()
             {
-                panic!("No recognized protocol: {:?}", upgrade.protocols())
+                panic!("Unrecognized protocol(s): {:?}", upgrade.protocols())
             }
             let mut client = upgrade.accept().unwrap();
             client.set_nonblocking(true).unwrap();
+            looping_tx.send(()).unwrap();
             loop {
                 let incoming_opt = match client.recv_message() {
                     Err(WebSocketError::NoDataAvailable) => None,
@@ -131,6 +134,7 @@ impl MockWebSocketsServer {
         thread::sleep(Duration::from_millis(250));
         MockWebSocketsServerStopHandle {
             requests_arc,
+            looping_rx,
             stop_tx,
             join_handle,
         }
@@ -149,13 +153,21 @@ impl MockWebSocketsServerStopHandle {
     }
 
     fn send_terminate_order(self, kill: bool) -> Vec<Result<MessageBody, String>> {
-        let _ = self.stop_tx.send(kill);
-        let _ = self.join_handle.join();
-        let guard = match self.requests_arc.lock() {
-            Ok(guard) => guard,
-            Err(poison_error) => poison_error.into_inner(),
-        };
-        (*guard).clone()
+        match self.looping_rx.try_recv () {
+            Ok (_) => {
+                let _ = self.stop_tx.send(kill);
+                let _ = self.join_handle.join();
+                let guard = match self.requests_arc.lock() {
+                    Ok(guard) => guard,
+                    Err(poison_error) => poison_error.into_inner(),
+                };
+                (*guard).clone()
+            },
+            Err (_) => {
+                // Nobody has even tried to connect; thread is not listening for shutdown. Leak it.
+                vec![]
+            }
+        }
     }
 }
 
