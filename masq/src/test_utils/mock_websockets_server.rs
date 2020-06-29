@@ -1,4 +1,5 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use masq_lib::messages::NODE_UI_PROTOCOL;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
@@ -11,7 +12,6 @@ use std::time::Duration;
 use websocket::result::WebSocketError;
 use websocket::sync::Server;
 use websocket::OwnedMessage;
-use crossbeam_channel::{unbounded, Receiver, Sender};
 
 pub struct MockWebSocketsServer {
     port: u16,
@@ -153,8 +153,8 @@ impl MockWebSocketsServerStopHandle {
     }
 
     fn send_terminate_order(self, kill: bool) -> Vec<Result<MessageBody, String>> {
-        match self.looping_rx.try_recv () {
-            Ok (_) => {
+        match self.looping_rx.try_recv() {
+            Ok(_) => {
                 let _ = self.stop_tx.send(kill);
                 let _ = self.join_handle.join();
                 let guard = match self.requests_arc.lock() {
@@ -162,8 +162,8 @@ impl MockWebSocketsServerStopHandle {
                     Err(poison_error) => poison_error.into_inner(),
                 };
                 (*guard).clone()
-            },
-            Err (_) => {
+            }
+            Err(_) => {
                 // Nobody has even tried to connect; thread is not listening for shutdown. Leak it.
                 vec![]
             }
