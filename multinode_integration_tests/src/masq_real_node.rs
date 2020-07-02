@@ -1102,7 +1102,7 @@ impl MASQRealNode {
                 name,
                 vec!["cat", &format!("{}/MASQNode_rCURRENT.log", DATA_DIRECTORY)],
             )
-            .unwrap_or_else(|_| panic!("Failed to read {}/MASQNode_rCURRENT.log", DATA_DIRECTORY));
+            .unwrap_or_else(|e| panic!("Failed to read {}/MASQNode_rCURRENT.log: {}", DATA_DIRECTORY, e));
             match regex.captures(output.as_str()) {
                 Some(captures) => {
                     let node_reference =
