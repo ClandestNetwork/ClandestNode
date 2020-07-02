@@ -256,15 +256,26 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
+        eprintln!("handle_outgoing_message_body({:?})", msg_result_result);
         match msg_result_result.expect ("Received message from beyond the grave") {
             OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
                 MessagePath::Conversation(context_id) => {
+eprintln! ("context_id = {}", context_id);
                     let conversation_result = inner.conversations.get(&context_id);
+eprintln! ("conversation_result = {:?}", conversation_result);
                     if conversation_result.is_some() {
+eprintln! ("Sending message...");
                         let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
+eprintln! ("send_message_result = {:?}", send_message_result);
                         match send_message_result {
-                            Ok(_) => {inner.conversations_waiting.insert(context_id);},
-                            Err(_) => inner = Self::fallback(inner),
+                            Ok(_) => {
+eprintln! ("Success: adding waiting conversation");
+                                inner.conversations_waiting.insert(context_id);
+                            },
+                            Err(e) => {
+eprintln! ("Error {:?}: falling back to Daemon", e);
+                                inner = Self::fallback(inner);
+                            }
                         }
                     };
                 },
@@ -1087,7 +1098,9 @@ mod tests {
     #[test]
     fn handles_outgoing_conversation_messages_to_dead_server() {
         let daemon_port = find_free_port();
-        let daemon_server = MockWebSocketsServer::new(daemon_port);
+        let daemon_server = MockWebSocketsServer::new(daemon_port)
+            .queue_string("disconnect")
+            .write_logs();
         let daemon_stop_handle = daemon_server.start();
         let (conversation1_tx, conversation1_rx) = unbounded();
         let (conversation2_tx, conversation2_rx) = unbounded();
@@ -1103,6 +1116,15 @@ mod tests {
         inner.daemon_port = daemon_port;
         inner.conversations = conversations;
         inner.conversations_waiting = vec_to_set(vec![2, 3]);
+        #[cfg(target_os = "macos")]
+        {
+            // macOS doesn't fail sends until some time after the pipe is broken: weird! Sick!
+            let _ = inner.talker_half.sender.send_message(
+                &mut inner.talker_half.stream,
+                &OwnedMessage::Text("booga".to_string()),
+            );
+            thread::sleep(Duration::from_millis(500));
+        }
 
         inner = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
@@ -1163,6 +1185,15 @@ mod tests {
         inner.daemon_port = daemon_port;
         inner.conversations = conversations;
         inner.conversations_waiting = vec_to_set(vec![2, 3]);
+        #[cfg(target_os = "macos")]
+        {
+            // macOS doesn't fail sends until some time after the pipe is broken: weird! Sick!
+            let _ = inner.talker_half.sender.send_message(
+                &mut inner.talker_half.stream,
+                &OwnedMessage::Text("booga".to_string()),
+            );
+            thread::sleep(Duration::from_millis(500));
+        }
 
         inner = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
@@ -1269,6 +1300,7 @@ mod tests {
         let client = make_client(port);
         let (_, talker_half) = client.split().unwrap();
         let _ = stop_handle.kill();
+        let _ = talker_half.shutdown_all();
         let _ = talker_half.shutdown_all();
         talker_half
     }
