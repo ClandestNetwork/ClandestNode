@@ -266,9 +266,9 @@ impl ConnectionManagerThread {
                             Ok(_) => {
                                 inner.conversations_waiting.insert(context_id);
                             },
-                            Err(e) => {
+                            Err(_) => {
                                 inner = Self::fallback(inner);
-                            }
+                            },
                         }
                     };
                 },
