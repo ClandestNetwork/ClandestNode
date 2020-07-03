@@ -256,24 +256,17 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_outgoing_message_body({:?})", msg_result_result);
         match msg_result_result.expect ("Received message from beyond the grave") {
             OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
                 MessagePath::Conversation(context_id) => {
-eprintln! ("context_id = {}", context_id);
                     let conversation_result = inner.conversations.get(&context_id);
-eprintln! ("conversation_result = {:?}", conversation_result);
                     if conversation_result.is_some() {
-eprintln! ("Sending message...");
                         let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
-eprintln! ("send_message_result = {:?}", send_message_result);
                         match send_message_result {
                             Ok(_) => {
-eprintln! ("Success: adding waiting conversation");
                                 inner.conversations_waiting.insert(context_id);
                             },
                             Err(e) => {
-eprintln! ("Error {:?}: falling back to Daemon", e);
                                 inner = Self::fallback(inner);
                             }
                         }
