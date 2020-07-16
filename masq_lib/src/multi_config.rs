@@ -361,18 +361,38 @@ pub enum ConfigFileVclError {
     OpenError(PathBuf, std::io::Error),
     CorruptUtf8(PathBuf),
     Unreadable(PathBuf, std::io::Error),
-    CorruptToml(PathBuf, toml::de::Error),
-    InvalidConfig(PathBuf),
+    CorruptToml(PathBuf, String),
+    InvalidConfig(PathBuf, String),
 }
 
 impl Display for ConfigFileVclError {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigFileVclError::OpenError(path, error) => writeln!(fmt, "Configuration file at {:?} could not be opened: {}", path, error),
-            ConfigFileVclError::CorruptUtf8 (path) => writeln!(fmt, "Configuration file at {:?} is corrupted: contains data that cannot be interpreted as UTF-8", path),
-            ConfigFileVclError::Unreadable(path, error) => writeln!(fmt, "Configuration file at {:?} could not be read: {}", path, error),
-            ConfigFileVclError::CorruptToml (path, error) => writeln!(fmt, "Configuration file at {:?} has bad TOML syntax: {}", path, error),
-            ConfigFileVclError::InvalidConfig (path) => writeln!(fmt, "Configuration file at {:?} contains unsupported Datetime or non-scalar configuration values", path),
+            ConfigFileVclError::OpenError(path, _) => write!(
+                fmt,
+                "Couldn't open configuration file {:?}. Are you sure it exists?",
+                path
+            ),
+            ConfigFileVclError::CorruptUtf8(path) => write!(
+                fmt,
+                "The configuration file {:?} looks like some kind of binary file, not UTF-8 text.",
+                path
+            ),
+            ConfigFileVclError::Unreadable(path, _) => write!(
+                fmt,
+                "The permissions on configuration file {:?} make it unreadable.",
+                path
+            ),
+            ConfigFileVclError::CorruptToml(path, error) => write!(
+                fmt,
+                "Configuration file {:?} isn't a valid TOML file: {}.",
+                path, error
+            ),
+            ConfigFileVclError::InvalidConfig(path, error) => write!(
+                fmt,
+                "Configuration file {:?} doesn't make sense: {}.",
+                path, error
+            ),
         }
     }
 }
@@ -401,7 +421,12 @@ impl ConfigFileVcl {
             Ok(_) => (),
         };
         let table: Table = match toml::de::from_str(&contents) {
-            Err(e) => return Err(ConfigFileVclError::CorruptToml(file_path.clone(), e)),
+            Err(e) => {
+                return Err(ConfigFileVclError::CorruptToml(
+                    file_path.clone(),
+                    e.to_string(),
+                ))
+            }
             Ok(table) => table,
         };
         let vcl_args_and_errs: Vec<Result<Box<dyn VclArg>, ConfigFileVclError>> = table
@@ -409,9 +434,27 @@ impl ConfigFileVcl {
             .map(|key| {
                 let name = format!("--{}", key);
                 let value = match table.get(key).expect("value disappeared") {
-                    Value::Table(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
-                    Value::Array(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
-                    Value::Datetime(_) => Err(ConfigFileVclError::InvalidConfig(file_path.clone())),
+                    Value::Table(_) => Err(ConfigFileVclError::InvalidConfig(
+                        file_path.clone(),
+                        format!(
+                            "parameter '{}' must have a scalar value, not a table value",
+                            key
+                        ),
+                    )),
+                    Value::Array(_) => Err(ConfigFileVclError::InvalidConfig(
+                        file_path.clone(),
+                        format!(
+                            "parameter '{}' must have a scalar value, not an array value",
+                            key
+                        ),
+                    )),
+                    Value::Datetime(_) => Err(ConfigFileVclError::InvalidConfig(
+                        file_path.clone(),
+                        format!(
+                            "parameter '{}' must have a string value, not a date or time value",
+                            key
+                        ),
+                    )),
                     Value::String(v) => Ok(v.as_str().to_string()),
                     v => Ok(v.to_string()),
                 };
@@ -424,8 +467,11 @@ impl ConfigFileVcl {
                 }
             })
             .collect();
-        if vcl_args_and_errs.iter().any(|v| v.is_err()) {
-            return Err(ConfigFileVclError::InvalidConfig(file_path.clone()));
+        if let Some(v) = vcl_args_and_errs.iter().find(|v| v.is_err()) {
+            return Err(ConfigFileVclError::InvalidConfig(
+                file_path.clone(),
+                v.as_ref().err().expect("already checked").to_string(),
+            ));
         }
         let vcl_args = vcl_args_and_errs
             .into_iter()
@@ -444,6 +490,73 @@ pub(crate) mod tests {
     use clap::Arg;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn config_file_vcl_error_displays_open_error() {
+        let subject = ConfigFileVclError::OpenError(
+            PathBuf::from("booga.txt"),
+            std::io::Error::from(ErrorKind::Other),
+        );
+
+        let result = subject.to_string();
+
+        assert_eq!(
+            result,
+            "Couldn't open configuration file \"booga.txt\". Are you sure it exists?".to_string()
+        )
+    }
+
+    #[test]
+    fn config_file_vcl_error_displays_corrupt_utf8() {
+        let subject = ConfigFileVclError::CorruptUtf8(PathBuf::from("booga.txt"));
+
+        let result = subject.to_string();
+
+        assert_eq! (result, "The configuration file \"booga.txt\" looks like some kind of binary file, not UTF-8 text.".to_string())
+    }
+
+    #[test]
+    fn config_file_vcl_error_displays_unreadable() {
+        let subject = ConfigFileVclError::Unreadable(
+            PathBuf::from("booga.txt"),
+            std::io::Error::from(ErrorKind::Other),
+        );
+
+        let result = subject.to_string();
+
+        assert_eq!(
+            result,
+            "The permissions on configuration file \"booga.txt\" make it unreadable.".to_string()
+        )
+    }
+
+    #[test]
+    fn config_file_vcl_error_displays_corrupt_toml() {
+        let subject =
+            ConfigFileVclError::CorruptToml(PathBuf::from("booga.txt"), "Biggledy-Poo".to_string());
+
+        let result = subject.to_string();
+
+        assert_eq!(
+            result,
+            "Configuration file \"booga.txt\" isn't a valid TOML file: Biggledy-Poo.".to_string()
+        )
+    }
+
+    #[test]
+    fn config_file_vcl_error_displays_invalid_config() {
+        let subject = ConfigFileVclError::InvalidConfig(
+            PathBuf::from("booga.txt"),
+            "Biggledy-Poo".to_string(),
+        );
+
+        let result = subject.to_string();
+
+        assert_eq!(
+            result,
+            "Configuration file \"booga.txt\" doesn't make sense: Biggledy-Poo.".to_string()
+        );
+    }
 
     #[test]
     fn make_configurator_error_handles_unfamiliar_message() {
@@ -823,7 +936,7 @@ pub(crate) mod tests {
         assert_eq!(subject.args(), command_line);
     }
 
-    #[test] // TODO: Is it this one that segfaults on the Mac in Actions
+    #[test]
     #[should_panic(expected = "Expected option beginning with '--', not value")]
     fn command_line_vcl_panics_when_given_value_without_name() {
         let command_line: Vec<String> = vec!["", "value"]
@@ -925,12 +1038,7 @@ pub(crate) mod tests {
         file_path.push("config.toml");
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result.to_string().contains("could not be opened: "),
-            true,
-            "{}",
-            result.to_string()
-        )
+        assert_contains(&result.to_string(), "Couldn't open configuration file")
     }
 
     #[test]
@@ -949,11 +1057,9 @@ pub(crate) mod tests {
         }
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result
-                .to_string()
-                .contains("is corrupted: contains data that cannot be interpreted as UTF-8"),
-            true
+        assert_contains(
+            &result.to_string(),
+            "looks like some kind of binary file, not UTF-8 text.",
         )
     }
 
@@ -971,11 +1077,9 @@ pub(crate) mod tests {
         }
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result.to_string().contains(
-                "has bad TOML syntax: expected a table key, found a right bracket at line 1"
-            ),
-            true
+        assert_contains(
+            &result.to_string(),
+            "isn't a valid TOML file: expected a table key, found a right bracket at line 1",
         )
     }
 
@@ -993,12 +1097,7 @@ pub(crate) mod tests {
         }
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result
-                .to_string()
-                .contains("contains unsupported Datetime or non-scalar configuration values"),
-            true
-        )
+        assert_contains(&result.to_string(), "doesn't make sense: parameter 'datetime' must have a string value, not a date or time value.")
     }
 
     #[test]
@@ -1015,11 +1114,9 @@ pub(crate) mod tests {
         }
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result
-                .to_string()
-                .contains("contains unsupported Datetime or non-scalar configuration values"),
-            true
+        assert_contains(
+            &result.to_string(),
+            "doesn't make sense: parameter 'array' must have a scalar value, not an array value.",
         )
     }
 
@@ -1037,11 +1134,19 @@ pub(crate) mod tests {
         }
 
         let result = ConfigFileVcl::new(&file_path, true).err().unwrap();
-        assert_eq!(
-            result
-                .to_string()
-                .contains("contains unsupported Datetime or non-scalar configuration values"),
-            true
+        assert_contains(
+            &result.to_string(),
+            "doesn't make sense: parameter 'table' must have a scalar value, not a table value.",
         )
+    }
+
+    fn assert_contains(haystack: &str, needle: &str) {
+        assert_eq!(
+            haystack.contains(needle),
+            true,
+            "\n{:?}\ndoes not contain\n{:?}",
+            haystack,
+            needle
+        );
     }
 }
