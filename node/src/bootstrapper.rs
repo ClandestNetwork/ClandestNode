@@ -381,7 +381,7 @@ impl SocketServer<BootstrapperConfig> for Bootstrapper {
         self.config =
             match NodeConfiguratorStandardPrivileged::new().configure(&args.to_vec(), streams) {
                 Ok(config) => config,
-                Err(e) => unimplemented!("Test-drive me: {:?}", e),
+                Err(e) => return Err(e),
             };
 
         self.logger_initializer.init(
@@ -589,6 +589,7 @@ mod tests {
     use actix::Recipient;
     use actix::System;
     use lazy_static::lazy_static;
+    use masq_lib::shared_schema::ParamError;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
@@ -955,6 +956,27 @@ mod tests {
                 None,
             )]
         )
+    }
+
+    #[test]
+    fn initialize_as_privileged_handles_error_from_configurator() {
+        let logger_initializer = LoggerInitializerWrapperMock::new();
+        let mut subject = Bootstrapper::new(Box::new(logger_initializer));
+        let args: Vec<String> = ArgsBuilder::new().param("--booga", "value").into();
+        let args_slice: &[String] = args.as_slice();
+
+        let result =
+            subject.initialize_as_privileged(args_slice, &mut FakeStreamHolder::new().streams());
+
+        assert_eq! (result, Err(ConfiguratorError::new(vec![ParamError {
+            parameter: "<unknown>".to_string(),
+            reason: "Unfamiliar message: error: Found argument '--booga' which wasn't expected, or isn't valid in this context
+
+USAGE:
+    MASQNode [OPTIONS]
+
+For more information try --help".to_string()
+        }])));
     }
 
     #[test]
