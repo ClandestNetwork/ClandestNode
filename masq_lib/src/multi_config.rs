@@ -467,19 +467,26 @@ impl ConfigFileVcl {
                 }
             })
             .collect();
-        if let Some(v) = vcl_args_and_errs.iter().find(|v| v.is_err()) {
-            return Err(ConfigFileVclError::InvalidConfig(
-                file_path.clone(),
-                v.as_ref().err().expect("already checked").to_string(),
-            ));
+        let init: (Vec<Box<dyn VclArg>>, Vec<ConfigFileVclError>) = (vec![], vec![]);
+        let (vcl_args, mut vcl_errs) =
+            vcl_args_and_errs
+                .into_iter()
+                .fold(init, |(args, errs), item| match item {
+                    Ok(arg) => (append(args, arg), errs),
+                    Err(err) => (args, append(errs, err)),
+                });
+        if vcl_errs.is_empty() {
+            Ok(ConfigFileVcl { vcl_args })
+        } else {
+            Err(vcl_errs.remove(0))
         }
-        let vcl_args = vcl_args_and_errs
-            .into_iter()
-            .map(|result| result.expect("Error appeared"))
-            .collect();
-
-        Ok(ConfigFileVcl { vcl_args })
     }
+}
+
+fn append<T>(ts: Vec<T>, t: T) -> Vec<T> {
+    let mut result: Vec<T> = ts.into_iter().map(|x| x).collect();
+    result.push(t);
+    result
 }
 
 #[cfg(test)]
