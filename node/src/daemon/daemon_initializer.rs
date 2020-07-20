@@ -6,7 +6,7 @@ use crate::daemon::{
     ChannelFactory, ChannelFactoryReal, Daemon, DaemonBindMessage, Launcher, Recipients,
 };
 use crate::node_configurator::node_configurator_initialization::InitializationConfig;
-use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
+use crate::node_configurator::{DirsWrapper, RealDirsWrapper, port_is_busy};
 use crate::server_initializer::{LoggerInitializerWrapper, LoggerInitializerWrapperReal};
 use crate::sub_lib::main_tools::main_with_args;
 use crate::sub_lib::ui_gateway::UiGatewayConfig;
@@ -69,7 +69,11 @@ pub struct DaemonInitializer {
 }
 
 impl Command for DaemonInitializer {
-    fn go(&mut self, _streams: &mut StdStreams<'_>, _args: &[String]) -> u8 {
+    fn go(&mut self, streams: &mut StdStreams<'_>, _args: &[String]) -> u8 {
+        if port_is_busy(self.config.ui_port) {
+            writeln! (streams.stderr, "There appears to be a process already listening on port {}; are you sure there's not a Daemon already running?", self.config.ui_port).unwrap();
+            return 1
+        }
         let system = System::new("daemon");
         let (sender, receiver) = self.channel_factory.make();
 
@@ -126,7 +130,7 @@ impl DaemonInitializer {
         }
     }
 
-    fn bind(&mut self, sender: Sender<HashMap<String, String>>) {
+    fn bind(&mut self, sender: Sender<HashMap<String, String>>) -> u8 {
         let launcher = LauncherReal::new(sender);
         let recipients = self
             .recipients_factory
@@ -141,6 +145,7 @@ impl DaemonInitializer {
             sub.try_send(bind_message.clone())
                 .expect("DaemonBindMessage recipient is dead")
         });
+        0
     }
 
     fn split(&mut self, system: SystemRunner, receiver: Receiver<HashMap<String, String>>) {
@@ -165,6 +170,9 @@ mod tests {
     use std::cell::RefCell;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
+    use masq_lib::utils::{find_free_port, localhost};
+    use std::net::{TcpListener, SocketAddr};
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 
     struct RecipientsFactoryMock {
         make_params: Arc<Mutex<Vec<(Box<dyn Launcher>, u16)>>>,
@@ -258,7 +266,8 @@ mod tests {
         let (daemon, _, daemon_recording_arc) = make_recorder();
         let system = System::new("test");
         let recipients = make_recipients(ui_gateway, daemon);
-        let config = InitializationConfig { ui_port: 1234 };
+        let port = find_free_port();
+        let config = InitializationConfig { ui_port: port };
         let channel_factory = ChannelFactoryMock::new();
         let addr_factory = RecipientsFactoryMock::new().make_result(recipients);
         let rerunner = RerunnerMock::new();
@@ -285,7 +294,8 @@ mod tests {
     #[test]
     fn split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args() {
         let system = System::new("test");
-        let config = InitializationConfig { ui_port: 1234 };
+        let port = find_free_port();
+        let config = InitializationConfig { ui_port: port };
         let (sender, receiver) = std::sync::mpsc::channel::<HashMap<String, String>>();
         let channel_factory = ChannelFactoryMock::new();
         let addr_factory = RecipientsFactoryMock::new();
@@ -318,6 +328,26 @@ mod tests {
                 "Billy".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn go_detects_already_running_daemon () {
+        let port = find_free_port();
+        let _listener = TcpListener::bind(SocketAddr::new(localhost(), port)).unwrap();
+        let mut subject = DaemonInitializer::new(
+            &RealDirsWrapper{},
+            InitializationConfig{ui_port: port},
+            Box::new(ChannelFactoryMock::new()),
+            Box::new(RecipientsFactoryMock::new()),
+            Box::new(RerunnerMock::new()),
+        );
+        let mut holder = FakeStreamHolder::new();
+
+        let result = subject.go(&mut holder.streams(), &[]);
+
+        assert_eq! (result, 1);
+        assert_eq! (holder.stderr.get_string(), format!("There appears to be a process already listening on port {}; are you sure there's not a Daemon already running?\n", port));
+panic! ("Why doesn't this show up?");
     }
 
     fn make_recipients(ui_gateway: Recorder, daemon: Recorder) -> Recipients {

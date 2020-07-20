@@ -115,7 +115,7 @@ impl Handler<BindMessage> for UiGateway {
             msg.peer_actors.ui_gateway.new_from_ui_message_sub,
         ) {
             Ok(wss) => Some (Box::new (wss)),
-            Err(e) => unimplemented!("{:?}", e),
+            Err(e) => panic!("Couldn't start WebSocketSupervisor: {:?}", e),
         };
         debug!(self.logger, "UIGateway bound");
     }
@@ -155,7 +155,7 @@ impl Handler<DaemonBindMessage> for UiGateway {
             msg.from_ui_message_recipient
         ) {
             Ok(wss) => Some (Box::new (wss)),
-            Err(e) => unimplemented! ("{:?}", e),
+            Err(e) => panic! ("Couldn't start WebSocketSupervisor: {:?}", e),
         };
         debug!(self.logger, "UIGateway bound");
     }

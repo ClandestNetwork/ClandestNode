@@ -33,6 +33,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
+use std::net::{TcpListener, SocketAddr};
+use masq_lib::utils::localhost;
 
 pub trait NodeConfigurator<T> {
     fn configure(
@@ -476,6 +478,13 @@ pub fn flushed_write(target: &mut dyn io::Write, string: &str) {
     target.flush().expect("Failed flush.");
 }
 
+pub fn port_is_busy(port: u16) -> bool {
+    match TcpListener::bind(SocketAddr::new(localhost(), port)) {
+        Ok(_) => false,
+        Err(_) => true,
+    }
+}
+
 pub mod common_validators {
     use masq_lib::constants::LOWEST_USABLE_INSECURE_PORT;
     use regex::Regex;
@@ -710,6 +719,8 @@ mod tests {
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
     use tiny_hderive::bip44::DerivationPath;
+    use masq_lib::utils::{find_free_port, localhost};
+    use std::net::{SocketAddr, TcpListener};
 
     #[test]
     fn validate_ethereum_address_requires_an_address_that_is_42_characters_long() {
@@ -1686,5 +1697,24 @@ mod tests {
 
         let set_password_params = set_password_params_arc.lock().unwrap();
         assert_eq!(*set_password_params, vec!["booga".to_string()]);
+    }
+
+    #[test]
+    pub fn port_is_busy_detects_free_port() {
+        let port = find_free_port();
+
+        let result = port_is_busy (port);
+
+        assert_eq! (result, false);
+    }
+
+    #[test]
+    pub fn port_is_busy_detects_busy_port() {
+        let port = find_free_port();
+        let _listener = TcpListener::bind(SocketAddr::new(localhost(), port)).unwrap();
+
+        let result = port_is_busy (port);
+
+        assert_eq! (result, true);
     }
 }
