@@ -32,7 +32,7 @@ impl NodeConfigurator<InitializationConfig> for NodeConfiguratorInitialization {
     ) -> Result<InitializationConfig, ConfiguratorError> {
         let app = app();
         let multi_config =
-            MultiConfig::try_new(&app, vec![Box::new(CommandLineVcl::new(args.to_vec()))])?;
+            MultiConfig::try_new(&app, vec![Box::new(CommandLineVcl::new(args.to_vec()))], streams)?;
         let mut config = InitializationConfig::default();
         initialization::parse_args(&multi_config, &mut config, streams);
         Ok(config)
@@ -80,7 +80,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+        let multi_config = MultiConfig::try_new(&app(), vcls, &mut FakeStreamHolder::new().streams()).unwrap();
 
         initialization::parse_args(
             &multi_config,
@@ -99,7 +99,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&app(), vcls).unwrap();
+        let multi_config = MultiConfig::try_new(&app(), vcls, &mut FakeStreamHolder::new().streams()).unwrap();
 
         initialization::parse_args(
             &multi_config,

@@ -2,7 +2,7 @@
 
 use crate::blockchain::bip39::Bip39;
 use crate::node_configurator::{
-    app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg, exit,
+    app_head, common_validators, consuming_wallet_arg, create_wallet, earning_wallet_arg,
     flushed_write, language_arg, mnemonic_passphrase_arg, mnemonic_seed_exists,
     prepare_initialization_mode, request_password_with_confirmation, request_password_with_retry,
     update_db_password, DirsWrapper, Either, NodeConfigurator, RealDirsWrapper,
@@ -18,6 +18,7 @@ use masq_lib::multi_config::MultiConfig;
 use masq_lib::shared_schema::{
     chain_arg, data_directory_arg, db_password_arg, real_user_arg, ConfiguratorError,
 };
+use masq_lib::utils::exit_process;
 
 pub struct NodeConfiguratorRecoverWallet {
     dirs_wrapper: Box<dyn DirsWrapper>,
@@ -161,9 +162,14 @@ impl NodeConfiguratorRecoverWallet {
         persistent_config: &dyn PersistentConfiguration,
     ) -> WalletCreationConfig {
         if mnemonic_seed_exists(persistent_config) {
-            exit(
+            #[cfg(test)]
+                let running_test = true;
+            #[cfg(not(test))]
+                let running_test = false;
+            exit_process(
                 1,
                 "Can't recover wallets: mnemonic seed has already been created",
+                running_test,
             )
         }
         self.make_wallet_creation_config(multi_config, streams)
@@ -215,7 +221,13 @@ impl NodeConfiguratorRecoverWallet {
         let phrase = phrase_words.join(" ");
         match Validators::validate_mnemonic_words(phrase.clone(), language) {
             Ok(_) => (),
-            Err(e) => exit(1, &e),
+            Err(e) => {
+                #[cfg(test)]
+                let running_test = true;
+                #[cfg(not(test))]
+                let running_test = false;
+                exit_process(1, &e, running_test)
+            },
         }
         Mnemonic::from_phrase(phrase, language).expect("Error creating Mnemonic")
     }
@@ -465,7 +477,7 @@ mod tests {
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&subject.app, vcls).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vcls, &mut FakeStreamHolder::new().streams()).unwrap();
 
         let config = subject.parse_args(
             &multi_config,
@@ -510,7 +522,7 @@ mod tests {
             .param("--mnemonic-passphrase", "mnemonic passphrase");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         subject.parse_args(
             &multi_config,
@@ -607,7 +619,7 @@ mod tests {
             .param("--db-password", "rick-rolled");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         subject.parse_args(
             &multi_config,

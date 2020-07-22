@@ -522,7 +522,7 @@ mod tests {
         subject.mnemonic_factory = Box::new(mnemonic_factory);
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&subject.app, vcls).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vcls, &mut FakeStreamHolder::new().streams()).unwrap();
 
         let config = subject.parse_args(
             &multi_config,
@@ -569,7 +569,7 @@ mod tests {
         let args = ArgsBuilder::new().opt("--generate-wallet");
         let multi_config = MultiConfig::try_new(
             &subject.app,
-            vec![Box::new(CommandLineVcl::new(args.into()))],
+            vec![Box::new(CommandLineVcl::new(args.into()))], &mut FakeStreamHolder::new().streams()
         )
         .unwrap();
 
@@ -596,7 +596,7 @@ mod tests {
         let args = ArgsBuilder::new().opt("--generate-wallet");
         let multi_config = MultiConfig::try_new(
             &subject.app,
-            vec![Box::new(CommandLineVcl::new(args.into()))],
+            vec![Box::new(CommandLineVcl::new(args.into()))], &mut FakeStreamHolder::new().streams()
         )
         .unwrap();
 
@@ -617,7 +617,7 @@ mod tests {
             stderr: &mut ByteArrayWriter::new(),
         };
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         subject.make_mnemonic_passphrase(&multi_config, &mut streams);
 
@@ -653,7 +653,7 @@ mod tests {
             .param("--db-password", "rick-rolled");
         let subject = NodeConfiguratorGenerateWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         subject.parse_args(
             &multi_config,

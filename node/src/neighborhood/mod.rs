@@ -45,7 +45,7 @@ use crate::sub_lib::route::RouteSegment;
 use crate::sub_lib::set_consuming_wallet_message::SetConsumingWalletMessage;
 use crate::sub_lib::stream_handler_pool::DispatcherNodeQueryResponse;
 use crate::sub_lib::ui_gateway::{UiCarrierMessage, UiMessage};
-use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
+use crate::sub_lib::utils::{NODE_MAILBOX_CAPACITY};
 use crate::sub_lib::versioned_data::VersionedData;
 use crate::sub_lib::wallet::Wallet;
 use actix::Addr;
@@ -68,6 +68,7 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use masq_lib::utils::exit_process;
 
 pub struct Neighborhood {
     cryptde: &'static dyn CryptDE,
@@ -1216,7 +1217,11 @@ impl Neighborhood {
             self.logger,
             "Received shutdown order from client {}: shutting down hard", client_id
         );
-        std::process::exit(0);
+        #[cfg(test)]
+            let running_test = true;
+        #[cfg(not(test))]
+            let running_test = false;
+        exit_process(0, &format! ("Received shutdown order from client {}: shutting down hard", client_id), running_test);
     }
 }
 
@@ -4213,11 +4218,9 @@ mod tests {
         ));
     }
 
+    #[should_panic (expected = "0: Received shutdown order from client 1234: shutting down hard")]
     #[test]
-    #[ignore]
-    // TODO: Un-ignore this test
     fn shutdown_instruction_generates_log() {
-        // TODO: Eventually this message should do more than just generate a log.
         init_test_logging();
         let system = System::new("test");
         let subject = Neighborhood::new(

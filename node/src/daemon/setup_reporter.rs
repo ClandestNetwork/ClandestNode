@@ -366,7 +366,15 @@ impl SetupReporterReal {
             };
             vcls.push(Box::new(config_file_vcl));
         }
-        MultiConfig::try_new(&app, vcls)
+        let mut null_stdin = ByteArrayReader::new(&[]);
+        let mut null_stdout = ByteArrayWriter::new();
+        let mut null_stderr = ByteArrayWriter::new();
+        let mut streams = StdStreams {
+            stdin: &mut null_stdin,
+            stdout: &mut null_stdout,
+            stderr: &mut null_stderr,
+        };
+        MultiConfig::try_new(&app, vcls, &mut streams)
     }
 
     #[allow(clippy::type_complexity)]

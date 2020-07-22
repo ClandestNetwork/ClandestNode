@@ -17,6 +17,7 @@ use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg, Conf
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::path::PathBuf;
+use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";
@@ -89,7 +90,7 @@ fn distill_args(
         Box::new(CommandLineVcl::new(args.to_vec())),
         Box::new(EnvironmentVcl::new(&app)),
     ];
-    let multi_config = MultiConfig::try_new(&app, vcls)?;
+    let multi_config = MultiConfig::try_new(&app, vcls, &mut FakeStreamHolder::new().streams())?;
     let (real_user, data_directory_opt, chain_name) =
         real_user_data_directory_opt_and_chain_name(dirs_wrapper, &multi_config);
     let directory =

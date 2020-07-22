@@ -34,7 +34,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_hderive::bip44::DerivationPath;
 use std::net::{TcpListener, SocketAddr};
-use masq_lib::utils::localhost;
+use masq_lib::utils::{localhost, exit_process};
+use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 
 pub trait NodeConfigurator<T> {
     fn configure(
@@ -150,7 +151,7 @@ pub fn determine_config_file_path(
     .map(|vcl_arg| vcl_arg.dup())
     .collect();
     let orientation_vcl = CommandLineVcl::from(orientation_args);
-    let multi_config = MultiConfig::try_new(&orientation_schema, vec![Box::new(orientation_vcl)])?;
+    let multi_config = MultiConfig::try_new(&orientation_schema, vec![Box::new(orientation_vcl)], &mut FakeStreamHolder::new().streams())?;
     let config_file_path =
         value_m!(multi_config, "config-file", PathBuf).expect("config-file should be defaulted");
     let user_specified = multi_config.arg_matches().occurrences_of("config-file") > 0;
@@ -269,7 +270,7 @@ pub fn prepare_initialization_mode<'a>(
         vec![
             Box::new(CommandLineVcl::new(args.to_vec())),
             Box::new(EnvironmentVcl::new(&app)),
-        ],
+        ], &mut FakeStreamHolder::new().streams()
     )?;
 
     let (real_user, data_directory_opt, chain_name) =
@@ -282,7 +283,11 @@ pub fn prepare_initialization_mode<'a>(
     );
     let persistent_config_box = initialize_database(&directory, chain_id_from_name(&chain_name));
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
-        exit(1, "Cannot re-initialize Node: already initialized")
+        #[cfg(test)]
+            let running_test = true;
+        #[cfg(not(test))]
+            let running_test = false;
+        exit_process(1, "Cannot re-initialize Node: already initialized", running_test)
     }
     Ok((multi_config, persistent_config_box))
 }
@@ -690,17 +695,6 @@ pub trait WalletCreationConfigMaker {
 }
 
 #[cfg(test)]
-fn exit(code: i32, message: &str) {
-    panic!("{} {}", code, message);
-}
-
-#[cfg(not(test))]
-fn exit(code: i32, message: &str) {
-    eprintln!("{}", message);
-    ::std::process::exit(code);
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::blockchain::bip32::Bip32ECKeyPair;
@@ -714,7 +708,7 @@ mod tests {
     use masq_lib::multi_config::MultiConfig;
     use masq_lib::shared_schema::db_password_arg;
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
-    use masq_lib::test_utils::fake_stream_holder::ByteArrayWriter;
+    use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
@@ -971,7 +965,7 @@ mod tests {
     fn real_user_data_directory_and_chain_id_picks_correct_directory_for_default_chain() {
         let args = ArgsBuilder::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&app(), vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&app(), vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         let (real_user, data_directory_opt, chain_name) =
             real_user_data_directory_opt_and_chain_name(&RealDirsWrapper {}, &multi_config);
@@ -1427,7 +1421,7 @@ mod tests {
     fn make_wallet_creation_config_defaults() {
         let subject = TameWalletCreationConfigMaker::new();
         let vcl = Box::new(CommandLineVcl::new(vec!["test".to_string()]));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&b"a terrible db password\na terrible db password\n"[..]),
@@ -1476,7 +1470,7 @@ mod tests {
             .param("--db-password", "db password")
             .param("--real-user", "123::");
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&[]),
@@ -1523,7 +1517,7 @@ mod tests {
             .param("--db-password", "db password")
             .param("--real-user", "123::");
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
         let stdout_writer = &mut ByteArrayWriter::new();
         let mut streams = &mut StdStreams {
             stdin: &mut Cursor::new(&[]),
@@ -1562,7 +1556,7 @@ mod tests {
             stderr: &mut ByteArrayWriter::new(),
         };
         let vcl = Box::new(CommandLineVcl::new(vec!["test".to_string()]));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl]).unwrap();
+        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
 
         subject.make_wallet_creation_config(&multi_config, streams);
     }
