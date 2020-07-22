@@ -4214,6 +4214,8 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    // TODO: Un-ignore this test
     fn shutdown_instruction_generates_log() {
         // TODO: Eventually this message should do more than just generate a log.
         init_test_logging();
