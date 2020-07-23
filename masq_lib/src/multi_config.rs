@@ -84,6 +84,7 @@ impl<'a> MultiConfig<'a> {
         schema: &App<'a, 'a>,
         vcls: Vec<Box<dyn VirtualCommandLine>>,
         streams: &mut StdStreams,
+        running_test: bool,
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let initial: Box<dyn VirtualCommandLine> =
             Box::new(CommandLineVcl::new(vec![String::new()]));
@@ -100,12 +101,8 @@ impl<'a> MultiConfig<'a> {
                     || (e.kind == clap::ErrorKind::VersionDisplayed) =>
             {
                 writeln!(streams.stdout, "{}", e.message).expect("writeln! failed");
-                #[cfg(test)]
-                let running_test = true;
-                #[cfg(not(test))]
-                let running_test = false;
                 exit_process(0, "", running_test);
-                panic! ("This line should never execute");
+                panic! ("This line should never execute, but tells Rust there's no return");
             }
             Err(e) => return Err(Self::make_configurator_error(e)),
         };

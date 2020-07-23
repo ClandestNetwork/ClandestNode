@@ -27,6 +27,7 @@ use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter}
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
+use crate::sub_lib::utils::make_new_multi_config;
 
 // TODO: Probably can take this out once GH-290 makes it in
 const CONSOLE_DIAGNOSTICS: bool = false;
@@ -374,7 +375,7 @@ impl SetupReporterReal {
             stdout: &mut null_stdout,
             stderr: &mut null_stderr,
         };
-        MultiConfig::try_new(&app, vcls, &mut streams)
+        make_new_multi_config(&app, vcls, &mut streams)
     }
 
     #[allow(clippy::type_complexity)]

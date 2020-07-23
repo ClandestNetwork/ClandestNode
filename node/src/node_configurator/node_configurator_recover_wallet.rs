@@ -32,7 +32,7 @@ impl NodeConfigurator<WalletCreationConfig> for NodeConfiguratorRecoverWallet {
         streams: &mut StdStreams<'_>,
     ) -> Result<WalletCreationConfig, ConfiguratorError> {
         let (multi_config, persistent_config_box) =
-            prepare_initialization_mode(self.dirs_wrapper.as_ref(), &self.app, args)?;
+            prepare_initialization_mode(self.dirs_wrapper.as_ref(), &self.app, args, streams)?;
         let persistent_config = persistent_config_box.as_ref();
 
         let config = self.parse_args(&multi_config, streams, persistent_config);
@@ -281,10 +281,11 @@ mod tests {
     };
     use crate::test_utils::*;
     use bip39::Seed;
-    use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
+    use masq_lib::multi_config::{CommandLineVcl, VirtualCommandLine};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
+    use crate::sub_lib::utils::make_new_test_multi_config;
 
     #[test]
     fn validate_mnemonic_words_if_provided_in_chinese_simplified() {
@@ -477,7 +478,7 @@ mod tests {
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&subject.app, vcls, &mut FakeStreamHolder::new().streams()).unwrap();
+        let multi_config = make_new_test_multi_config(&subject.app, vcls).unwrap();
 
         let config = subject.parse_args(
             &multi_config,
@@ -522,7 +523,7 @@ mod tests {
             .param("--mnemonic-passphrase", "mnemonic passphrase");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
+        let multi_config = make_new_test_multi_config(&subject.app, vec![vcl]).unwrap();
 
         subject.parse_args(
             &multi_config,
@@ -619,7 +620,7 @@ mod tests {
             .param("--db-password", "rick-rolled");
         let subject = NodeConfiguratorRecoverWallet::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
-        let multi_config = MultiConfig::try_new(&subject.app, vec![vcl], &mut FakeStreamHolder::new().streams()).unwrap();
+        let multi_config = make_new_test_multi_config(&subject.app, vec![vcl]).unwrap();
 
         subject.parse_args(
             &multi_config,

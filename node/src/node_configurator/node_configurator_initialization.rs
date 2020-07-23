@@ -5,8 +5,9 @@ use clap::{App, Arg};
 use lazy_static::lazy_static;
 use masq_lib::command::StdStreams;
 use masq_lib::constants::{HIGHEST_USABLE_PORT, LOWEST_USABLE_INSECURE_PORT};
-use masq_lib::multi_config::{CommandLineVcl, MultiConfig};
+use masq_lib::multi_config::{CommandLineVcl};
 use masq_lib::shared_schema::{ui_port_arg, ConfiguratorError};
+use crate::sub_lib::utils::make_new_multi_config;
 
 lazy_static! {
     static ref UI_PORT_HELP: String = format!(
@@ -32,7 +33,7 @@ impl NodeConfigurator<InitializationConfig> for NodeConfiguratorInitialization {
     ) -> Result<InitializationConfig, ConfiguratorError> {
         let app = app();
         let multi_config =
-            MultiConfig::try_new(&app, vec![Box::new(CommandLineVcl::new(args.to_vec()))], streams)?;
+            make_new_multi_config(&app, vec![Box::new(CommandLineVcl::new(args.to_vec()))], streams)?;
         let mut config = InitializationConfig::default();
         initialization::parse_args(&multi_config, &mut config, streams);
         Ok(config)
@@ -71,8 +72,9 @@ mod tests {
     use super::*;
     use crate::test_utils::ArgsBuilder;
     use masq_lib::constants::DEFAULT_UI_PORT;
-    use masq_lib::multi_config::{CommandLineVcl, MultiConfig, VirtualCommandLine};
+    use masq_lib::multi_config::{CommandLineVcl, VirtualCommandLine};
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+    use crate::sub_lib::utils::make_new_test_multi_config;
 
     #[test]
     fn parse_args_creates_configuration_with_defaults() {
@@ -80,7 +82,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&app(), vcls, &mut FakeStreamHolder::new().streams()).unwrap();
+        let multi_config = make_new_test_multi_config(&app(), vcls).unwrap();
 
         initialization::parse_args(
             &multi_config,
@@ -99,7 +101,7 @@ mod tests {
         let mut config = InitializationConfig::default();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(args.into()))];
-        let multi_config = MultiConfig::try_new(&app(), vcls, &mut FakeStreamHolder::new().streams()).unwrap();
+        let multi_config = make_new_test_multi_config(&app(), vcls).unwrap();
 
         initialization::parse_args(
             &multi_config,
