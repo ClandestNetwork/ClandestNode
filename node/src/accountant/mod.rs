@@ -2068,7 +2068,9 @@ pub mod tests {
         let banned_dao = BannedDaoMock::default();
         let (mut blockchain_bridge, blockchain_bridge_awaiter, blockchain_bridge_recordings_arc) =
             make_recorder();
-        blockchain_bridge = blockchain_bridge.report_accounts_payable_response(Ok(vec![]));
+        blockchain_bridge = blockchain_bridge
+            .retrieve_transactions_response(Ok(vec![]))
+            .report_accounts_payable_response(Ok(vec![]));
 
         thread::spawn(move || {
             let system = System::new(

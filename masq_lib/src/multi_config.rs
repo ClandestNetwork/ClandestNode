@@ -1,6 +1,8 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use crate::command::StdStreams;
 use crate::shared_schema::{ConfiguratorError, ParamError};
+use crate::utils::exit_process;
 #[allow(unused_imports)]
 use clap::{value_t, values_t};
 use clap::{App, ArgMatches};
@@ -81,6 +83,8 @@ impl<'a> MultiConfig<'a> {
     pub fn try_new(
         schema: &App<'a, 'a>,
         vcls: Vec<Box<dyn VirtualCommandLine>>,
+        streams: &mut StdStreams,
+        running_test: bool,
     ) -> Result<MultiConfig<'a>, ConfiguratorError> {
         let initial: Box<dyn VirtualCommandLine> =
             Box::new(CommandLineVcl::new(vec![String::new()]));
@@ -96,7 +100,9 @@ impl<'a> MultiConfig<'a> {
                 if (e.kind == clap::ErrorKind::HelpDisplayed)
                     || (e.kind == clap::ErrorKind::VersionDisplayed) =>
             {
-                e.exit()
+                writeln!(streams.stdout, "{}", e.message).expect("writeln! failed");
+                exit_process(0, "", running_test);
+                panic!("This line should never execute, but tells Rust there's no return");
             }
             Err(e) => return Err(Self::make_configurator_error(e)),
         };
@@ -493,6 +499,7 @@ fn append<T>(ts: Vec<T>, t: T) -> Vec<T> {
 pub(crate) mod tests {
     use super::*;
     use crate::test_utils::environment_guard::EnvironmentGuard;
+    use crate::test_utils::fake_stream_holder::FakeStreamHolder;
     use crate::test_utils::utils::ensure_node_home_directory_exists;
     use clap::Arg;
     use std::fs::File;
@@ -599,7 +606,9 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -622,7 +631,9 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -645,7 +656,9 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -674,7 +687,9 @@ pub(crate) mod tests {
                 "20,21".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -699,7 +714,9 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -724,7 +741,9 @@ pub(crate) mod tests {
                 "20,21".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = values_m!(subject, "numeric-arg", u64);
 
@@ -747,7 +766,9 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -770,7 +791,9 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = value_m!(subject, "numeric-arg", u64);
 
@@ -794,7 +817,9 @@ pub(crate) mod tests {
             ])),
             Box::new(CommandLineVcl::new(vec![String::new()])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let (result, user_specified) = value_user_specified_m!(subject, "numeric-arg", u64);
 
@@ -819,7 +844,9 @@ pub(crate) mod tests {
                 "20".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let (result, user_specified) = value_user_specified_m!(subject, "numeric-arg", u64);
 
@@ -850,7 +877,9 @@ pub(crate) mod tests {
             "--numeric-arg".to_string(),
             "20".to_string(),
         ]))];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let (numeric_arg_result, user_specified_numeric) =
             value_user_specified_m!(subject, "numeric-arg", u64);
@@ -878,7 +907,9 @@ pub(crate) mod tests {
                 "--nonvalued".to_string(),
             ])),
         ];
-        let subject = MultiConfig::try_new(&schema, vcls).unwrap();
+        let subject =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .unwrap();
 
         let result = subject.arg_matches();
 
@@ -903,7 +934,10 @@ pub(crate) mod tests {
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
             vec![Box::new(CommandLineVcl::new(vec![String::new()]))];
 
-        let result = MultiConfig::try_new(&schema, vcls).err().unwrap();
+        let result =
+            MultiConfig::try_new(&schema, vcls, &mut FakeStreamHolder::new().streams(), false)
+                .err()
+                .unwrap();
 
         let expected =
             ConfiguratorError::required("another-arg", "ParamError parameter not provided")

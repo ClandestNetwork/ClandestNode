@@ -16,6 +16,7 @@ use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
+use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
@@ -32,7 +33,6 @@ use masq_lib::ui_gateway::{
 };
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-use std::sync::mpsc::{Receiver, Sender};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
