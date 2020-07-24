@@ -944,7 +944,7 @@ mod tests {
     use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::{main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME};
+    use crate::test_utils::{main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME, assert_string_contains};
     use crate::test_utils::{make_default_persistent_configuration, DEFAULT_CHAIN_ID};
     use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_GAS_PRICE, DEFAULT_UI_PORT};
     use masq_lib::multi_config::{
@@ -2322,9 +2322,16 @@ mod tests {
             .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .err();
 
-        assert_eq!(result, Some (ConfiguratorError::new(vec![
-            ParamError::new("config-file", "Couldn't open configuration file \"/home/dnwiebe/.local/share/MASQ/mainnet/booga.toml\". Are you sure it exists?")
-        ])))
+        match result {
+            None => panic! ("Expected a value, got None"),
+            Some (mut error) => {
+                assert_eq! (error.param_errors.len(), 1);
+                let param_error = error.param_errors.remove(0);
+                assert_eq! (param_error.parameter, "config-file".to_string());
+                assert_string_contains(&param_error.reason, "Couldn't open configuration file ");
+                assert_string_contains(&param_error.reason, ". Are you sure it exists?");
+            }
+        }
     }
 
     #[test]
@@ -2343,9 +2350,16 @@ mod tests {
             .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
             .err();
 
-        assert_eq! (result, Some(ConfiguratorError::new (vec![
-            ParamError::new ("config-file", "Couldn't open configuration file \"/home/dnwiebe/.local/share/MASQ/mainnet/booga.toml\". Are you sure it exists?")
-        ])))
+        match result {
+            None => panic! ("Expected a value, got None"),
+            Some (mut error) => {
+                assert_eq! (error.param_errors.len(), 1);
+                let param_error = error.param_errors.remove(0);
+                assert_eq! (param_error.parameter, "config-file".to_string());
+                assert_string_contains(&param_error.reason, "Couldn't open configuration file ");
+                assert_string_contains(&param_error.reason, ". Are you sure it exists?");
+            }
+        }
     }
 
     #[test]
