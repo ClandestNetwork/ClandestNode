@@ -386,8 +386,16 @@ mod tests {
 
         let end = Instant::now();
         let interval = end.duration_since(begin).as_millis();
-        assert!(interval >= 25, "Interval should have been 25 or greater, but was {}", interval);
-        assert!(interval < 500, "Interval should have been less than 500, but was {}", interval);
+        assert!(
+            interval >= 25,
+            "Interval should have been 25 or greater, but was {}",
+            interval
+        );
+        assert!(
+            interval < 500,
+            "Interval should have been less than 500, but was {}",
+            interval
+        );
     }
 
     #[test]
