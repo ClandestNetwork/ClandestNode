@@ -109,12 +109,12 @@ impl Handler<BindMessage> for UiGateway {
             msg.peer_actors.accountant.ui_message_sub.clone(),
             msg.peer_actors.neighborhood.from_ui_message_sub.clone(),
         ];
-        self.websocket_supervisor = match WebSocketSupervisorReal::new (
+        self.websocket_supervisor = match WebSocketSupervisorReal::new(
             self.port,
             msg.peer_actors.ui_gateway.from_ui_message_sub,
             msg.peer_actors.ui_gateway.new_from_ui_message_sub,
         ) {
-            Ok(wss) => Some (Box::new (wss)),
+            Ok(wss) => Some(Box::new(wss)),
             Err(e) => panic!("Couldn't start WebSocketSupervisor: {:?}", e),
         };
         debug!(self.logger, "UIGateway bound");
@@ -152,10 +152,10 @@ impl Handler<DaemonBindMessage> for UiGateway {
         self.websocket_supervisor = match WebSocketSupervisorReal::new(
             self.port,
             StubRecipient::make(),
-            msg.from_ui_message_recipient
+            msg.from_ui_message_recipient,
         ) {
-            Ok(wss) => Some (Box::new (wss)),
-            Err(e) => panic! ("Couldn't start WebSocketSupervisor: {:?}", e),
+            Ok(wss) => Some(Box::new(wss)),
+            Err(e) => panic!("Couldn't start WebSocketSupervisor: {:?}", e),
         };
         debug!(self.logger, "UIGateway bound");
     }

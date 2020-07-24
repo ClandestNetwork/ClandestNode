@@ -163,9 +163,9 @@ impl NodeConfiguratorRecoverWallet {
     ) -> WalletCreationConfig {
         if mnemonic_seed_exists(persistent_config) {
             #[cfg(test)]
-                let running_test = true;
+            let running_test = true;
             #[cfg(not(test))]
-                let running_test = false;
+            let running_test = false;
             exit_process(
                 1,
                 "Can't recover wallets: mnemonic seed has already been created",
@@ -227,7 +227,7 @@ impl NodeConfiguratorRecoverWallet {
                 #[cfg(not(test))]
                 let running_test = false;
                 exit_process(1, &e, running_test)
-            },
+            }
         }
         Mnemonic::from_phrase(phrase, language).expect("Error creating Mnemonic")
     }
@@ -276,6 +276,7 @@ mod tests {
     use crate::node_configurator::{initialize_database, DerivationPathWalletInfo};
     use crate::persistent_configuration::PersistentConfigurationReal;
     use crate::sub_lib::cryptde::PlainData;
+    use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::{
         Wallet, DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
     };
@@ -285,7 +286,6 @@ mod tests {
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
-    use crate::sub_lib::utils::make_new_test_multi_config;
 
     #[test]
     fn validate_mnemonic_words_if_provided_in_chinese_simplified() {

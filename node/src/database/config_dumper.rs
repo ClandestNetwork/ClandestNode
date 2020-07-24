@@ -9,6 +9,7 @@ use crate::node_configurator::{
     app_head, data_directory_from_context, real_user_data_directory_opt_and_chain_name, DirsWrapper,
 };
 use crate::privilege_drop::{PrivilegeDropper, PrivilegeDropperReal};
+use crate::sub_lib::utils::make_new_multi_config;
 use clap::Arg;
 use heck::MixedCase;
 use masq_lib::command::StdStreams;
@@ -17,7 +18,6 @@ use masq_lib::shared_schema::{chain_arg, data_directory_arg, real_user_arg, Conf
 use serde_json::json;
 use serde_json::{Map, Value};
 use std::path::PathBuf;
-use crate::sub_lib::utils::make_new_multi_config;
 
 const DUMP_CONFIG_HELP: &str =
     "Dump the configuration of MASQ Node to stdout in JSON. Used chiefly by UIs.";

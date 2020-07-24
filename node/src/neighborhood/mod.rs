@@ -45,7 +45,7 @@ use crate::sub_lib::route::RouteSegment;
 use crate::sub_lib::set_consuming_wallet_message::SetConsumingWalletMessage;
 use crate::sub_lib::stream_handler_pool::DispatcherNodeQueryResponse;
 use crate::sub_lib::ui_gateway::{UiCarrierMessage, UiMessage};
-use crate::sub_lib::utils::{NODE_MAILBOX_CAPACITY};
+use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use crate::sub_lib::versioned_data::VersionedData;
 use crate::sub_lib::wallet::Wallet;
 use actix::Addr;
@@ -62,13 +62,13 @@ use itertools::Itertools;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::{UiMessageError, UiShutdownRequest};
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
+use masq_lib::utils::exit_process;
 use neighborhood_database::NeighborhoodDatabase;
 use node_record::NodeRecord;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use masq_lib::utils::exit_process;
 
 pub struct Neighborhood {
     cryptde: &'static dyn CryptDE,
@@ -1221,10 +1221,17 @@ impl Neighborhood {
             "Received shutdown order from client {}: shutting down hard", client_id
         );
         #[cfg(test)]
-            let running_test = true;
+        let running_test = true;
         #[cfg(not(test))]
-            let running_test = false;
-        exit_process(0, &format! ("Received shutdown order from client {}: shutting down hard", client_id), running_test);
+        let running_test = false;
+        exit_process(
+            0,
+            &format!(
+                "Received shutdown order from client {}: shutting down hard",
+                client_id
+            ),
+            running_test,
+        );
     }
 }
 
@@ -4221,7 +4228,7 @@ mod tests {
         ));
     }
 
-    #[should_panic (expected = "0: Received shutdown order from client 1234: shutting down hard")]
+    #[should_panic(expected = "0: Received shutdown order from client 1234: shutting down hard")]
     #[test]
     fn shutdown_instruction_generates_log() {
         init_test_logging();

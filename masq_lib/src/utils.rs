@@ -85,8 +85,7 @@ where
 pub fn exit_process(code: i32, message: &str, running_test: bool) {
     if running_test {
         panic!("{}: {}", code, message);
-    }
-    else {
+    } else {
         eprintln!("{}", message);
         ::std::process::exit(code);
     }

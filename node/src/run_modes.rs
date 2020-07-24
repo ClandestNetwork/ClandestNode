@@ -8,7 +8,7 @@ use crate::node_configurator::node_configurator_initialization::NodeConfigurator
 use crate::node_configurator::node_configurator_recover_wallet::NodeConfiguratorRecoverWallet;
 use crate::node_configurator::{NodeConfigurator, RealDirsWrapper, WalletCreationConfig};
 use crate::privilege_drop::{PrivilegeDropper, PrivilegeDropperReal};
-use crate::server_initializer::{ServerInitializer, LoggerInitializerWrapperReal};
+use crate::server_initializer::{LoggerInitializerWrapperReal, ServerInitializer};
 use actix::System;
 use futures::future::Future;
 use masq_lib::command::{Command, StdStreams};
@@ -215,7 +215,7 @@ impl Runner for RunnerReal {
         let config = configurator.configure(args, streams)?;
         let mut initializer = DaemonInitializer::new(
             &RealDirsWrapper {},
-            Box::new(LoggerInitializerWrapperReal{}),
+            Box::new(LoggerInitializerWrapperReal {}),
             config,
             Box::new(ChannelFactoryReal::new()),
             Box::new(RecipientsFactoryReal::new()),

@@ -7,12 +7,12 @@ use crate::daemon::launch_verifier::LaunchVerification::{
 use crate::daemon::launch_verifier::{LaunchVerifier, LaunchVerifierReal};
 use crate::daemon::{LaunchSuccess, Launcher};
 use actix::Recipient;
+use crossbeam_channel::Sender;
 use itertools::Itertools;
 use masq_lib::utils::find_free_port;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Child, Command, Output, Stdio};
-use crossbeam_channel::Sender;
 use std::thread;
 
 trait ChildWrapper: Send {

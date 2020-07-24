@@ -21,8 +21,12 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardPrivileged
         streams: &mut StdStreams,
     ) -> Result<BootstrapperConfig, ConfiguratorError> {
         let app = app();
-        let multi_config =
-            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args, streams)?;
+        let multi_config = standard::make_service_mode_multi_config(
+            self.dirs_wrapper.as_ref(),
+            &app,
+            args,
+            streams,
+        )?;
         let mut bootstrapper_config = BootstrapperConfig::new();
         standard::establish_port_configurations(&mut bootstrapper_config);
         standard::privileged_parse_args(
@@ -66,8 +70,12 @@ impl NodeConfigurator<BootstrapperConfig> for NodeConfiguratorStandardUnprivileg
             self.privileged_config.blockchain_bridge_config.chain_id,
         );
         let mut unprivileged_config = BootstrapperConfig::new();
-        let multi_config =
-            standard::make_service_mode_multi_config(self.dirs_wrapper.as_ref(), &app, args, streams)?;
+        let multi_config = standard::make_service_mode_multi_config(
+            self.dirs_wrapper.as_ref(),
+            &app,
+            args,
+            streams,
+        )?;
         standard::unprivileged_parse_args(
             &multi_config,
             &mut unprivileged_config,
@@ -156,6 +164,7 @@ pub mod standard {
         NeighborhoodConfig, NeighborhoodMode, NodeDescriptor, DEFAULT_RATE_PACK,
     };
     use crate::sub_lib::node_addr::NodeAddr;
+    use crate::sub_lib::utils::make_new_multi_config;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
@@ -166,7 +175,6 @@ pub mod standard {
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
-    use crate::sub_lib::utils::{make_new_multi_config};
 
     pub fn make_service_mode_multi_config<'a>(
         dirs_wrapper: &dyn DirsWrapper,
@@ -187,7 +195,7 @@ pub mod standard {
                 Box::new(EnvironmentVcl::new(&app)),
                 config_file_vcl,
             ],
-            streams
+            streams,
         )
     }
 
@@ -702,11 +710,11 @@ pub mod standard {
     mod tests {
         use super::*;
         use crate::persistent_configuration::PersistentConfigError;
+        use crate::sub_lib::utils::make_new_test_multi_config;
         use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
         use crate::test_utils::ArgsBuilder;
         use masq_lib::multi_config::VirtualCommandLine;
         use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
-        use crate::sub_lib::utils::make_new_test_multi_config;
 
         #[test]
         fn get_wallets_handles_consuming_private_key_and_earning_wallet_address_when_database_contains_mnemonic_seed(
@@ -933,6 +941,7 @@ mod tests {
         NeighborhoodConfig, NeighborhoodMode, NodeDescriptor, DEFAULT_RATE_PACK,
     };
     use crate::sub_lib::node_addr::NodeAddr;
+    use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use crate::test_utils::{main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME};
@@ -954,7 +963,6 @@ mod tests {
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
-    use crate::sub_lib::utils::make_new_test_multi_config;
 
     fn make_default_cli_params() -> ArgsBuilder {
         ArgsBuilder::new().param("--ip", "1.2.3.4")
@@ -1020,7 +1028,7 @@ mod tests {
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1053,7 +1061,7 @@ mod tests {
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1087,7 +1095,7 @@ mod tests {
                 ArgsBuilder::new()
                     .param("--neighborhood-mode", "originate-only")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1114,7 +1122,7 @@ mod tests {
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1144,7 +1152,7 @@ mod tests {
                 ArgsBuilder::new()
                     .param("--neighborhood-mode", "consume-only")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1172,7 +1180,7 @@ mod tests {
                 ArgsBuilder::new()
                     .param("--neighborhood-mode", "zero-hop")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1200,7 +1208,7 @@ mod tests {
                     .param("--neighborhood-mode", "zero-hop")
                     .param("--ip", "1.2.3.4")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1233,7 +1241,7 @@ mod tests {
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
-            ))]
+            ))],
         )
         .unwrap();
 
@@ -1312,16 +1320,25 @@ mod tests {
             &app(),
             vec![Box::new(CommandLineVcl::new(
                 ArgsBuilder::new().param("--neighbors", "ooga,booga").into(),
-            ))]
+            ))],
         )
         .unwrap();
 
         let result = standard::convert_ci_configs(&multi_config).err();
 
-        assert_eq! (result, Some (ConfiguratorError::new(vec![
-            ParamError::new ("neighbors", "Should be <public key>[@ | :]<node address>, not 'ooga'"),
-            ParamError::new ("neighbors", "Should be <public key>[@ | :]<node address>, not 'booga'"),
-        ])));
+        assert_eq!(
+            result,
+            Some(ConfiguratorError::new(vec![
+                ParamError::new(
+                    "neighbors",
+                    "Should be <public key>[@ | :]<node address>, not 'ooga'"
+                ),
+                ParamError::new(
+                    "neighbors",
+                    "Should be <public key>[@ | :]<node address>, not 'booga'"
+                ),
+            ]))
+        );
     }
 
     #[test]
@@ -1391,7 +1408,7 @@ mod tests {
             vec![
                 Box::new(CommandLineVcl::new(args.into())),
                 Box::new(ConfigFileVcl::new(&config_file_path, false).unwrap()),
-            ]
+            ],
         )
         .unwrap();
 
@@ -2028,9 +2045,13 @@ mod tests {
         )
         .err();
 
-        assert_eq! (result, Some (ConfiguratorError::new (vec![
-            ParamError::new ("consuming-private-key", "Not the private key of the consuming wallet you have used in the past")
-        ])))
+        assert_eq!(
+            result,
+            Some(ConfiguratorError::new(vec![ParamError::new(
+                "consuming-private-key",
+                "Not the private key of the consuming wallet you have used in the past"
+            )]))
+        )
     }
 
     #[test]

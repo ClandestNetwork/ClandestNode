@@ -6,17 +6,17 @@ use crate::daemon::{
     ChannelFactory, ChannelFactoryReal, Daemon, DaemonBindMessage, Launcher, Recipients,
 };
 use crate::node_configurator::node_configurator_initialization::InitializationConfig;
-use crate::node_configurator::{DirsWrapper, port_is_busy};
-use crate::server_initializer::{LoggerInitializerWrapper};
+use crate::node_configurator::{port_is_busy, DirsWrapper};
+use crate::server_initializer::LoggerInitializerWrapper;
 use crate::sub_lib::main_tools::main_with_args;
 use crate::sub_lib::ui_gateway::UiGatewayConfig;
 use crate::ui_gateway::UiGateway;
 use actix::{Actor, System, SystemRunner};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use flexi_logger::LevelFilter;
 use itertools::Itertools;
 use masq_lib::command::{Command, StdStreams};
 use std::collections::HashMap;
-use crossbeam_channel::{Receiver, Sender, unbounded};
 
 pub trait RecipientsFactory {
     fn make(&self, launcher: Box<dyn Launcher>, ui_port: u16) -> Recipients;
@@ -72,7 +72,7 @@ impl Command for DaemonInitializer {
     fn go(&mut self, streams: &mut StdStreams<'_>, _args: &[String]) -> u8 {
         if port_is_busy(self.config.ui_port) {
             writeln! (streams.stderr, "There appears to be a process already listening on port {}; are you sure there's not a Daemon already running?", self.config.ui_port).unwrap();
-            return 1
+            return 1;
         }
         let system = System::new("daemon");
         let (sender, receiver) = self.channel_factory.make();
@@ -166,18 +166,18 @@ mod tests {
     use super::*;
     use crate::daemon::{ChannelFactory, Recipients};
     use crate::node_configurator::node_configurator_initialization::InitializationConfig;
-    use crate::test_utils::recorder::{make_recorder, Recorder};
-    use actix::System;
-    use std::cell::RefCell;
-    use std::iter::FromIterator;
-    use std::sync::{Arc, Mutex};
-    use masq_lib::utils::{find_free_port, localhost};
-    use std::net::{TcpListener, SocketAddr};
-    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
-    use crossbeam_channel::unbounded;
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use crate::node_test_utils::MockDirsWrapper;
     use crate::server_initializer::test_utils::LoggerInitializerWrapperMock;
+    use crate::test_utils::recorder::{make_recorder, Recorder};
+    use actix::System;
+    use crossbeam_channel::unbounded;
+    use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::utils::{find_free_port, localhost};
+    use std::cell::RefCell;
+    use std::iter::FromIterator;
+    use std::net::{SocketAddr, TcpListener};
+    use std::sync::{Arc, Mutex};
 
     struct RecipientsFactoryMock {
         make_params: Arc<Mutex<Vec<(Box<dyn Launcher>, u16)>>>,
@@ -267,14 +267,17 @@ mod tests {
 
     #[test]
     fn bind_binds_everything_together() {
-        let data_dir = ensure_node_home_directory_exists("daemon_initializer", "bind_binds_everything_together");
+        let data_dir = ensure_node_home_directory_exists(
+            "daemon_initializer",
+            "bind_binds_everything_together",
+        );
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let (daemon, _, daemon_recording_arc) = make_recorder();
         let system = System::new("bind_binds_everything_together");
         let recipients = make_recipients(ui_gateway, daemon);
         let dirs_wrapper = MockDirsWrapper::new()
-            .home_dir_result(Some (data_dir.clone()))
-            .data_dir_result(Some (data_dir));
+            .home_dir_result(Some(data_dir.clone()))
+            .data_dir_result(Some(data_dir));
         let logger_initializer_wrapper = LoggerInitializerWrapperMock::new();
         let port = find_free_port();
         let config = InitializationConfig { ui_port: port };
@@ -283,7 +286,7 @@ mod tests {
         let rerunner = RerunnerMock::new();
         let mut subject = DaemonInitializer::new(
             &dirs_wrapper,
-            Box::new (logger_initializer_wrapper),
+            Box::new(logger_initializer_wrapper),
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),
@@ -304,11 +307,15 @@ mod tests {
 
     #[test]
     fn split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args() {
-        let data_dir = ensure_node_home_directory_exists("daemon_initializer", "split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args");
-        let system = System::new("split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args");
+        let data_dir = ensure_node_home_directory_exists(
+            "daemon_initializer",
+            "split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args",
+        );
+        let system =
+            System::new("split_accepts_parameters_upon_system_shutdown_and_calls_main_with_args");
         let dirs_wrapper = MockDirsWrapper::new()
-            .home_dir_result(Some (data_dir.clone()))
-            .data_dir_result(Some (data_dir));
+            .home_dir_result(Some(data_dir.clone()))
+            .data_dir_result(Some(data_dir));
         let logger_initializer_wrapper = LoggerInitializerWrapperMock::new();
         let port = find_free_port();
         let config = InitializationConfig { ui_port: port };
@@ -319,7 +326,7 @@ mod tests {
         let rerunner = RerunnerMock::new().rerun_parameters(&rerun_parameters_arc);
         let mut subject = DaemonInitializer::new(
             &dirs_wrapper,
-            Box::new (logger_initializer_wrapper),
+            Box::new(logger_initializer_wrapper),
             config,
             Box::new(channel_factory),
             Box::new(addr_factory),
@@ -348,18 +355,21 @@ mod tests {
     }
 
     #[test]
-    fn go_detects_already_running_daemon () {
-        let data_dir = ensure_node_home_directory_exists("daemon_initializer", "go_detects_already_running_daemon");
+    fn go_detects_already_running_daemon() {
+        let data_dir = ensure_node_home_directory_exists(
+            "daemon_initializer",
+            "go_detects_already_running_daemon",
+        );
         let dirs_wrapper = MockDirsWrapper::new()
-            .home_dir_result(Some (data_dir.clone()))
-            .data_dir_result(Some (data_dir));
+            .home_dir_result(Some(data_dir.clone()))
+            .data_dir_result(Some(data_dir));
         let logger_initializer_wrapper = LoggerInitializerWrapperMock::new();
         let port = find_free_port();
         let _listener = TcpListener::bind(SocketAddr::new(localhost(), port)).unwrap();
         let mut subject = DaemonInitializer::new(
             &dirs_wrapper,
-            Box::new (logger_initializer_wrapper),
-            InitializationConfig{ui_port: port},
+            Box::new(logger_initializer_wrapper),
+            InitializationConfig { ui_port: port },
             Box::new(ChannelFactoryMock::new()),
             Box::new(RecipientsFactoryMock::new()),
             Box::new(RerunnerMock::new()),
@@ -368,7 +378,7 @@ mod tests {
 
         let result = subject.go(&mut holder.streams(), &[]);
 
-        assert_eq! (result, 1);
+        assert_eq!(result, 1);
         assert_eq! (holder.stderr.get_string(), format!("There appears to be a process already listening on port {}; are you sure there's not a Daemon already running?\n", port));
     }
 

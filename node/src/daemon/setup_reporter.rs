@@ -12,6 +12,7 @@ use crate::node_configurator::{
 use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
 use crate::sub_lib::accountant::DEFAULT_EARNING_WALLET;
 use crate::sub_lib::neighborhood::NodeDescriptor;
+use crate::sub_lib::utils::make_new_multi_config;
 use crate::test_utils::main_cryptde;
 use clap::value_t;
 use itertools::Itertools;
@@ -27,7 +28,6 @@ use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter}
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use crate::sub_lib::utils::make_new_multi_config;
 
 // TODO: Probably can take this out once GH-290 makes it in
 const CONSOLE_DIAGNOSTICS: bool = false;
@@ -855,6 +855,7 @@ mod tests {
     use crate::sub_lib::cryptde::PublicKey;
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
+    use crate::test_utils::assert_string_contains;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use masq_lib::messages::UiSetupResponseValueStatus;
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Configured, Required, Set};
@@ -867,7 +868,6 @@ mod tests {
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
-    use crate::test_utils::assert_string_contains;
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {

@@ -348,6 +348,7 @@ mod tests {
     use crate::node_configurator::{initialize_database, DerivationPathWalletInfo};
     use crate::persistent_configuration::PersistentConfigurationReal;
     use crate::sub_lib::cryptde::PlainData;
+    use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::DEFAULT_CONSUMING_DERIVATION_PATH;
     use crate::sub_lib::wallet::DEFAULT_EARNING_DERIVATION_PATH;
     use crate::test_utils::*;
@@ -359,7 +360,6 @@ mod tests {
     use std::cell::RefCell;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
-    use crate::sub_lib::utils::make_new_test_multi_config;
 
     struct MnemonicFactoryMock {
         make_parameters: Arc<Mutex<Vec<(MnemonicType, Language)>>>,
@@ -570,7 +570,7 @@ mod tests {
         let args = ArgsBuilder::new().opt("--generate-wallet");
         let multi_config = make_new_test_multi_config(
             &subject.app,
-            vec![Box::new(CommandLineVcl::new(args.into()))]
+            vec![Box::new(CommandLineVcl::new(args.into()))],
         )
         .unwrap();
 
@@ -597,7 +597,7 @@ mod tests {
         let args = ArgsBuilder::new().opt("--generate-wallet");
         let multi_config = make_new_test_multi_config(
             &subject.app,
-            vec![Box::new(CommandLineVcl::new(args.into()))]
+            vec![Box::new(CommandLineVcl::new(args.into()))],
         )
         .unwrap();
 
