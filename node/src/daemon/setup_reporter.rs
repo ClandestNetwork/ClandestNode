@@ -867,6 +867,7 @@ mod tests {
     use std::net::IpAddr;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
+    use crate::test_utils::assert_string_contains;
 
     #[test]
     fn everything_in_defaults_is_properly_constructed() {
@@ -1899,12 +1900,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
-        assert_eq!(
-            result.param_errors[0]
-                .reason
-                .contains("could not be opened"),
-            true
-        );
+        assert_string_contains(&result.param_errors[0].reason, "Are you sure it exists?");
     }
 
     #[test]
@@ -1979,12 +1975,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.param_errors[0].parameter, "config-file");
-        assert_eq!(
-            result.param_errors[0]
-                .reason
-                .contains("could not be opened"),
-            true
-        );
+        assert_string_contains(&result.param_errors[0].reason, "Are you sure it exists?");
     }
 
     #[test]

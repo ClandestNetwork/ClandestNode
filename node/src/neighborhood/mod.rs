@@ -302,10 +302,13 @@ impl Handler<NodeFromUiMessage> for Neighborhood {
             UiShutdownRequest::fmb(msg.body);
         match result {
             Ok((payload, _)) => self.handle_shutdown_order(client_id, payload),
-            Err(UnexpectedMessage(_, _)) => (),
+            Err(UnexpectedMessage(opcode, _)) => debug!(
+                &self.logger,
+                "Ignoring '{}' request from client {}", opcode, client_id
+            ),
             Err(e) => error!(
                 &self.logger,
-                "Bad {} request from client {}: {:?}", opcode, client_id, e
+                "Failure to parse '{}' message from client {}: {:?}", opcode, client_id, e
             ),
         }
     }
@@ -4294,7 +4297,7 @@ mod tests {
         let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
         assert_eq!(ui_gateway_recording.len(), 0);
         TestLogHandler::new().exists_log_containing(
-            "ERROR: Neighborhood: Bad booga request from client 1234: BadOpcode",
+            "DEBUG: Neighborhood: Ignoring 'booga' request from client 1234",
         );
     }
 

@@ -32,7 +32,7 @@ use masq_lib::ui_gateway::{
 };
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-use std::sync::mpsc::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,

@@ -941,7 +941,7 @@ mod tests {
     use masq_lib::multi_config::{
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
     };
-    use masq_lib::shared_schema::ConfiguratorError;
+    use masq_lib::shared_schema::{ConfiguratorError, ParamError};
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
@@ -970,7 +970,7 @@ mod tests {
                     .param("--ip", "1.2.3.4")
                     .param(
                         "--neighbors",
-                        "mhtjjdMt7Gyoebtb1yiK0hdaUx6j84noHdaAHeDR1S4:1.2.3.4:1234;2345,Si06R3ulkOjJOLw1r2R9GOsY87yuinHU/IHK2FJyGnk:2.3.4.5:3456;4567",
+                        "mhtjjdMt7Gyoebtb1yiK0hdaUx6j84noHdaAHeDR1S4@1.2.3.4:1234;2345,Si06R3ulkOjJOLw1r2R9GOsY87yuinHU/IHK2FJyGnk@2.3.4.5:3456;4567",
                     )
                     .into(),
             ))]
@@ -992,12 +992,12 @@ mod tests {
                     vec![
                         NodeDescriptor::from_str(
                             &dummy_cryptde,
-                            "mhtjjdMt7Gyoebtb1yiK0hdaUx6j84noHdaAHeDR1S4:1.2.3.4:1234;2345"
+                            "mhtjjdMt7Gyoebtb1yiK0hdaUx6j84noHdaAHeDR1S4@1.2.3.4:1234;2345"
                         )
                         .unwrap(),
                         NodeDescriptor::from_str(
                             &dummy_cryptde,
-                            "Si06R3ulkOjJOLw1r2R9GOsY87yuinHU/IHK2FJyGnk:2.3.4.5:3456;4567"
+                            "Si06R3ulkOjJOLw1r2R9GOsY87yuinHU/IHK2FJyGnk@2.3.4.5:3456;4567"
                         )
                         .unwrap()
                     ],
@@ -1016,7 +1016,7 @@ mod tests {
                     .param("--neighborhood-mode", "standard")
                     .param(
                         "--neighbors",
-                        "QmlsbA:1.2.3.4:1234;2345,VGVk:2.3.4.5:3456;4567",
+                        "QmlsbA@1.2.3.4:1234;2345,VGVk@2.3.4.5:3456;4567",
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
@@ -1049,7 +1049,7 @@ mod tests {
                     .param("--neighborhood-mode", "originate-only")
                     .param(
                         "--neighbors",
-                        "QmlsbA:1.2.3.4:1234;2345,VGVk:2.3.4.5:3456;4567",
+                        "QmlsbA@1.2.3.4:1234;2345,VGVk@2.3.4.5:3456;4567",
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
@@ -1069,9 +1069,9 @@ mod tests {
             Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::OriginateOnly(
                     vec![
-                        NodeDescriptor::from_str(main_cryptde(), "QmlsbA:1.2.3.4:1234;2345")
+                        NodeDescriptor::from_str(main_cryptde(), "QmlsbA@1.2.3.4:1234;2345")
                             .unwrap(),
-                        NodeDescriptor::from_str(main_cryptde(), "VGVk:2.3.4.5:3456;4567").unwrap()
+                        NodeDescriptor::from_str(main_cryptde(), "VGVk@2.3.4.5:3456;4567").unwrap()
                     ],
                     DEFAULT_RATE_PACK
                 )
@@ -1110,7 +1110,7 @@ mod tests {
                     .param("--neighborhood-mode", "consume-only")
                     .param(
                         "--neighbors",
-                        "QmlsbA:1.2.3.4:1234;2345,VGVk:2.3.4.5:3456;4567",
+                        "QmlsbA@1.2.3.4:1234;2345,VGVk@2.3.4.5:3456;4567",
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
@@ -1129,8 +1129,8 @@ mod tests {
             result,
             Ok(NeighborhoodConfig {
                 mode: NeighborhoodMode::ConsumeOnly(vec![
-                    NodeDescriptor::from_str(main_cryptde(), "QmlsbA:1.2.3.4:1234;2345").unwrap(),
-                    NodeDescriptor::from_str(main_cryptde(), "VGVk:2.3.4.5:3456;4567").unwrap()
+                    NodeDescriptor::from_str(main_cryptde(), "QmlsbA@1.2.3.4:1234;2345").unwrap(),
+                    NodeDescriptor::from_str(main_cryptde(), "VGVk@2.3.4.5:3456;4567").unwrap()
                 ],)
             })
         );
@@ -1229,7 +1229,7 @@ mod tests {
                     .param("--neighborhood-mode", "zero-hop")
                     .param(
                         "--neighbors",
-                        "QmlsbA:1.2.3.4:1234;2345,VGVk:2.3.4.5:3456;4567",
+                        "QmlsbA@1.2.3.4:1234;2345,VGVk@2.3.4.5:3456;4567",
                     )
                     .param("--fake-public-key", "booga")
                     .into(),
@@ -1307,9 +1307,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Neighbor syntax error. Should be <public key>[@ | :]<node address>, not 'ooga'"
-    )]
     fn convert_ci_configs_does_not_like_neighbors_with_bad_syntax() {
         let multi_config = make_new_test_multi_config(
             &app(),
@@ -1319,7 +1316,12 @@ mod tests {
         )
         .unwrap();
 
-        let _ = standard::convert_ci_configs(&multi_config);
+        let result = standard::convert_ci_configs(&multi_config).err();
+
+        assert_eq! (result, Some (ConfiguratorError::new(vec![
+            ParamError::new ("neighbors", "Should be <public key>[@ | :]<node address>, not 'ooga'"),
+            ParamError::new ("neighbors", "Should be <public key>[@ | :]<node address>, not 'booga'"),
+        ])));
     }
 
     #[test]
@@ -1525,7 +1527,7 @@ mod tests {
             .param("--dns-servers", "12.34.56.78,23.45.67.89")
             .param(
                 "--neighbors",
-                "QmlsbA:1.2.3.4:1234;2345,VGVk:2.3.4.5:3456;4567",
+                "QmlsbA@1.2.3.4:1234;2345,VGVk@2.3.4.5:3456;4567",
             )
             .param("--ip", "34.56.78.90")
             .param("--clandestine-port", "1234")
@@ -1579,9 +1581,9 @@ mod tests {
                 mode: NeighborhoodMode::Standard(
                     NodeAddr::new(&IpAddr::from_str("34.56.78.90").unwrap(), &[]),
                     vec![
-                        NodeDescriptor::from_str(main_cryptde(), "QmlsbA:1.2.3.4:1234;2345")
+                        NodeDescriptor::from_str(main_cryptde(), "QmlsbA@1.2.3.4:1234;2345")
                             .unwrap(),
-                        NodeDescriptor::from_str(main_cryptde(), "VGVk:2.3.4.5:3456;4567").unwrap(),
+                        NodeDescriptor::from_str(main_cryptde(), "VGVk@2.3.4.5:3456;4567").unwrap(),
                     ],
                     DEFAULT_RATE_PACK.clone()
                 )
@@ -1828,9 +1830,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Cannot use --consuming-private-key when database contains mnemonic seed and consuming wallet derivation path"
-    )]
     fn consuming_wallet_private_key_plus_consuming_wallet_derivation_path() {
         let consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
@@ -1852,19 +1851,20 @@ mod tests {
         .check_password_result(Some(false));
         let mut config = BootstrapperConfig::new();
 
-        standard::get_wallets(
+        let result = standard::get_wallets(
             &mut FakeStreamHolder::new().streams(),
             &multi_config,
             &persistent_config,
             &mut config,
         )
-        .unwrap();
+        .err();
+
+        assert_eq! (result, Some (ConfiguratorError::new (vec![
+            ParamError::new ("consuming-private-key", "Cannot use when database contains mnemonic seed and consuming wallet derivation path")
+        ])));
     }
 
     #[test]
-    #[should_panic(
-        expected = "Cannot use --earning-wallet to specify an address (0x0123456789012345678901234567890123456789) different from that previously set (0x9876543210987654321098765432109876543210)"
-    )]
     fn earning_wallet_address_different_from_database() {
         let multi_config = make_multi_config(ArgsBuilder::new().param(
             "--earning-wallet",
@@ -1881,13 +1881,17 @@ mod tests {
         );
         let mut config = BootstrapperConfig::new();
 
-        standard::get_wallets(
+        let result = standard::get_wallets(
             &mut FakeStreamHolder::new().streams(),
             &multi_config,
             &persistent_config,
             &mut config,
         )
-        .unwrap();
+        .err();
+
+        assert_eq! (result, Some (ConfiguratorError::new (vec![
+            ParamError::new ("earning-wallet", "Cannot change to an address (0x0123456789012345678901234567890123456789) different from that previously set (0x9876543210987654321098765432109876543210)")
+        ])));
     }
 
     #[test]
@@ -1922,9 +1926,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "Cannot use --consuming-private-key and earning wallet address when database contains mnemonic seed"
-    )]
     fn consuming_wallet_private_key_plus_earning_wallet_address_plus_mnemonic_seed() {
         let consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
@@ -1945,13 +1946,17 @@ mod tests {
         );
         let mut config = BootstrapperConfig::new();
 
-        standard::get_wallets(
+        let result = standard::get_wallets(
             &mut FakeStreamHolder::new().streams(),
             &multi_config,
             &persistent_config,
             &mut config,
         )
-        .unwrap();
+        .err();
+
+        assert_eq! (result, Some (ConfiguratorError::new (vec![
+            ParamError::new ("consuming-private-key", "Cannot use --consuming-private-key and --earning-wallet when database contains mnemonic seed")
+        ])));
     }
 
     #[test]
@@ -1991,9 +1996,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "The specified --consuming-private-key does not denote the same consuming wallet you have used in the past."
-    )]
     fn consuming_private_key_doesnt_match_database() {
         let good_consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
@@ -2018,13 +2020,17 @@ mod tests {
         );
         let mut config = BootstrapperConfig::new();
 
-        standard::get_wallets(
+        let result = standard::get_wallets(
             &mut FakeStreamHolder::new().streams(),
             &multi_config,
             &persistent_config,
             &mut config,
         )
-        .unwrap();
+        .err();
+
+        assert_eq! (result, Some (ConfiguratorError::new (vec![
+            ParamError::new ("consuming-private-key", "Not the private key of the consuming wallet you have used in the past")
+        ])))
     }
 
     #[test]
@@ -2286,19 +2292,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "could not be read: ")]
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
         let args_vec: Vec<String> = args.into();
 
-        subject
+        let result = subject
             .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
-            .unwrap();
+            .err();
+
+        assert_eq!(result, Some (ConfiguratorError::new(vec![
+            ParamError::new("config-file", "Couldn't open configuration file \"/home/dnwiebe/.local/share/MASQ/mainnet/booga.toml\". Are you sure it exists?")
+        ])))
     }
 
     #[test]
-    #[should_panic(expected = "could not be read: ")]
     fn unprivileged_generate_configuration_senses_when_user_specifies_config_file() {
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
@@ -2310,9 +2318,13 @@ mod tests {
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
         let args_vec: Vec<String> = args.into();
 
-        subject
+        let result = subject
             .configure(args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
-            .unwrap();
+            .err();
+
+        assert_eq! (result, Some(ConfiguratorError::new (vec![
+            ParamError::new ("config-file", "Couldn't open configuration file \"/home/dnwiebe/.local/share/MASQ/mainnet/booga.toml\". Are you sure it exists?")
+        ])))
     }
 
     #[test]

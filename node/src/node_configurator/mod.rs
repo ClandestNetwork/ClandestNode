@@ -921,6 +921,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic (expected = "1: Cannot re-initialize Node: already initialized")]
     fn prepare_initialization_mode_fails_if_mnemonic_seed_already_exists() {
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator",
@@ -945,17 +946,7 @@ mod tests {
             .param("--chain", TEST_DEFAULT_CHAIN_NAME);
         let args_vec: Vec<String> = args.into();
 
-        let result = prepare_initialization_mode(&RealDirsWrapper {}, &app, args_vec.as_slice(), &mut FakeStreamHolder::new().streams())
-            .err()
-            .unwrap();
-
-        assert_eq!(
-            result,
-            ConfiguratorError::required(
-                "recover-wallet, generate-wallet",
-                "Cannot re-initialize Node: already initialized"
-            )
-        )
+        let _ = prepare_initialization_mode(&RealDirsWrapper {}, &app, args_vec.as_slice(), &mut FakeStreamHolder::new().streams());
     }
 
     fn determine_config_file_path_app() -> App<'static, 'static> {
