@@ -1252,14 +1252,13 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("send_dot_graph_response_sends_it_to_the_client");
-        let mut client_id = 0;
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client = ClientWrapperMock::new()
                 .send_result(Ok(()))
                 .flush_result(Ok(()));
-            client_id = subject.inject_mock_client(mock_client, true);
+            let client_id = subject.inject_mock_client(mock_client, true);
 
             let json_string = UiTrafficConverterOldReal::new()
                 .marshal(UiMessage::NeighborhoodDotGraphResponse(String::from(
@@ -1368,14 +1367,13 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("send_sends_a_message_to_the_client");
-        let mut client_id = 0;
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client = ClientWrapperMock::new()
                 .send_result(Ok(()))
                 .flush_result(Ok(()));
-            client_id = subject.inject_mock_client(mock_client, true);
+            let client_id = subject.inject_mock_client(mock_client, true);
 
             let json_string = "{totally: 'valid'}";
 
@@ -1541,14 +1539,13 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("receive_sends_a_message_and_errors_on_flush");
-        let mut client_id = 0;
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client = ClientWrapperMock::new()
                 .send_result(Ok(()))
                 .flush_result(Err(WebSocketError::NoDataAvailable));
-            client_id = subject.inject_mock_client(mock_client, true);
+            let client_id = subject.inject_mock_client(mock_client, true);
 
             let json_string = "{totally: 'valid'}";
 
@@ -1567,14 +1564,14 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("send_msg_tries_to_send_message_and_panics_on_flush");
-        let mut correspondent = MessageTarget::ClientId(0);
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client = ClientWrapperMock::new()
                 .send_result(Ok(()))
                 .flush_result(Err(WebSocketError::NoDataAvailable));
-            correspondent = MessageTarget::ClientId(subject.inject_mock_client(mock_client, false));
+            let correspondent =
+                MessageTarget::ClientId(subject.inject_mock_client(mock_client, false));
             let msg = NodeToUiMessage {
                 target: correspondent,
                 body: MessageBody {
@@ -1601,13 +1598,12 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("send_tries_to_send_message_and_panics");
-        let mut client_id = 0;
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client =
                 ClientWrapperMock::new().send_result(Err(WebSocketError::NoDataAvailable));
-            client_id = subject.inject_mock_client(mock_client, true);
+            let client_id = subject.inject_mock_client(mock_client, true);
 
             let json_string = "{totally: 'valid'}";
 
@@ -1626,15 +1622,13 @@ mod tests {
         let (ui_gateway, _, _) = make_recorder();
         let (from_ui_message, ui_message_sub) = subs(ui_gateway);
         let system = System::new("send_msg_tries_to_send_message_and_panics");
-        let mut correspondent = MessageTarget::ClientId(0);
         let lazy_future = lazy(move || {
             let subject =
                 WebSocketSupervisorReal::new(port, from_ui_message, ui_message_sub).unwrap();
             let mock_client =
                 ClientWrapperMock::new().send_result(Err(WebSocketError::NoDataAvailable));
-            correspondent = MessageTarget::ClientId(subject.inject_mock_client(mock_client, false));
             let msg = NodeToUiMessage {
-                target: correspondent,
+                target: MessageTarget::ClientId(subject.inject_mock_client(mock_client, false)),
                 body: MessageBody {
                     opcode: "booga".to_string(),
                     path: FireAndForget,
