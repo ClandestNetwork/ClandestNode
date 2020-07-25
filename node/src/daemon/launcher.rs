@@ -354,11 +354,21 @@ mod tests {
         daemon_awaiter.await_message_count(1);
         let daemon_recording = daemon_recording_arc.lock().unwrap();
         let msg = daemon_recording.get_record::<CrashNotification>(0);
+        #[cfg(not(target_os = "windows"))]
         assert_eq!(
             msg,
             &CrashNotification {
                 process_id: 1234,
                 exit_code: None,
+                stderr: Some("Standard error".to_string()),
+            }
+        );
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            msg,
+            &CrashNotification {
+                process_id: 1234,
+                exit_code: Some(1),
                 stderr: Some("Standard error".to_string()),
             }
         );

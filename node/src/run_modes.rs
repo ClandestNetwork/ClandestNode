@@ -485,7 +485,7 @@ mod tests {
         );
         assert_eq!(
             dump_config_no,
-            "MASQNode in DumpConfig mode does not require Adminstrator privilege.\n"
+            "MASQNode.exe in DumpConfig mode does not require Administrator privilege.\n"
         );
     }
 

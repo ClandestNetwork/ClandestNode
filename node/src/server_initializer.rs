@@ -284,6 +284,7 @@ pub mod test_utils {
     use crate::bootstrapper::RealUser;
     use crate::privilege_drop::PrivilegeDropper;
     use crate::server_initializer::LoggerInitializerWrapper;
+    #[cfg(not(target_os = "windows"))]
     use crate::test_utils::logging::init_test_logging;
     use log::LevelFilter;
     use std::cell::RefCell;
@@ -373,6 +374,7 @@ pub mod test_utils {
                     None => None,
                 },
             ));
+            #[cfg(not(target_os = "windows"))]
             assert!(init_test_logging());
         }
     }
