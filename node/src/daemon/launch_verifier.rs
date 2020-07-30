@@ -3,6 +3,7 @@
 use crate::daemon::launch_verifier::LaunchVerification::{
     CleanFailure, DirtyFailure, InterventionRequired, Launched,
 };
+use crate::sub_lib::logger::Logger;
 use masq_lib::messages::NODE_UI_PROTOCOL;
 use std::thread;
 use std::time::Duration;
@@ -23,8 +24,9 @@ pub trait VerifierTools {
     fn delay(&self, milliseconds: u64);
 }
 
-#[derive(Default)]
-pub struct VerifierToolsReal {}
+pub struct VerifierToolsReal {
+    logger: Logger,
+}
 
 impl VerifierTools for VerifierToolsReal {
     fn can_connect_to_ui_gateway(&self, ui_port: u16) -> bool {
@@ -46,7 +48,12 @@ impl VerifierTools for VerifierToolsReal {
 
     fn kill_process(&self, process_id: u32) {
         if let Some(process) = Self::system().get_process(Self::convert_pid(process_id)) {
-            process.kill(Signal::Kill);
+            if !process.kill(Signal::Term) && !process.kill(Signal::Kill) {
+                error!(
+                    self.logger,
+                    "Process {} could be neither terminated nor killed", process_id
+                );
+            }
         }
     }
 
@@ -55,9 +62,17 @@ impl VerifierTools for VerifierToolsReal {
     }
 }
 
+impl Default for VerifierToolsReal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VerifierToolsReal {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            logger: Logger::new("VerifierTools"),
+        }
     }
 
     fn system() -> sysinfo::System {
