@@ -386,6 +386,7 @@ mod tests {
 
         subject.kill_process(child.id());
 
+        thread::sleep(Duration::from_millis(500));
         let after = subject.process_is_running(child.id());
 
         assert_eq!(before, true);
