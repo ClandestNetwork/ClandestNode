@@ -379,17 +379,31 @@ mod tests {
 
     #[test]
     fn kill_process_and_process_is_running_work() {
+        eprintln!("Test started");
         let subject = VerifierToolsReal::new();
         let child = make_long_running_child();
 
         let before = subject.process_is_running(child.id());
+        eprintln!("before set to {}", before);
 
         subject.kill_process(child.id());
+        eprintln!("process killed");
 
         let after = subject.process_is_running(child.id());
+        eprintln!("after set to {}", after);
 
-        assert_eq!(before, true, "Process {} should have been running before, but wasn't", child.id());
-        assert_eq!(after, false, "Process {} should not have been running after, but was", child.id());
+        assert_eq!(
+            before,
+            true,
+            "Process {} should have been running before, but wasn't",
+            child.id()
+        );
+        assert_eq!(
+            after,
+            false,
+            "Process {} should not have been running after, but was",
+            child.id()
+        );
     }
 
     #[test]
