@@ -387,7 +387,7 @@ mod tests {
         eprintln!("Test started");
         let subject = VerifierToolsReal::new();
         let child = make_long_running_child();
-        thread::sleep (Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(500));
 
         let before = subject.process_is_running(child.id());
         eprintln!("before set to {}", before);
@@ -398,18 +398,7 @@ mod tests {
         let after = subject.process_is_running(child.id());
         eprintln!("after set to {}", after);
 
-        assert_eq!(
-            before,
-            true,
-            "Process {} should have been running before, but wasn't",
-            child.id()
-        );
-        assert_eq!(
-            after,
-            false,
-            "Process {} should not have been running after, but was",
-            child.id()
-        );
+        assert_eq!((before, after), (true, false));
     }
 
     #[test]
