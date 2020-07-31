@@ -387,6 +387,7 @@ mod tests {
         eprintln!("Test started");
         let subject = VerifierToolsReal::new();
         let child = make_long_running_child();
+        thread::sleep (Duration::from_millis(500));
 
         let before = subject.process_is_running(child.id());
         eprintln!("before set to {}", before);
