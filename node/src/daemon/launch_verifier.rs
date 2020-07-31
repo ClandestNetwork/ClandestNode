@@ -386,11 +386,10 @@ mod tests {
 
         subject.kill_process(child.id());
 
-        thread::sleep(Duration::from_millis(500));
         let after = subject.process_is_running(child.id());
 
-        assert_eq!(before, true);
-        assert_eq!(after, false);
+        assert_eq!(before, true, "Process {} should have been running before, but wasn't", child.id());
+        assert_eq!(after, false, "Process {} should not have been running after, but was", child.id());
     }
 
     #[test]
