@@ -376,7 +376,7 @@ mod tests {
             .unwrap();
         #[cfg(target_os = "windows")]
         let child = Command::new("cmd")
-            .args(vec!["/c", "pause"])
+            .args(vec!["/c", "ping", "127.0.0.1"])
             .spawn()
             .unwrap();
         child
