@@ -40,12 +40,10 @@ impl VerifierTools for VerifierToolsReal {
     fn process_is_running(&self, process_id: u32) -> bool {
         let system = Self::system();
         let process_info_opt = system.get_process(Self::convert_pid(process_id));
-        eprintln!("process_info_opt: {:?}", process_info_opt);
         match process_info_opt {
             None => false,
             Some(process) => {
                 let status = process.status();
-                eprintln!("process_status: {:?}", status);
                 Self::is_alive(status)
             }
         }
@@ -384,19 +382,15 @@ mod tests {
 
     #[test]
     fn kill_process_and_process_is_running_work() {
-        eprintln!("Test started");
         let subject = VerifierToolsReal::new();
         let child = make_long_running_child();
         thread::sleep(Duration::from_millis(500));
 
         let before = subject.process_is_running(child.id());
-        eprintln!("before set to {}", before);
 
         subject.kill_process(child.id());
-        eprintln!("process killed");
 
         let after = subject.process_is_running(child.id());
-        eprintln!("after set to {}", after);
 
         assert_eq!((before, after), (true, false));
     }
