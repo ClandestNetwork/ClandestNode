@@ -11,6 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
+use itertools::Itertools;
 
 pub const NODE_UI_PROTOCOL: &str = "MASQNode-UIv2";
 
@@ -272,7 +273,9 @@ impl UiSetupResponse {
     ) -> UiSetupResponse {
         UiSetupResponse {
             running,
-            values: values.into_iter().map(|(_, v)| v).collect(),
+            values: values.into_iter()
+                .sorted_by (|a, b| Ord::cmp(&a.0, &b.0))
+                .map(|(_, v)| v).collect(),
             errors: errors
                 .param_errors
                 .into_iter()
@@ -297,7 +300,10 @@ impl UiSetupBroadcast {
     ) -> UiSetupBroadcast {
         UiSetupBroadcast {
             running,
-            values: values.into_iter().map(|(_, v)| v).collect(),
+            values: values.into_iter()
+                .sorted_by (|a, b| Ord::cmp(&a.0, &b.0))
+                .map(|(_, v)| v)
+                .collect(),
             errors: errors
                 .param_errors
                 .into_iter()
