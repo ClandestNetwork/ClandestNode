@@ -2366,10 +2366,12 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_multinode() {
+        let data_dir = ensure_node_home_directory_exists("node_configurator_standard", "privileged_configuration_accepts_network_chain_selection_for_multinode");
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--chain", "dev");
+            .param("--chain", "dev")
+            .param("--data-directory", data_dir.to_str().unwrap());
         let args_vec: Vec<String> = args.into();
 
         let config = subject
@@ -2402,8 +2404,11 @@ mod tests {
 
     #[test]
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
+        let data_dir = ensure_node_home_directory_exists("node_configurator_standard", "privileged_configuration_defaults_network_chain_selection_to_mainnet");
         let subject = NodeConfiguratorStandardPrivileged::new();
-        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new()
+            .param("--ip", "1.2.3.4")
+            .param("--data-directory", data_dir.to_str().unwrap());
         let args_vec: Vec<String> = args.into();
 
         let config = subject
@@ -2475,8 +2480,11 @@ mod tests {
 
     #[test]
     fn privileged_configuration_rejects_invalid_gas_price() {
+        let data_dir = ensure_node_home_directory_exists("node_configurator_standard", "privileged_configuration_rejects_invalid_gas_price");
         let subject = NodeConfiguratorStandardPrivileged::new();
-        let args = ArgsBuilder::new().param("--gas-price", "unleaded");
+        let args = ArgsBuilder::new()
+            .param("--gas-price", "unleaded")
+            .param("--data-directory", data_dir.to_str().unwrap());
         let args_vec: Vec<String> = args.into();
 
         let result = subject
