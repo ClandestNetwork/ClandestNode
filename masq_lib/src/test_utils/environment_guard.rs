@@ -64,6 +64,12 @@ pub struct ClapGuard<'a> {
     _preventer: ConcurrencyPreventer<'a>,
 }
 
+impl<'a> Default for ClapGuard<'a> {
+    fn default() -> ClapGuard<'a> {
+        ClapGuard::new()
+    }
+}
+
 impl<'a> ClapGuard<'a> {
     pub fn new() -> ClapGuard<'a> {
         ClapGuard {
