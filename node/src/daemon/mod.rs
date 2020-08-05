@@ -466,6 +466,7 @@ mod tests {
     use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
+    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
@@ -791,7 +792,8 @@ mod tests {
 
     #[test]
     fn setup_judges_node_not_running_when_port_and_pid_are_set_but_os_says_different() {
-        let home_dir = ensure_node_home_directory_exists(
+        let _clap_guard = ClapGuard::new();
+        let data_dir = ensure_node_home_directory_exists(
             "daemon",
             "setup_judges_node_not_running_when_port_and_pid_are_set_but_os_says_different",
         );
@@ -810,7 +812,7 @@ mod tests {
             client_id: 1234,
             body: UiSetupRequest {
                 values: vec![
-                    UiSetupRequestValue::new("data-directory", format!("{:?}", home_dir).as_str()),
+                    UiSetupRequestValue::new("data-directory", data_dir.to_str().unwrap()),
                     UiSetupRequestValue::new("chain", "ropsten"),
                     UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                 ],
@@ -1138,6 +1140,7 @@ mod tests {
 
     #[test]
     fn maintains_setup_through_start_order() {
+        let _clap_guard = ClapGuard::new();
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let launcher = LauncherMock::new().launch_result(Ok(Some(LaunchSuccess {
             new_process_id: 2345,

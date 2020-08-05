@@ -360,6 +360,7 @@ mod tests {
     use std::cell::RefCell;
     use std::io::Cursor;
     use std::sync::{Arc, Mutex};
+    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     struct MnemonicFactoryMock {
         make_parameters: Arc<Mutex<Vec<(MnemonicType, Language)>>>,
@@ -450,6 +451,7 @@ mod tests {
 
     #[test]
     fn exercise_configure() {
+        let _clap_guard = ClapGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator_generate_wallet",
             "exercise_configure",

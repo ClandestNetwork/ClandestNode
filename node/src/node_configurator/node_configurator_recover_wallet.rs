@@ -286,6 +286,7 @@ mod tests {
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use std::io::Cursor;
+    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     #[test]
     fn validate_mnemonic_words_if_provided_in_chinese_simplified() {
@@ -417,6 +418,7 @@ mod tests {
 
     #[test]
     fn exercise_configure() {
+        let _clap_guard = ClapGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator_recover_wallet",
             "exercise_configure",
