@@ -953,7 +953,7 @@ mod tests {
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
     };
     use masq_lib::shared_schema::{ConfiguratorError, ParamError};
-    use masq_lib::test_utils::environment_guard::{EnvironmentGuard, ClapGuard};
+    use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rustc_hex::{FromHex, ToHex};
@@ -2405,8 +2405,7 @@ mod tests {
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
         let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
-        let args = ArgsBuilder::new()
-            .param("--ip", "1.2.3.4");
+        let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let args_vec: Vec<String> = args.into();
 
         let config = subject
@@ -2482,8 +2481,7 @@ mod tests {
     fn privileged_configuration_rejects_invalid_gas_price() {
         let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
-        let args = ArgsBuilder::new()
-            .param("--gas-price", "unleaded");
+        let args = ArgsBuilder::new().param("--gas-price", "unleaded");
         let args_vec: Vec<String> = args.into();
 
         let result = subject

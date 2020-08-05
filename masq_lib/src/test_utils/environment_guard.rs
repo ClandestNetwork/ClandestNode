@@ -10,16 +10,16 @@ lazy_static! {
 }
 
 pub struct ConcurrencyPreventer<'a> {
-    _lock: MutexGuard<'a, ()>
+    _lock: MutexGuard<'a, ()>,
 }
 
 impl<'a> ConcurrencyPreventer<'a> {
     pub fn new(mutex: &'a Mutex<()>) -> ConcurrencyPreventer<'a> {
         ConcurrencyPreventer {
             _lock: match mutex.lock() {
-                Ok (guard) => guard,
-                Err (poisoned) => poisoned.into_inner(),
-            }
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            },
         }
     }
 }
@@ -48,7 +48,7 @@ impl<'a> Drop for EnvironmentGuard<'a> {
 impl<'a> EnvironmentGuard<'a> {
     pub fn new() -> EnvironmentGuard<'a> {
         EnvironmentGuard {
-            _preventer: ConcurrencyPreventer::new (&ENVIRONMENT_GUARD_MUTEX),
+            _preventer: ConcurrencyPreventer::new(&ENVIRONMENT_GUARD_MUTEX),
             environment: std::env::vars_os().collect(),
         }
     }
@@ -67,7 +67,7 @@ pub struct ClapGuard<'a> {
 impl<'a> ClapGuard<'a> {
     pub fn new() -> ClapGuard<'a> {
         ClapGuard {
-            _preventer: ConcurrencyPreventer::new (&CLAP_GUARD_MUTEX),
+            _preventer: ConcurrencyPreventer::new(&CLAP_GUARD_MUTEX),
         }
     }
 }

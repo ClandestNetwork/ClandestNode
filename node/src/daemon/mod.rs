@@ -18,9 +18,14 @@ use actix::Recipient;
 use actix::{Actor, Context, Handler, Message};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use masq_lib::messages::UiMessageError::UnexpectedMessage;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
-use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError, UiNodeCrashedBroadcast, UiRedirect, UiSetupBroadcast, UiSetupRequest, UiSetupResponse, UiStartOrder, UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR, UiSetupResponseValue};
+use masq_lib::messages::{
+    FromMessageBody, ToMessageBody, UiMessageError, UiNodeCrashedBroadcast, UiRedirect,
+    UiSetupBroadcast, UiSetupRequest, UiSetupResponse, UiSetupResponseValue, UiStartOrder,
+    UiStartResponse, NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
+};
 use masq_lib::shared_schema::ConfiguratorError;
 use masq_lib::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
@@ -29,7 +34,6 @@ use masq_lib::ui_gateway::{
 };
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-use lazy_static::lazy_static;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -43,8 +47,10 @@ lazy_static! {
     static ref CENSORABLES: HashMap<String, usize> = {
         vec![
             ("db-password".to_string(), 16),
-            ("consuming-private-key".to_string(), 64)
-        ].into_iter().collect()
+            ("consuming-private-key".to_string(), 64),
+        ]
+        .into_iter()
+        .collect()
     };
 }
 
@@ -384,13 +390,17 @@ impl Daemon {
     }
 
     fn censored_params(&self) -> SetupCluster {
-        self.params.clone().into_iter ()
-            .map (|(name, uisrv)| {
-                match CENSORABLES.get(&name) {
-                    Some (length) => (name, UiSetupResponseValue::new(&uisrv.name, &"*".repeat(*length), uisrv.status)),
-                    None => (name, uisrv),
-                }
-            }).collect()
+        self.params
+            .clone()
+            .into_iter()
+            .map(|(name, uisrv)| match CENSORABLES.get(&name) {
+                Some(length) => (
+                    name,
+                    UiSetupResponseValue::new(&uisrv.name, &"*".repeat(*length), uisrv.status),
+                ),
+                None => (name, uisrv),
+            })
+            .collect()
     }
 
     fn send_ui_message(&self, body: MessageBody, target: MessageTarget) {
@@ -451,7 +461,7 @@ mod tests {
     use crate::daemon::LaunchSuccess;
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
-    use masq_lib::messages::UiSetupResponseValueStatus::{Set, Required, Blank};
+    use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Required, Set};
     use masq_lib::messages::{
         CrashReason, UiFinancialsRequest, UiNodeCrashedBroadcast, UiRedirect, UiSetupBroadcast,
         UiSetupRequest, UiSetupRequestValue, UiSetupResponse, UiSetupResponseValue,
@@ -459,6 +469,7 @@ mod tests {
         NODE_ALREADY_RUNNING_ERROR, NODE_LAUNCH_ERROR, NODE_NOT_RUNNING_ERROR,
     };
     use masq_lib::shared_schema::ConfiguratorError;
+    use masq_lib::test_utils::environment_guard::ClapGuard;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::ui_gateway::MessageTarget;
     use masq_lib::ui_gateway::MessageTarget::AllExcept;
@@ -466,7 +477,6 @@ mod tests {
     use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
-    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     struct LauncherMock {
         launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
@@ -582,8 +592,8 @@ mod tests {
 
     #[test]
     fn censorship_works() {
-        let mut subject = Daemon::new (Box::new (LauncherMock::new()));
-        subject.params = make_setup_cluster (vec![
+        let mut subject = Daemon::new(Box::new(LauncherMock::new()));
+        subject.params = make_setup_cluster(vec![
             ("one-non-censorable", "one value", Set),
             ("db-password", "super-secret value", Configured),
             ("consuming-private-key", "another super-secret value", Blank),
@@ -592,12 +602,19 @@ mod tests {
 
         let result = subject.censored_params();
 
-        assert_eq! (result, make_setup_cluster (vec![
-            ("one-non-censorable", "one value", Set),
-            ("db-password", "****************", Configured),
-            ("consuming-private-key", "****************************************************************", Blank),
-            ("another-non-censorable", "another value", Required),
-        ]));
+        assert_eq!(
+            result,
+            make_setup_cluster(vec![
+                ("one-non-censorable", "one value", Set),
+                ("db-password", "****************", Configured),
+                (
+                    "consuming-private-key",
+                    "****************************************************************",
+                    Blank
+                ),
+                ("another-non-censorable", "another value", Required),
+            ])
+        );
     }
 
     #[test]
@@ -646,7 +663,11 @@ mod tests {
             UiSetupResponse {
                 running: true,
                 values: vec![
-                    UiSetupResponseValue::new("consuming-private-key", "****************************************************************", Set),
+                    UiSetupResponseValue::new(
+                        "consuming-private-key",
+                        "****************************************************************",
+                        Set
+                    ),
                     UiSetupResponseValue::new("db-password", "****************", Set),
                     UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
                 ],
@@ -665,8 +686,7 @@ mod tests {
             ("log-level", "trace", Set),
             ("consuming-private-key", "secret value", Set),
         ]);
-        let setup_reporter = SetupReporterMock::new()
-            .get_modified_setup_result(Ok(combined_setup));
+        let setup_reporter = SetupReporterMock::new().get_modified_setup_result(Ok(combined_setup));
         let system = System::new("test");
         let mut subject = Daemon::new(Box::new(LauncherMock::new()));
         subject.verifier_tools = Box::new(verifier_tools);
@@ -698,7 +718,11 @@ mod tests {
         System::current().stop();
         system.run();
         let expected_combined_setup = vec![
-            UiSetupResponseValue::new("consuming-private-key", "****************************************************************", Set),
+            UiSetupResponseValue::new(
+                "consuming-private-key",
+                "****************************************************************",
+                Set,
+            ),
             UiSetupResponseValue::new("db-password", "****************", Set),
             UiSetupResponseValue::new("log-level", "trace", Set),
             UiSetupResponseValue::new("neighborhood-mode", "zero-hop", Set),
@@ -712,10 +736,7 @@ mod tests {
             UiSetupResponse::fmb(record.body).unwrap();
         assert_eq!(context_id, 4321);
         assert_eq!(payload.running, false);
-        assert_eq!(
-            &payload.values,
-            &expected_combined_setup,
-        );
+        assert_eq!(&payload.values, &expected_combined_setup,);
         let record = ui_gateway_recording
             .get_record::<NodeToUiMessage>(1)
             .clone();
@@ -724,10 +745,7 @@ mod tests {
             UiSetupBroadcast::fmb(record.body).unwrap();
         assert_eq!(context_id, 0);
         assert_eq!(payload.running, false);
-        assert_eq!(
-            &payload.values,
-            &expected_combined_setup
-        );
+        assert_eq!(&payload.values, &expected_combined_setup);
     }
 
     #[test]
@@ -973,9 +991,13 @@ mod tests {
                 target: MessageTarget::ClientId(47),
                 body: UiSetupResponse {
                     running: false,
-                    values: vec![
-                        UiSetupResponseValue::new ("db-password", "****************", Configured),
-                    ].into_iter().collect(),
+                    values: vec![UiSetupResponseValue::new(
+                        "db-password",
+                        "****************",
+                        Configured
+                    ),]
+                    .into_iter()
+                    .collect(),
                     errors: vec![]
                 }
                 .tmb(74),
@@ -1022,7 +1044,7 @@ mod tests {
                     values: modified_setup
                         .iter()
                         .map(|(_, v)| v.clone())
-                        .sorted_by (|a, b| Ord::cmp (&a.name, &b.name))
+                        .sorted_by(|a, b| Ord::cmp(&a.name, &b.name))
                         .collect(),
                     errors: vec![]
                 }
@@ -1036,9 +1058,10 @@ mod tests {
                 target: MessageTarget::AllExcept(47),
                 body: UiSetupBroadcast {
                     running: false,
-                    values: modified_setup.into_iter()
+                    values: modified_setup
+                        .into_iter()
                         .map(|(_, v)| v)
-                        .sorted_by (|a, b| Ord::cmp (&a.name, &b.name))
+                        .sorted_by(|a, b| Ord::cmp(&a.name, &b.name))
                         .collect(),
                     errors: vec![]
                 }

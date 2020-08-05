@@ -80,7 +80,7 @@ impl DbInitializer for DbInitializerReal {
         let database_file_path = &path.join(DATABASE_FILE);
         match Connection::open_with_flags(database_file_path, flags) {
             Ok(conn) => {
-eprintln! ("Opened existing database at {:?}", database_file_path);
+                eprintln!("Opened existing database at {:?}", database_file_path);
                 let config = self.extract_configurations(&conn);
                 match self.check_version(config.get("schema_version")) {
                     Ok(_) => Ok(Box::new(ConnectionWrapperReal::new(conn))),
@@ -93,12 +93,12 @@ eprintln! ("Opened existing database at {:?}", database_file_path);
                 flags.insert(OpenFlags::SQLITE_OPEN_CREATE);
                 match Connection::open_with_flags(database_file_path, flags) {
                     Ok(conn) => {
-eprintln! ("Created new database at {:?}", database_file_path);
+                        eprintln!("Created new database at {:?}", database_file_path);
                         match self.create_database_tables(&conn, chain_id) {
                             Ok(()) => Ok(Box::new(ConnectionWrapperReal::new(conn))),
                             Err(e) => Err(e),
                         }
-                    },
+                    }
                     Err(e) => Err(InitializationError::SqliteError(e)),
                 }
             }

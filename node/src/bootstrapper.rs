@@ -590,6 +590,7 @@ mod tests {
     use actix::System;
     use lazy_static::lazy_static;
     use masq_lib::shared_schema::ParamError;
+    use masq_lib::test_utils::environment_guard::ClapGuard;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
@@ -606,7 +607,6 @@ mod tests {
     use std::thread;
     use tokio;
     use tokio::prelude::Async;
-    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     lazy_static! {
         static ref INITIALIZATION: Mutex<bool> = Mutex::new(false);

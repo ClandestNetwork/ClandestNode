@@ -109,9 +109,9 @@ mod tests {
     use crate::persistent_configuration::{PersistentConfiguration, PersistentConfigurationReal};
     use crate::sub_lib::cryptde::PlainData;
     use crate::test_utils::{ArgsBuilder, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
+    use masq_lib::test_utils::environment_guard::ClapGuard;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
-    use masq_lib::test_utils::environment_guard::ClapGuard;
 
     #[test]
     fn dump_config_creates_database_if_nonexistent() {
