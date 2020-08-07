@@ -150,7 +150,18 @@ Redirect payload.  If it's a valid Node message, the Node should respond appropr
 
 ### Node
 
-[fill this out]
+#### Shutdown
+
+The Shutdown operation causes the Node to cease operations and terminate. The UI will receive a response, and then
+the WebSockets connection will be dropped by the Node.
+
+Whenever the WebSockets connection is dropped, whether the Shutdown operation is in progress or not, the UI should
+reconnect to the Daemon.
+
+If for some reason the WebSockets connection is _not_ dropped by the Node within a few milliseconds of the response
+to the Shutdown message, that indicates that the Node has somehow become hung on the way down. In this case, the
+WebSockets connection to the Node will probably be of no further use. The UI may choose to inform the user that
+bad things are happening which will probably require user intervention.
 
 ## Message Reference
 
