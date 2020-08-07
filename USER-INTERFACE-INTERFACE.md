@@ -83,12 +83,13 @@ The `opcode` is a short string that identifies the message type. Sometimes the s
 different message types if they can easily be distinguished by some other context--for example, if one type is
 only ever sent from the UI to the Node, and the other type is only ever sent from the Node to the UI.
 
-The `contextId` is best thought of as a conversation number. Just as there can be many UIs connected to the same
-Node, each UI can be carrying on many simultaneous conversations with the Node. When a request is sent as part
-of a particular conversation, the Daemon and the Node guarantee that the next message received in that
-conversation will be the response to that request. It is the responsibility of each UI to manage `contextId`s.
-When the UI wants to start a new conversation, it merely mentions a new `contextId` in the first message of
-that conversation; when it's done with a conversation, it just stops mentioning that conversation's `contextId`.
+The `contextId` is a positive integer best thought of as a conversation number. Just as there can be many UIs 
+connected to the same Node, each UI can be carrying on many simultaneous conversations with the Node. When a 
+request is sent as part of a particular conversation, the Daemon and the Node guarantee that the next message 
+received in that conversation will be the response to that request. It is the responsibility of each UI to 
+manage `contextId`s. When the UI wants to start a new conversation, it merely mentions a new `contextId` in 
+the first message of that conversation; when it's done with a conversation, it just stops mentioning that 
+conversation's `contextId`.
 
 Some messages are always isolated, and never part of any conversation. These messages will be identifiable by
 their `opcode`, and their `contextId` should be ignored. (In the real world, it's always zero, but depending on
@@ -105,6 +106,49 @@ The structure of the `payload` of a `MASQNode-UIv2` message depends on the `opco
 Message Reference section below.
 
 ## General Operational Concepts
+
+### Daemon
+
+#### Setup
+
+The Node requires quite a bit of configuration information before it can start up properly. There are several
+possible sources of this configuration information. The primary source, though, is the command line that's used
+to start the Node. There are many parameters that can be specified on that command line, and the Daemon needs to
+know them all in order to start the Node.
+
+Accumulating this information is the purpose of the Daemon's Setup functionality, which is a large proportion of
+what it does.
+
+The Daemon has a space inside it to hold Setup information for the Node. A UI can query the Daemon to get a dump
+of the information in the Setup space. When the Node is not running, the information in the Setup space can be
+changed by the UI. When the Node is running, the information in the Setup space is frozen and immutable. This is
+so that when the Node is running, you can use the UI to query the Daemon to discover the configuration with which
+the Node was started.
+
+If a Node is shut down, a new Node can easily be started with exactly the same configuration as its predecessor
+as long as the information in the Setup space is not disturbed.
+
+#### Start
+
+When the Start operation is triggered, the Daemon will try to start the Node with the information in the Setup
+space. The response message will tell whether the attempt succeeded or failed. 
+
+#### Redirect
+
+As long as the UI sends the Daemon messages that the Daemon understands, the Daemon will respond appropriately to
+them. But if the UI sends the Daemon a message the Daemon doesn't understand, the Redirect operation may come
+into play.
+
+If the Node is not running, there's nowhere to Redirect, so the Daemon will just send back an error response.
+
+However, if the Node _is_ running, the Daemon will send back a Redirect response, which will contain both
+information about where the Node is running and also the unexpected message sent to the Daemon. When the UI
+gets a Redirect, it should drop the WebSockets connection to the Daemon, make a WebSockets connection to the
+Node on the port supplied in the Redirect message (on `localhost`, using the `MASQNode-UIv2` protocol), and
+resend the original message--which, in case the UI doesn't remember it anymore, is helpfully included in the
+Redirect payload.  If it's a valid Node message, the Node should respond appropriately to it.
+
+### Node
 
 [fill this out]
 
