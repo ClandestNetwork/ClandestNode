@@ -71,8 +71,8 @@ The low-level JSON format of `MASQNode-UIv2` messages is very simple. It looks l
 
 ```
 {
-    "opcode": <opcode>,
-    "contextId": <context id>,
+    "opcode": <string>,
+    "contextId": <positive integer>,
     "payload": {
         <... payload ...>
     }
@@ -80,7 +80,7 @@ The low-level JSON format of `MASQNode-UIv2` messages is very simple. It looks l
 ```
 
 The `opcode` is a short string that identifies the message type. Sometimes the same opcode will be used for two
-different message types if they can easily be distinguished by some other context--for example, if one type is
+different message types if they can easily be distinguished by some other context--for example if one type is
 only ever sent from the UI to the Node, and the other type is only ever sent from the Node to the UI.
 
 The `contextId` is a positive integer best thought of as a conversation number. Just as there can be many UIs 
@@ -99,6 +99,10 @@ Neither the Daemon nor the Node will ever start a conversation, although they wi
 messages.
 
 The `payload` is the body of the message, with its structure being signaled by the contents of the `opcode` field.
+
+There is no provision in the `MASQNode-UIv2` protocol for UIs to communicate with one another. A UI may be able
+to deduce from broadcasts the existence of other UIs, but it can never be assured that there are no other UIs
+connected to the Node or Daemon.
 
 #### Level 5
 
@@ -221,7 +225,7 @@ greater than 64 bits long will cause undefined behavior.
         },
         < ... >
     ],
-    "totalReceivable": <nonnegative integer>,
+    "totalReceivable": <nonnegative integer>
 }
 ```
 ##### Description:
@@ -249,5 +253,97 @@ The `payables` and `receivables` arrays are not in any particular order.
 
 For security reasons, the Node does not keep track of individual blockchain transactions, with the exception
 of payments that have not yet been confirmed. Only cumulative account balances are retained.
+
+#### `setup`
+##### Direction: Request
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {
+    "values": [
+        {
+            "name": <string, see below>,
+            "value": <optional string>
+        },
+        < ... >
+    ]
+}
+```
+##### Description:
+Requests modifications to the Daemon's Setup space and a dump of the results.
+
+The `values` array may be empty. If it is, no modifications will be made, but a report of the existing contents
+of the Setup space will be returned.
+
+The `name` field is one of a set of known parameter names whose value should be changed. See below for a list.
+
+The `value` field, if present, holds the new value for the parameter. If not present, the parameter value will
+be cleared.
+
+###### Permitted `name`s
+* `blockchain-service-url` - URL of the blockchain service to use: currently only Infura is supported.
+* `chain` - `mainnet` or `ropsten`. The blockchain the Node should connect to. 
+* `clandestine-port` - The port at which other Nodes will contact this one.
+* `config-file` - Path to or name of the TOML file from which to take additional configuration.
+* `consuming-private-key` - 64-digit hexadecimal number containing the consuming wallet's private key.
+* `data-directory` - Path to data directory.
+* `db-password` - Password to unlock the sensitive values in the database.
+* `dns-servers` - Comma-separated list of DNS servers to use.
+* `earning-wallet` - Wallet into which earnings should be deposited.
+* `gas-price` - Transaction fee to offer on the blockchain.
+* `ip` - The public IP address of the Node.
+* `log-level` - The lowest level of logs that should be recorded. `off`, `error`, `warn`, `info`, `debug`, `trace`
+* `neighborhood-mode` - `zero-hop`, `originate-only`, `consume-only`, `standard`
+* `neighbors` - Comma-separated list of Node descriptors for neighbors to contact on startup
+* `real-user` - Non-Windows platforms only, only where required: <uid>:<gid>:<home directory>
+
+#### `setup`
+##### Direction: Response or Broadcast
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {
+    "running": <boolean>,
+    "values": [
+        {
+            "name": <string>,
+            "value": <string>,
+            "status": <string, see below>,
+        },
+        < ... >
+    ],
+    "errors": [
+        [<string, see below>, <string, see below>],
+        < ... >
+    ]
+}
+```
+##### Description:
+Conveys the contents of the Daemon's Setup space. A UI will receive this message as a response (with a
+meaningful `contextId`) if it sends a `setup` request; but it will also receive this message as an unsolicited
+broadcast if another UI sends a `setup` request that results in actual changes to the Daemon's Setup space.
+
+The `running` field will be true if the Node is currently running, or false otherwise. If true, the proposed
+changes, if any, in the request that stimulated this response or broadcast were ignored, because the Setup
+space is immutable while the Node is running.
+
+The `values` array contains a list of the values in the Setup space. For each object in the list:
+
+The `name` field is the name of the parameter, one of the names listed for the request above.
+
+The `value` field is the value of that parameter. If the parameter has no value, the `value` field will be
+a blank string.
+
+The `status` field has one of the following values:
+* `Default` - The parameter has a default value, and has not been changed from it.
+* `Configured` - The parameter has taken its value from a configuration file or an environment variable.
+* `Set` - The parameter was set by a UI using a `setup` message.
+* `Blank` - The parameter has no value, and no value is required.
+* `Required` - The parameter has no value, but some value is required to start the Node.
+
+Sometimes, the values in the Setup space may be incomplete, inconsistent, or obviously incorrect. When this
+happens, the `errors` array will be populated with error messages about the problem parameters. It's an array
+of two-element arrays; each two-element array will have the name of the offending parameter first, and an
+appropriate error message second. If there are no detectable errors, the `errors` array will be empty.
 
 [continue]
