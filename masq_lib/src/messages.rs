@@ -367,6 +367,7 @@ pub enum CrashReason {
 pub struct UiNodeCrashedBroadcast {
     #[serde(rename = "processId")]
     pub process_id: u32,
+    #[serde(rename = "crashReason")]
     pub crash_reason: CrashReason,
 }
 fire_and_forget_message!(UiNodeCrashedBroadcast, "crashed");

@@ -194,6 +194,30 @@ by the Daemon or Node.
 The various errors that can result from each request are not specifically mentioned unless they indicate a
 condition the UI can correct.
 
+#### `crash`
+##### Direction: Broadcast
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {
+    "processId": <integer>,
+    "crashReason": {
+        <key>: <string>
+    }
+}
+```
+##### Description:
+When the Node has been running, and the Daemon senses that it is no longer running, the Daemon will broadcast a
+`crash` message to all UIs connected to the Daemon. This doesn't necessarily mean the Node has experienced
+catastrophic failure: it may have been instructed by a UI to shut down.
+
+The `processId` field contains the platform-dependent process ID of the late Node.
+
+The `crashReason` field is rather clumsy, and there's a card (GH-323) in the backlog to improve it. At the moment,
+it's an object with one field, which may be named "ChildWaitFailure", "NoInformation", or "Unrecognized". If the
+field is named "ChildWaitFailure" or "Unrecognized", the value is a string with additional information. If the key
+is "NoInformation", the value is `null`.
+
 #### `financials`
 ##### Direction: Request
 ##### Correspondent: Node
@@ -273,6 +297,35 @@ The `payables` and `receivables` arrays are not in any particular order.
 
 For security reasons, the Node does not keep track of individual blockchain transactions, with the exception
 of payments that have not yet been confirmed. Only cumulative account balances are retained.
+
+#### `redirect`
+##### Direction: Unsolicited Response
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {
+    "port": <positive integer>,
+    "opcode": <string>,
+    "contextId": <optional positive integer>,
+    "payload": <string>,
+}
+```
+##### Description:
+This message will be sent by the Daemon to a UI in response to a message with an opcode the Daemon doesn't
+recognize, when the Node is running. The Daemon's assumption is that such a message must be meant for the Node.
+
+The `port` field contains the port number on which the Node is listening for UI connections.
+
+The `opcode` field contains the opcode of the unrecognized message.
+
+The `contextId` field, if present, contains the `contextId` of the unrecognized message. If not present, then
+the unrecognized message was not part of a conversation.
+
+The `payload` field is a string of JSON, containing the payload of the unrecognized message.
+
+The UI should disconnect from the Daemon, connect to the Node on `localhost` at the indicated port,
+reconstruct the original message from the `opcode`, `contextId`, and `payload` fields, and send it to the
+Node.
 
 #### `setup`
 ##### Direction: Request
@@ -401,4 +454,19 @@ starts the Node can take advantage of this to preemptively connect to the Node w
 a UI that starts after the Node is already running must go through the Redirect operation to find it. It requires
 less code to simply have your UI always use Redirects.
 
-[continue]
+#### `unmarshalError`
+##### Direction: Response
+##### Correspondent: Daemon or Node
+##### Layout:
+```
+"payload": {
+    "message": <string>,
+    "badData": <string>,
+}
+```
+##### Description:
+If the Daemon or the Node can't unmarshal a message from a UI, it will send this message in response.
+
+The `message` field describes what's wrong with the unmarshallable message.
+
+The `badData` field contains the unmarshallable message itself.
