@@ -423,6 +423,18 @@ The presence of errors or `Required` parameters will not prevent the Daemon from
 but it will prevent the Node from starting or running properly. The UI may choose not to offer the user the
 option to start the Node until the Daemon is happy, but that's optional.
 
+#### `shutdown`
+##### Direction: Request or Response
+##### Correspondent: Node
+##### Layout:
+```
+"payload": {}
+```
+##### Description:
+The `shutdown` message has an empty payload. As a Request, it instructs the Node to shut down. As a Response, it
+notifies the UI that the Node is almost shut down. (Obviously, the Node can't send a Response if it's _completely_
+shut down.)
+
 #### `start`
 ##### Direction: Request
 ##### Correspondent: Daemon
