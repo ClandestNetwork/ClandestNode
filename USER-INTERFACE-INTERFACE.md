@@ -67,15 +67,14 @@ or Node are formatted in JSON. A message packet is always a JSON object, never a
 
 #### Level 4
 
-The low-level JSON format of `MASQNode-UIv2` messages is very simple. It looks like this:
+The low-level JSON format of `MASQNode-UIv2` messages is reasonably simple. It looks like this:
 
 ```
 {
     "opcode": <string>,
     "contextId": <positive integer>,
-    "payload": {
-        <... payload ...>
-    }
+    "payload": <optional object>,
+    "error": <optional object>
 }
 ```
 
@@ -99,9 +98,27 @@ Neither the Daemon nor the Node will ever start a conversation, although they wi
 messages.
 
 The `payload` is the body of the message, with its structure being signaled by the contents of the `opcode` field.
+See the Message Reference section below for specifics about the `payload` field for each type of message.
+It will be present if and only if the `error` field is not present.
+
+The object in the `error` field, if present, tells about the error that was encountered in the process of trying to
+satisfy a request. It will be present if and only if the `payload` field is not present. It will have this structure:
+
+```
+{
+    code: <nonnegative integer>,
+    message: <string>
+}
+```
+
+The `code` field is a 64-bit integer. Its numeric value is not particularly important, but it denotes a kind of
+error. The UI can tell whether a particular operation is producing the same kind of error repeatedly, or different
+kinds of errors, by comparing one `code` to the next.
+
+The `message` field is a string with a hopefully-friendly description of the error.
 
 There is no provision in the `MASQNode-UIv2` protocol for UIs to communicate with one another. A UI may be able
-to deduce from broadcasts the existence of other UIs, but it can never be assured that there are no other UIs
+to deduce, from broadcasts, the existence of other UIs, but it can never be assured that there _aren't_ any other UIs
 connected to the Node or Daemon.
 
 #### Level 5
@@ -173,6 +190,9 @@ The following messages are listed in alphabetical order by opcode. If several me
 they'll be ordered under that opcode with the request first and the response later. The `opcode` and `contextId`
 fields are not included in the message layouts, but they must be provided by the UI and will be specified
 by the Daemon or Node.
+
+The various errors that can result from each request are not specifically mentioned unless they indicate a
+condition the UI can correct.
 
 #### `financials`
 ##### Direction: Request
@@ -345,5 +365,40 @@ Sometimes, the values in the Setup space may be incomplete, inconsistent, or obv
 happens, the `errors` array will be populated with error messages about the problem parameters. It's an array
 of two-element arrays; each two-element array will have the name of the offending parameter first, and an
 appropriate error message second. If there are no detectable errors, the `errors` array will be empty.
+
+The presence of errors or `Required` parameters will not prevent the Daemon from attempting to start the Node,
+but it will prevent the Node from starting or running properly. The UI may choose not to offer the user the
+option to start the Node until the Daemon is happy, but that's optional.
+
+#### `start`
+##### Direction: Request
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {}
+```
+##### Description:
+The `start` message has an empty payload. It causes the Daemon to try to start the Node with whatever configuration
+information is presently in its Setup space.
+
+#### `start`
+##### Direction: Response
+##### Correspondent: Daemon
+##### Layout:
+```
+"payload": {
+    "newProcessId": <integer>,
+    "redirectUiPort": <integer greater than 1024>,
+}
+```
+##### Description:
+If a `start` attempt is successful, this response will arrive.
+
+The `newProcessId` field is the system-dependent process ID of the newly-running Node.
+
+The `redirectUiPort` field is the WebSockets port on which the UI can now connect to the Node. The UI that actually
+starts the Node can take advantage of this to preemptively connect to the Node without processing a Redirect; but
+a UI that starts after the Node is already running must go through the Redirect operation to find it. It requires
+less code to simply have your UI always use Redirects.
 
 [continue]
