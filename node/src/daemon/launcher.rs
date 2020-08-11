@@ -67,6 +67,7 @@ impl SpawnWrapper for SpawnWrapperReal {
         match Command::new(exe_path)
             .args(params)
             .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
             .spawn()
         {
             Ok(child) => Ok(Box::new(ChildWrapperReal::new(child))),
@@ -102,9 +103,16 @@ impl Execer for ExecerReal {
                 let process_id = child.id();
                 thread::spawn(move || match child.wait_with_output() {
                     Ok(output) => {
-                        let stderr = match output.stderr.len() {
-                            0 => None,
-                            _ => Some(String::from_utf8_lossy(&output.stderr).to_string()),
+                        let stderr = match output.stdout.len() {
+                            0 => {
+eprintln! ("------ Shutdown with empty stderr");
+                                None
+                            },
+                            _ => {
+                                let stderr = String::from_utf8_lossy(&output.stdout).to_string();
+eprintln! ("------ Begin crash report\n{}\n------ End crash report", stderr);
+                                Some(stderr)
+                            },
                         };
                         crashed_recipient
                             .try_send(CrashNotification {
@@ -115,6 +123,7 @@ impl Execer for ExecerReal {
                             .expect("Daemon is dead");
                     }
                     Err(e) => {
+eprintln! ("Child wait failure: {:?}", e);
                         crashed_recipient
                             .try_send(CrashNotification {
                                 process_id,

@@ -440,6 +440,7 @@ impl WebSocketSupervisorReal {
                 .client_by_id
                 .get_mut(&client_id)
                 .unwrap_or_else(|| panic!("Tried to send to a nonexistent client {}", client_id));
+eprintln! ("------ Sending to client {} ------\n{}\n------", client_id, json);
             match client.send(OwnedMessage::Text(json.clone())) {
                 Ok(_) => match client.flush() {
                     Ok(_) => (),
