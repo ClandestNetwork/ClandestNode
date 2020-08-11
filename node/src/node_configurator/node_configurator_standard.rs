@@ -953,7 +953,7 @@ mod tests {
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
     };
     use masq_lib::shared_schema::{ConfiguratorError, ParamError};
-    use masq_lib::test_utils::environment_guard::EnvironmentGuard;
+    use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use rustc_hex::{FromHex, ToHex};
@@ -2173,7 +2173,7 @@ mod tests {
 
         let args = ArgsBuilder::new().param("--data-directory", home_directory.to_str().unwrap());
         let vcl_args: Vec<Box<dyn VclArg>> = vec![Box::new(NameValueVclArg::new(
-            &"--consuming-private-key", // this is equal to SUB_CONSUMING_PRIVATE_KEY
+            &"--consuming-private-key", // this is equal to MASQ_CONSUMING_PRIVATE_KEY
             &"not valid hex",
         ))];
 
@@ -2204,7 +2204,7 @@ mod tests {
             .param("--data-directory", home_directory.to_str().unwrap())
             .opt("--db-password");
         let vcl_args: Vec<Box<dyn VclArg>> = vec![Box::new(NameValueVclArg::new(
-            &"--consuming-private-key", // this is equal to SUB_CONSUMING_PRIVATE_KEY
+            &"--consuming-private-key", // this is equal to MASQ_CONSUMING_PRIVATE_KEY
             &"cc46befe8d169b89db447bd725fc2368b12542113555302598430cb5d5c74ea9",
         ))];
 
@@ -2366,6 +2366,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_multinode() {
+        let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
@@ -2402,6 +2403,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
+        let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let args_vec: Vec<String> = args.into();
@@ -2435,6 +2437,7 @@ mod tests {
 
     #[test]
     fn unprivileged_configuration_gets_parameter_gas_price() {
+        let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
             "unprivileged_configuration_gets_parameter_gas_price",
@@ -2456,6 +2459,7 @@ mod tests {
 
     #[test]
     fn unprivileged_configuration_sets_default_gas_price_when_not_provided() {
+        let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
             "unprivileged_configuration_sets_default_gas_price_when_not_provided",
@@ -2475,6 +2479,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_rejects_invalid_gas_price() {
+        let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
         let args_vec: Vec<String> = args.into();
