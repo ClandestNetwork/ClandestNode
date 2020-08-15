@@ -590,6 +590,7 @@ mod tests {
     use actix::System;
     use lazy_static::lazy_static;
     use masq_lib::shared_schema::ParamError;
+    use masq_lib::test_utils::environment_guard::ClapGuard;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
@@ -1091,6 +1092,7 @@ For more information try --help".to_string()
     fn init_as_privileged_stores_dns_servers_and_passes_them_to_actor_system_factory_for_proxy_client_in_init_as_unprivileged(
     ) {
         let _lock = INITIALIZATION.lock();
+        let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "bootstrapper",
             "init_as_privileged_stores_dns_servers_and_passes_them_to_actor_system_factory_for_proxy_client_in_init_as_unprivileged",

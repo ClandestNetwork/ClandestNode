@@ -13,6 +13,7 @@ extern "C" {
 }
 
 use crate::bootstrapper::RealUser;
+#[cfg(not(target_os = "windows"))]
 use nix::NixPath;
 use std::path::PathBuf;
 use std::process::Command;

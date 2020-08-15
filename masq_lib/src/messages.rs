@@ -4,6 +4,7 @@ use crate::messages::UiMessageError::{DeserializationError, PayloadError, Unexpe
 use crate::shared_schema::ConfiguratorError;
 use crate::ui_gateway::MessagePath::{Conversation, FireAndForget};
 use crate::ui_gateway::{MessageBody, MessagePath};
+use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::export::fmt::Error;
 use serde::export::Formatter;
@@ -278,7 +279,11 @@ impl UiSetupResponse {
     ) -> UiSetupResponse {
         UiSetupResponse {
             running,
-            values: values.into_iter().map(|(_, v)| v).collect(),
+            values: values
+                .into_iter()
+                .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
+                .map(|(_, v)| v)
+                .collect(),
             errors: errors
                 .param_errors
                 .into_iter()
@@ -303,7 +308,11 @@ impl UiSetupBroadcast {
     ) -> UiSetupBroadcast {
         UiSetupBroadcast {
             running,
-            values: values.into_iter().map(|(_, v)| v).collect(),
+            values: values
+                .into_iter()
+                .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
+                .map(|(_, v)| v)
+                .collect(),
             errors: errors
                 .param_errors
                 .into_iter()
@@ -364,6 +373,7 @@ pub enum CrashReason {
 pub struct UiNodeCrashedBroadcast {
     #[serde(rename = "processId")]
     pub process_id: u32,
+    #[serde(rename = "crashReason")]
     pub crash_reason: CrashReason,
 }
 fire_and_forget_message!(UiNodeCrashedBroadcast, "crashed");

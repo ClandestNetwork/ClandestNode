@@ -103,14 +103,12 @@ impl Execer for ExecerReal {
                 let process_id = child.id();
                 thread::spawn(move || match child.wait_with_output() {
                     Ok(output) => {
-                        let stderr = match output.stdout.len() {
+                        let stderr = match output.stderr.len() {
                             0 => {
-eprintln! ("------ Shutdown with empty stderr");
                                 None
                             },
                             _ => {
-                                let stderr = String::from_utf8_lossy(&output.stdout).to_string();
-eprintln! ("------ Begin crash report\n{}\n------ End crash report", stderr);
+                                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                                 Some(stderr)
                             },
                         };
@@ -123,7 +121,6 @@ eprintln! ("------ Begin crash report\n{}\n------ End crash report", stderr);
                             .expect("Daemon is dead");
                     }
                     Err(e) => {
-eprintln! ("Child wait failure: {:?}", e);
                         crashed_recipient
                             .try_send(CrashNotification {
                                 process_id,
@@ -573,6 +570,4 @@ mod tests {
 
         assert_eq! (result, format! ("Node started in process 1234, but was unresponsive and could not be killed. Manual intervention is required."))
     }
-
-
 }

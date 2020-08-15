@@ -354,6 +354,7 @@ mod tests {
     use crate::test_utils::*;
     use bip39::Seed;
     use masq_lib::multi_config::{CommandLineVcl, VirtualCommandLine};
+    use masq_lib::test_utils::environment_guard::ClapGuard;
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use regex::Regex;
@@ -450,6 +451,7 @@ mod tests {
 
     #[test]
     fn exercise_configure() {
+        let _clap_guard = ClapGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator_generate_wallet",
             "exercise_configure",
