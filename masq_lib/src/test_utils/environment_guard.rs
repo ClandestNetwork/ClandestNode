@@ -6,6 +6,23 @@ use std::sync::{Mutex, MutexGuard};
 
 lazy_static! {
     static ref ENVIRONMENT_GUARD_MUTEX: Mutex<()> = Mutex::new(());
+    static ref CLAP_GUARD_MUTEX: Mutex<()> = Mutex::new(());
+    static ref LOGFILE_NAME_GUARD_MUTEX: Mutex<()> = Mutex::new(());
+}
+
+pub struct ConcurrencyPreventer<'a> {
+    _lock: MutexGuard<'a, ()>,
+}
+
+impl<'a> ConcurrencyPreventer<'a> {
+    pub fn new(mutex: &'a Mutex<()>) -> ConcurrencyPreventer<'a> {
+        ConcurrencyPreventer {
+            _lock: match mutex.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            },
+        }
+    }
 }
 
 /// Create one of these at the beginning of a test scope that manipulates the environment, with a variable name beginning

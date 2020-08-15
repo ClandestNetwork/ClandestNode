@@ -174,6 +174,12 @@ macro_rules! conversation_message {
 ///////////////////////////////////////////////////////////////////////
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct UiCrashNow {
+    pub panic_message: String,
+}
+fire_and_forget_message!(UiCrashNow, "crashNow");
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupRequestValue {
     pub name: String,
     pub value: Option<String>,
@@ -199,8 +205,8 @@ impl UiSetupRequestValue {
 pub struct UiSetupRequest {
     pub values: Vec<UiSetupRequestValue>,
 }
-
 conversation_message!(UiSetupRequest, "setup");
+
 impl UiSetupRequest {
     pub fn new(pairs: Vec<(&str, Option<&str>)>) -> UiSetupRequest {
         UiSetupRequest {
