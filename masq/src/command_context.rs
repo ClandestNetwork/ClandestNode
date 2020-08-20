@@ -19,8 +19,19 @@ pub enum ContextError {
     Other(String),
 }
 
+impl From<ClientError> for ContextError {
+    fn from(client_error: ClientError) -> Self {
+        match client_error {
+            ClientError::FallbackFailed(e) => ContextError::ConnectionDropped(e),
+            ClientError::ConnectionDropped => ContextError::ConnectionDropped(String::new()),
+            e => panic!("No provision for error {:?}", e),
+        }
+    }
+}
+
 pub trait CommandContext {
     fn active_port(&self) -> u16;
+    fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
     fn transact(&mut self, message: MessageBody) -> Result<MessageBody, ContextError>;
     fn stdin(&mut self) -> &mut dyn Read;
     fn stdout(&mut self) -> &mut dyn Write;
@@ -40,15 +51,19 @@ impl CommandContext for CommandContextReal {
         self.connection.active_ui_port()
     }
 
+    fn send(&mut self, outgoing_message: MessageBody) -> Result<(), ContextError> {
+        let conversation = self.connection.start_conversation();
+        match conversation.send(outgoing_message) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     fn transact(&mut self, outgoing_message: MessageBody) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
         let incoming_message_result = conversation.transact(outgoing_message);
         let incoming_message = match incoming_message_result {
-            Err(ClientError::FallbackFailed(e)) => return Err(ContextError::ConnectionDropped(e)),
-            Err(ClientError::ConnectionDropped) => {
-                return Err(ContextError::ConnectionDropped(String::new()))
-            }
-            Err(e) => panic!("No provision for error {:?}", e),
+            Err(e) => return Err(e.into()),
             Ok(message) => match message.payload {
                 Err((code, msg)) => return Err(ContextError::PayloadError(code, msg)),
                 Ok(_) => message,
@@ -102,7 +117,7 @@ mod tests {
     };
     use crate::communications::broadcast_handler::StreamFactoryReal;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use masq_lib::messages::{FromMessageBody, UiSetupRequest};
+    use masq_lib::messages::{FromMessageBody, UiCrashRequest, UiSetupRequest};
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
@@ -122,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn works_when_everythings_fine() {
+    fn transact_works_when_everythings_fine() {
         let port = find_free_port();
         let stdin = ByteArrayReader::new(b"This is stdin.");
         let stdout = ByteArrayWriter::new();
@@ -173,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn works_when_server_sends_payload_error() {
+    fn transact_works_when_server_sends_payload_error() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_response(MessageBody {
             opcode: "setup".to_string(),
@@ -190,8 +205,8 @@ mod tests {
         stop_handle.stop();
     }
 
-    #[test] // TODO Segfaults on the Mac in Actions
-    fn works_when_server_sends_connection_error() {
+    #[test]
+    fn transact_works_when_server_sends_connection_error() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();
@@ -205,5 +220,48 @@ mod tests {
             Err(ConnectionDropped(_)) => (),
             x => panic!("Expected ConnectionDropped; got {:?} instead", x),
         }
+    }
+
+    #[test]
+    fn send_works_when_everythings_fine() {
+        let port = find_free_port();
+        let stdin = ByteArrayReader::new(b"This is stdin.");
+        let stdout = ByteArrayWriter::new();
+        let stdout_arc = stdout.inner_arc();
+        let stderr = ByteArrayWriter::new();
+        let stderr_arc = stderr.inner_arc();
+        let server = MockWebSocketsServer::new(port);
+        let stop_handle = server.start();
+        let mut subject =
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+        subject.stdin = Box::new(stdin);
+        subject.stdout = Box::new(stdout);
+        subject.stderr = Box::new(stderr);
+
+        let response = subject
+            .send(
+                UiCrashRequest {
+                    panic_message: "Message".to_string(),
+                }
+                .tmb(0),
+            )
+            .unwrap();
+
+        let mut input = String::new();
+        subject.stdin().read_to_string(&mut input).unwrap();
+        write!(subject.stdout(), "This is stdout.").unwrap();
+        write!(subject.stderr(), "This is stderr.").unwrap();
+
+        stop_handle.stop();
+        assert_eq!(response, ());
+        assert_eq!(input, "This is stdin.".to_string());
+        assert_eq!(
+            stdout_arc.lock().unwrap().get_string(),
+            "This is stdout.".to_string()
+        );
+        assert_eq!(
+            stderr_arc.lock().unwrap().get_string(),
+            "This is stderr.".to_string()
+        );
     }
 }

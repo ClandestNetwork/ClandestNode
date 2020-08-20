@@ -105,7 +105,7 @@ impl UiTrafficConverter {
     }
 
     pub fn new_unmarshal(json: &str) -> Result<MessageBody, UnmarshalError> {
-eprintln! ("------ Received ------\n{}\n------", json);
+        eprintln!("------ Received ------\n{}\n------", json);
         match serde_json::from_str(json) {
             Ok(Value::Object(map)) => {
                 let opcode = match Self::get_string(&map, "opcode") {

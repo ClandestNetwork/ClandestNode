@@ -35,7 +35,7 @@ impl UiConnection {
     pub fn send_with_context_id<T: ToMessageBody>(&mut self, payload: T, context_id: u64) {
         let outgoing_msg = payload.tmb(context_id);
         let outgoing_msg_json = UiTrafficConverter::new_marshal(outgoing_msg);
-eprintln! ("------ Sending ------\n{}\n------", outgoing_msg_json);
+        eprintln!("------ Sending ------\n{}\n------", outgoing_msg_json);
         self.send_string(outgoing_msg_json);
     }
 

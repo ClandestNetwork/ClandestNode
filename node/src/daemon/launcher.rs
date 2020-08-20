@@ -104,13 +104,11 @@ impl Execer for ExecerReal {
                 thread::spawn(move || match child.wait_with_output() {
                     Ok(output) => {
                         let stderr = match output.stderr.len() {
-                            0 => {
-                                None
-                            },
+                            0 => None,
                             _ => {
                                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                                 Some(stderr)
-                            },
+                            }
                         };
                         crashed_recipient
                             .try_send(CrashNotification {

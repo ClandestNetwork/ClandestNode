@@ -49,6 +49,8 @@ impl CommandFactoryMock {
 
 pub struct CommandContextMock {
     active_port_results: RefCell<Vec<u16>>,
+    send_params: Arc<Mutex<Vec<MessageBody>>>,
+    send_results: RefCell<Vec<Result<(), ContextError>>>,
     transact_params: Arc<Mutex<Vec<MessageBody>>>,
     transact_results: RefCell<Vec<Result<MessageBody, ContextError>>>,
     stdout: Box<dyn Write>,
@@ -60,6 +62,11 @@ pub struct CommandContextMock {
 impl CommandContext for CommandContextMock {
     fn active_port(&self) -> u16 {
         self.active_port_results.borrow_mut().remove(0)
+    }
+
+    fn send(&mut self, message: MessageBody) -> Result<(), ContextError> {
+        self.send_params.lock().unwrap().push(message);
+        self.send_results.borrow_mut().remove(0)
     }
 
     fn transact(&mut self, message: MessageBody) -> Result<MessageBody, ContextError> {
@@ -92,6 +99,8 @@ impl Default for CommandContextMock {
         let stderr_arc = stderr.inner_arc();
         Self {
             active_port_results: RefCell::new(vec![]),
+            send_params: Arc::new(Mutex::new(vec![])),
+            send_results: RefCell::new(vec![]),
             transact_params: Arc::new(Mutex::new(vec![])),
             transact_results: RefCell::new(vec![]),
             stdout: Box::new(stdout),
@@ -109,6 +118,16 @@ impl CommandContextMock {
 
     pub fn active_port_result(self, result: u16) -> Self {
         self.active_port_results.borrow_mut().push(result);
+        self
+    }
+
+    pub fn send_params(mut self, params: &Arc<Mutex<Vec<MessageBody>>>) -> Self {
+        self.send_params = params.clone();
+        self
+    }
+
+    pub fn send_result(self, result: Result<(), ContextError>) -> Self {
+        self.send_results.borrow_mut().push(result);
         self
     }
 

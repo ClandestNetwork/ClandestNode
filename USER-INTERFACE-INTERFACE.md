@@ -195,6 +195,27 @@ The various errors that can result from each request are not specifically mentio
 condition the UI can correct.
 
 #### `crash`
+##### Direction: Request
+##### Correspondent: Node
+##### Layout:
+```
+"payload": {
+    "panicMessage": <string>
+}
+```
+##### Description:
+This is a message used only for testing. It will be unrecognized unless the Node that receives it has been
+started with the `--crash-point message` parameter. It's used to test the behavior of the Node during a crash
+and the reactions of the software around it to that crash.
+
+It makes the Node panic and crash at a specified time that can be chosen by the tester. The normal rule for the
+Node is that it's not allowed to crash because of anything it receives over the network from the outside; this
+message is an exception to that rule, which is why it must be enabled by a special parameter.
+
+The `panicMessage` field in the payload is the message that will be passed to the `panic!()` macro by the Node
+immediately upon receiving the message.
+
+#### `crash`
 ##### Direction: Broadcast
 ##### Correspondent: Daemon
 ##### Layout:

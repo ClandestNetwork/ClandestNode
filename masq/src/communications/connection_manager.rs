@@ -256,8 +256,9 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-        match msg_result_result.expect ("Received message from beyond the grave") {
-            OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
+        match msg_result_result {
+            Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
+            Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
                 MessagePath::Conversation(context_id) => {
                     let conversation_result = inner.conversations.get(&context_id);
                     if conversation_result.is_some() {
@@ -274,7 +275,7 @@ impl ConnectionManagerThread {
                 },
                 MessagePath::FireAndForget => panic!("NodeConversation should have prevented sending a FireAndForget message with transact()"),
             },
-            OutgoingMessageType::FireAndForgetMessage(message_body, context_id) => match message_body.path {
+            Ok(OutgoingMessageType::FireAndForgetMessage(message_body, context_id)) => match message_body.path {
                 MessagePath::FireAndForget => if let Some (conversation_tx) = inner.conversations.get (&context_id) {
                     match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
                         Ok (_) => {let _ = conversation_tx.send(Err(NodeConversationTermination::FiredAndForgotten));},
@@ -283,7 +284,7 @@ impl ConnectionManagerThread {
                 }
                 MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
             },
-            OutgoingMessageType::SignOff(context_id) => {
+            Ok(OutgoingMessageType::SignOff(context_id)) => {
                 let _ = inner.conversations.remove (&context_id);
                 let _ = inner.conversations_waiting.remove (&context_id);
             },

@@ -137,8 +137,6 @@ impl Handler<NodeFromUiMessage> for Daemon {
         debug!(&self.logger, "Debug message");
         trace!(&self.logger, "Trace message");
 
-
-
         debug!(
             &self.logger,
             "Handing NodeFromUiMessage from client {}: {}", msg.client_id, msg.body.opcode

@@ -2,7 +2,7 @@
 
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::CommandError::{
-    ConnectionDropped, Other, Payload, Transmission,
+    ConnectionProblem, Other, Payload, Transmission,
 };
 use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, SubCommand};
@@ -35,7 +35,7 @@ impl Command for ShutdownCommand {
         let output: Result<UiShutdownResponse, CommandError> = transaction(input, context);
         match output {
             Ok(_) => (),
-            Err(ConnectionDropped(_)) => {
+            Err(ConnectionProblem(_)) => {
                 writeln!(
                     context.stdout(),
                     "MASQNode was instructed to shut down and has broken its connection"

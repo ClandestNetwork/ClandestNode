@@ -175,10 +175,11 @@ macro_rules! conversation_message {
 ///////////////////////////////////////////////////////////////////////
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct UiCrashNow {
+pub struct UiCrashRequest {
+    #[serde(rename = "panicMessage")]
     pub panic_message: String,
 }
-fire_and_forget_message!(UiCrashNow, "crashNow");
+fire_and_forget_message!(UiCrashRequest, "crash");
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupRequestValue {
