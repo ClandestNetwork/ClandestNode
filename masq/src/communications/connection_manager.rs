@@ -23,7 +23,7 @@ use websocket::OwnedMessage;
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
     ConversationMessage(MessageBody),
-    FireAndForgetMessage(MessageBody, u64),
+    FireAndForgetMessage(MessageBody),
     SignOff(u64),
 }
 
@@ -275,12 +275,10 @@ impl ConnectionManagerThread {
                 },
                 MessagePath::FireAndForget => panic!("NodeConversation should have prevented sending a FireAndForget message with transact()"),
             },
-            Ok(OutgoingMessageType::FireAndForgetMessage(message_body, context_id)) => match message_body.path {
-                MessagePath::FireAndForget => if let Some (conversation_tx) = inner.conversations.get (&context_id) {
-                    match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
-                        Ok (_) => {let _ = conversation_tx.send(Err(NodeConversationTermination::FiredAndForgotten));},
-                        Err (_) => inner = Self::fallback(inner),
-                    }
+            Ok(OutgoingMessageType::FireAndForgetMessage(message_body)) => match message_body.path {
+                MessagePath::FireAndForget => match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
+                    Ok (_) => (),
+                    Err (_) => inner = Self::fallback(inner),
                 }
                 MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
             },
@@ -1049,39 +1047,29 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let stop_handle = server.start();
         let (_, talker_half) = make_client(port).split().unwrap();
-        let (demand_tx, demand_rx) = unbounded();
         let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
-        let (conversation_return_tx, conversation_return_rx) = unbounded();
         let (_listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         let (_redirect_order_tx, redirect_order_rx) = unbounded();
         let mut inner = make_inner();
         inner.next_context_id = 1;
-        inner.conversation_return_tx = conversation_return_tx;
         inner.conversations_to_manager_tx = conversations_to_manager_tx;
         inner.conversations_to_manager_rx = conversations_to_manager_rx;
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
-        inner.demand_rx = demand_rx;
         inner.redirect_order_rx = redirect_order_rx;
-        demand_tx.send(Demand::Conversation).unwrap();
-        inner = ConnectionManagerThread::thread_loop_guts(inner);
-        let conversation = conversation_return_rx.try_recv().unwrap();
         let outgoing_message = UiUnmarshalError {
             message: "".to_string(),
             bad_data: "".to_string(),
         }
         .tmb(0);
 
-        let inner = ConnectionManagerThread::handle_outgoing_message_body(
+        let _ = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
             Ok(OutgoingMessageType::FireAndForgetMessage(
                 outgoing_message.clone(),
-                conversation.context_id(),
             )),
         );
 
-        assert_eq!(inner.conversations.len(), 1);
-        assert_eq!(inner.conversations_waiting.is_empty(), true);
         let mut outgoing_messages = stop_handle.stop();
         assert_eq!(
             UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()),
@@ -1197,7 +1185,6 @@ mod tests {
                     bad_data: String::new(),
                 }
                 .tmb(0),
-                2,
             )),
         );
 
@@ -1212,31 +1199,6 @@ mod tests {
             Ok(Err(NodeConversationTermination::Fatal))
         ); // innocent bystander
         assert_eq!(inner.conversations_waiting.is_empty(), true);
-    }
-
-    #[test]
-    fn handles_outgoing_fire_and_forget_message_from_nonexistent_conversation() {
-        let conversations = vec![(1, unbounded().0), (2, unbounded().0)]
-            .into_iter()
-            .collect::<HashMap<u64, Sender<Result<MessageBody, NodeConversationTermination>>>>();
-        let mut inner = make_inner();
-        inner.conversations = conversations;
-        inner.conversations_waiting = vec_to_set(vec![1]);
-
-        inner = ConnectionManagerThread::handle_outgoing_message_body(
-            inner,
-            Ok(OutgoingMessageType::FireAndForgetMessage(
-                UiUnmarshalError {
-                    message: String::new(),
-                    bad_data: String::new(),
-                }
-                .tmb(0),
-                42,
-            )),
-        );
-
-        assert_eq!(inner.conversations.len(), 2);
-        assert_eq!(inner.conversations_waiting.len(), 1);
     }
 
     #[test]
@@ -1263,7 +1225,7 @@ mod tests {
             }
             .tmb(0),
         );
-        assert_eq!(result, Err(ClientError::ConnectionDropped));
+        assert_eq!(result, Ok(()));
     }
 
     fn make_inner() -> CmsInner {

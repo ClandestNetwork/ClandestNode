@@ -21,7 +21,6 @@ pub enum NodeConversationTermination {
     Graceful,
     Resend,
     Fatal,
-    FiredAndForgotten,
 }
 
 pub struct NodeConversation {
@@ -63,7 +62,6 @@ impl NodeConversation {
             .conversations_to_manager_tx
             .send(OutgoingMessageType::FireAndForgetMessage(
                 outgoing_msg.clone(),
-                self.context_id(),
             )) {
             Ok(_) => Ok(()),
             Err(e) => panic!("ConnectionManager is dead: {:?}", e),
@@ -90,9 +88,6 @@ impl NodeConversation {
                     Ok(Err(NodeConversationTermination::Resend)) => self.transact(outgoing_msg),
                     Ok(Err(NodeConversationTermination::Fatal)) => {
                         Err(ClientError::ConnectionDropped)
-                    }
-                    Ok(Err(NodeConversationTermination::FiredAndForgotten)) => {
-                        panic!("Conversation messages should never produce FiredAndForgotten error")
                     }
                     Err(_) => Err(ClientError::ConnectionDropped),
                 }
@@ -249,20 +244,17 @@ mod tests {
 
     #[test]
     fn send_handles_successful_transmission() {
-        let (subject, message_body_receive_tx, message_body_send_rx) = make_subject();
+        let (subject, _, message_body_send_rx) = make_subject();
         let message = UiUnmarshalError {
             message: "Message".to_string(),
             bad_data: "Data".to_string(),
         };
-        message_body_receive_tx
-            .send(Err(NodeConversationTermination::FiredAndForgotten))
-            .unwrap();
 
         subject.send(message.clone().tmb(0)).unwrap();
 
-        let (outgoing_message, context_id) = match message_body_send_rx.recv().unwrap() {
-            OutgoingMessageType::FireAndForgetMessage(message_body, context_id) => {
-                (message_body, context_id)
+        let outgoing_message = match message_body_send_rx.recv().unwrap() {
+            OutgoingMessageType::FireAndForgetMessage(message_body) => {
+                message_body
             }
             x => panic!("Expected FireAndForgetMessage, got {:?}", x),
         };
@@ -270,7 +262,6 @@ mod tests {
             UiUnmarshalError::fmb(outgoing_message).unwrap(),
             (message, 0)
         );
-        assert_eq!(context_id, subject.context_id());
     }
 
     #[test]
@@ -297,7 +288,7 @@ mod tests {
 
         let result = subject.send(message.clone().tmb(0));
 
-        assert_eq!(result, Err(ClientError::ConnectionDropped));
+        assert_eq!(result, Ok(()));
     }
 
     #[test]
@@ -312,9 +303,6 @@ mod tests {
             .unwrap();
         message_body_receive_tx
             .send(Err(NodeConversationTermination::Resend))
-            .unwrap();
-        message_body_receive_tx
-            .send(Err(NodeConversationTermination::FiredAndForgotten))
             .unwrap();
 
         let result = subject.send(message.clone().tmb(0));
@@ -335,6 +323,6 @@ mod tests {
 
         let result = subject.send(message.clone().tmb(0));
 
-        assert_eq!(result, Err(ClientError::ConnectionDropped));
+        assert_eq!(result, Ok(()));
     }
 }
