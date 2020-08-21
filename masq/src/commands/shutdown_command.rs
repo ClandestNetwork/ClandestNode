@@ -32,7 +32,7 @@ pub fn shutdown_subcommand() -> App<'static, 'static> {
 impl Command for ShutdownCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let input = UiShutdownRequest {};
-        let output: Result<UiShutdownResponse, CommandError> = transaction(input, context);
+        let output: Result<UiShutdownResponse, CommandError> = transaction(input, context, 1000);
         match output {
             Ok(_) => (),
             Err(ConnectionProblem(_)) => {
@@ -236,7 +236,7 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(*transact_params, vec![(UiShutdownRequest {}.tmb(0), 1000)]);
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has broken its connection\n"
@@ -264,7 +264,7 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(*transact_params, vec![(UiShutdownRequest {}.tmb(0), 1000)]);
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has broken its connection\n"
@@ -297,7 +297,7 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(*transact_params, vec![(UiShutdownRequest {}.tmb(0), 1000)]);
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has stopped answering\n"
@@ -331,7 +331,7 @@ mod tests {
 
         assert_eq!(result, Err(Other("Shutdown failed".to_string())));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(*transact_params, vec![(UiShutdownRequest {}.tmb(0), 1000)]);
         assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
         assert_eq!(
             stderr_arc.lock().unwrap().get_string(),

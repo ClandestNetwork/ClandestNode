@@ -266,7 +266,7 @@ mod tests {
             Err(Transmission("Other(\"not really an error\")".to_string()))
         );
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(1)]);
+        assert_eq!(*transact_params, vec![(UiShutdownRequest {}.tmb(1), 1000)]);
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MockCommand output".to_string()

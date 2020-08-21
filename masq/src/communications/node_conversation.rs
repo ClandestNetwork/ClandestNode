@@ -1,9 +1,10 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use crate::communications::connection_manager::OutgoingMessageType;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UnmarshalError;
+use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientError {
@@ -14,6 +15,7 @@ pub enum ClientError {
     PacketType(String),
     Deserialization(UnmarshalError),
     MessageType(String, MessagePath),
+    Timeout(u64),
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -58,6 +60,7 @@ impl NodeConversation {
         if let MessagePath::Conversation(_) = outgoing_msg.path {
             panic! ("Cannot use NodeConversation::send() to send message with MessagePath::Conversation(_). Use NodeCoversation::transact() instead.")
         }
+eprintln! ("node_conversation.send: send");
         match self
             .conversations_to_manager_tx
             .send(OutgoingMessageType::FireAndForgetMessage(
@@ -68,27 +71,31 @@ impl NodeConversation {
         }
     }
 
-    pub fn transact(&self, mut outgoing_msg: MessageBody) -> Result<MessageBody, ClientError> {
+    pub fn transact(&self, mut outgoing_msg: MessageBody, timeout_millis: u64) -> Result<MessageBody, ClientError> {
         if outgoing_msg.path == MessagePath::FireAndForget {
             panic! ("Cannot use NodeConversation::transact() to send message with MessagePath::FireAndForget. Use NodeCoversation::send() instead.")
         }
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
+eprintln!("node_conversation.transact: send");
         match self
             .conversations_to_manager_tx
             .send(OutgoingMessageType::ConversationMessage(
                 outgoing_msg.clone(),
             )) {
             Ok(_) => {
-                let recv_result = self.manager_to_conversation_rx.recv();
+eprintln! ("node_conversation.transact: recv beginning");
+                let recv_result = self.manager_to_conversation_rx.recv_timeout(Duration::from_millis(timeout_millis));
+eprintln! ("node_conversation.transact: recv complete");
                 match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => {
                         Err(ClientError::ConnectionDropped)
                     }
-                    Ok(Err(NodeConversationTermination::Resend)) => self.transact(outgoing_msg),
+                    Ok(Err(NodeConversationTermination::Resend)) => self.transact(outgoing_msg, timeout_millis),
                     Ok(Err(NodeConversationTermination::Fatal)) => {
                         Err(ClientError::ConnectionDropped)
                     }
+                    Err(RecvTimeoutError::Timeout) => Err(ClientError::Timeout(timeout_millis)),
                     Err(_) => Err(ClientError::ConnectionDropped),
                 }
             }
@@ -137,7 +144,7 @@ mod tests {
             .send(Ok(UiShutdownResponse {}.tmb(42)))
             .unwrap();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0)).unwrap();
+        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).unwrap();
 
         assert_eq!(result, UiShutdownResponse {}.tmb(42));
         let outgoing_message = message_body_send_rx.recv().unwrap();
@@ -158,7 +165,7 @@ mod tests {
             bad_data: "Data".to_string(),
         };
 
-        let _ = subject.transact(message.tmb(0));
+        let _ = subject.transact(message.tmb(0), 1000);
     }
 
     #[test]
@@ -171,7 +178,7 @@ mod tests {
             .send(Ok(UiShutdownResponse {}.tmb(42)))
             .unwrap();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0)).err().unwrap();
+        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).err().unwrap();
 
         assert_eq!(result, ClientError::ConnectionDropped);
     }
@@ -186,7 +193,7 @@ mod tests {
             .send(Ok(UiShutdownResponse {}.tmb(42)))
             .unwrap();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0)).unwrap();
+        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).unwrap();
 
         assert_eq!(result, UiShutdownResponse {}.tmb(42));
         let outgoing_message = message_body_send_rx.try_recv().unwrap();
@@ -209,7 +216,7 @@ mod tests {
             .send(Err(NodeConversationTermination::Fatal))
             .unwrap();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0));
+        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000);
 
         assert_eq!(result, Err(ClientError::ConnectionDropped));
         let outgoing_message = match message_body_send_rx.recv().unwrap() {
@@ -223,7 +230,7 @@ mod tests {
     fn transact_handles_send_error() {
         let (subject, _, _) = make_subject();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0)).err().unwrap();
+        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).err().unwrap();
 
         assert_eq!(result, ClientError::ConnectionDropped);
     }
@@ -235,11 +242,23 @@ mod tests {
         let subject = NodeConversation::new(42, message_body_send_tx, message_body_receive_rx);
 
         let result = subject
-            .transact(UiShutdownRequest {}.tmb(24))
+            .transact(UiShutdownRequest {}.tmb(24), 1000)
             .err()
             .unwrap();
 
         assert_eq!(result, ClientError::ConnectionDropped);
+    }
+
+    #[test]
+    fn transact_handles_timeout() {
+        let (subject, _message_body_receive_tx, _message_body_send_rx) = make_subject();
+
+        let result = subject
+            .transact(UiShutdownRequest {}.tmb(24), 100)
+            .err()
+            .unwrap();
+
+        assert_eq! (result, ClientError::Timeout(100));
     }
 
     #[test]

@@ -75,7 +75,7 @@ mod tests {
 
     impl Command for TestCommand {
         fn execute<'a>(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
-            match context.transact(UiShutdownRequest {}.tmb(1)) {
+            match context.transact(UiShutdownRequest {}.tmb(1), 1000) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(CommandError::Other(format!("{:?}", e))),
             }

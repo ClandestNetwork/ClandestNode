@@ -29,7 +29,7 @@ impl Command for SetupCommand {
         let out_message = UiSetupRequest {
             values: self.values.clone(),
         };
-        let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context);
+        let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context, 1000);
         match result {
             Ok(response) => {
                 Self::dump_setup(UiSetupInner::from(response), context.stdout());
@@ -186,14 +186,14 @@ mod tests {
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![UiSetupRequest {
+            vec![(UiSetupRequest {
                 values: vec![
                     UiSetupRequestValue::new("chain", "ropsten"),
                     UiSetupRequestValue::clear("log-level"),
                     UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                 ]
             }
-            .tmb(0)]
+            .tmb(0), 1000)]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                   VALUE                                                            STATUS\n\
@@ -240,7 +240,7 @@ neighborhood-mode      zero-hop                                                 
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![UiSetupRequest {
+            vec![(UiSetupRequest {
                 values: vec![
                     UiSetupRequestValue::new("chain", "ropsten"),
                     UiSetupRequestValue::new("clandestine-port", "8534"),
@@ -248,7 +248,7 @@ neighborhood-mode      zero-hop                                                 
                     UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                 ]
             }
-            .tmb(0)]
+            .tmb(0), 1000)]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                   VALUE                                                            STATUS\n\

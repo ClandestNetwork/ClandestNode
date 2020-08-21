@@ -32,7 +32,7 @@ impl From<ClientError> for ContextError {
 pub trait CommandContext {
     fn active_port(&self) -> u16;
     fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
-    fn transact(&mut self, message: MessageBody) -> Result<MessageBody, ContextError>;
+    fn transact(&mut self, message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError>;
     fn stdin(&mut self) -> &mut dyn Read;
     fn stdout(&mut self) -> &mut dyn Write;
     fn stderr(&mut self) -> &mut dyn Write;
@@ -53,15 +53,22 @@ impl CommandContext for CommandContextReal {
 
     fn send(&mut self, outgoing_message: MessageBody) -> Result<(), ContextError> {
         let conversation = self.connection.start_conversation();
-        match conversation.send(outgoing_message) {
+let opcode = outgoing_message.opcode.clone();
+eprintln! ("command_context.send for {} beginning", opcode);
+        let result = match conversation.send(outgoing_message) {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
-        }
+        };
+eprintln! ("command_context.send for {} complete", opcode);
+        result
     }
 
-    fn transact(&mut self, outgoing_message: MessageBody) -> Result<MessageBody, ContextError> {
+    fn transact(&mut self, outgoing_message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
-        let incoming_message_result = conversation.transact(outgoing_message);
+let opcode = outgoing_message.opcode.clone();
+eprintln! ("command_context.transact for {} beginning", opcode);
+        let incoming_message_result = conversation.transact(outgoing_message, timeout_millis);
+eprintln! ("command_context.transact for {} complete", opcode);
         let incoming_message = match incoming_message_result {
             Err(e) => return Err(e.into()),
             Ok(message) => match message.payload {
@@ -152,7 +159,7 @@ mod tests {
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
 
-        let response = subject.transact(UiShutdownRequest {}.tmb(1)).unwrap();
+        let response = subject.transact(UiShutdownRequest {}.tmb(1), 1000).unwrap();
         let mut input = String::new();
         subject.stdin().read_to_string(&mut input).unwrap();
         write!(subject.stdout(), "This is stdout.").unwrap();
@@ -199,7 +206,7 @@ mod tests {
         let mut subject =
             CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
-        let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
+        let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1), 1000);
 
         assert_eq!(response, Err(PayloadError(101, "booga".to_string())));
         stop_handle.stop();
@@ -213,7 +220,7 @@ mod tests {
         let mut subject =
             CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
-        let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1));
+        let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1), 1000);
 
         stop_handle.stop();
         match response {

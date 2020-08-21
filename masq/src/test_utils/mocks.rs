@@ -51,7 +51,7 @@ pub struct CommandContextMock {
     active_port_results: RefCell<Vec<u16>>,
     send_params: Arc<Mutex<Vec<MessageBody>>>,
     send_results: RefCell<Vec<Result<(), ContextError>>>,
-    transact_params: Arc<Mutex<Vec<MessageBody>>>,
+    transact_params: Arc<Mutex<Vec<(MessageBody, u64)>>>,
     transact_results: RefCell<Vec<Result<MessageBody, ContextError>>>,
     stdout: Box<dyn Write>,
     stdout_arc: Arc<Mutex<ByteArrayWriterInner>>,
@@ -69,8 +69,8 @@ impl CommandContext for CommandContextMock {
         self.send_results.borrow_mut().remove(0)
     }
 
-    fn transact(&mut self, message: MessageBody) -> Result<MessageBody, ContextError> {
-        self.transact_params.lock().unwrap().push(message);
+    fn transact(&mut self, message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError> {
+        self.transact_params.lock().unwrap().push((message, timeout_millis));
         self.transact_results.borrow_mut().remove(0)
     }
 
@@ -131,7 +131,7 @@ impl CommandContextMock {
         self
     }
 
-    pub fn transact_params(mut self, params: &Arc<Mutex<Vec<MessageBody>>>) -> Self {
+    pub fn transact_params(mut self, params: &Arc<Mutex<Vec<(MessageBody, u64)>>>) -> Self {
         self.transact_params = params.clone();
         self
     }
@@ -237,7 +237,7 @@ impl Command for MockCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         write!(context.stdout(), "MockCommand output").unwrap();
         write!(context.stderr(), "MockCommand error").unwrap();
-        match context.transact(self.message.clone()) {
+        match context.transact(self.message.clone(), 1000) {
             Ok(_) => self.execute_results.borrow_mut().remove(0),
             Err(e) => Err(Transmission(format!("{:?}", e))),
         }

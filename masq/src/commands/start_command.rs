@@ -18,7 +18,7 @@ pub struct StartCommand {}
 impl Command for StartCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let out_message = UiStartOrder {};
-        let result: Result<UiStartResponse, CommandError> = transaction(out_message, context);
+        let result: Result<UiStartResponse, CommandError> = transaction(out_message, context, 1000);
         match result {
             Ok(response) => {
                 writeln!(
@@ -70,7 +70,7 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiStartOrder {}.tmb(0)]);
+        assert_eq!(*transact_params, vec![(UiStartOrder {}.tmb(0), 1000)]);
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode successfully started as process 1234, listening for UIs on port 4321\n"

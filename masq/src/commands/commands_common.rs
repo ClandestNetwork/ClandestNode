@@ -32,12 +32,12 @@ where
     }
 }
 
-pub fn transaction<I, O>(input: I, context: &mut dyn CommandContext) -> Result<O, CommandError>
+pub fn transaction<I, O>(input: I, context: &mut dyn CommandContext, timeout_millis: u64) -> Result<O, CommandError>
 where
     I: ToMessageBody,
     O: FromMessageBody,
 {
-    let message: MessageBody = match context.transact(input.tmb(0)) {
+    let message: MessageBody = match context.transact(input.tmb(0), timeout_millis) {
         Ok(ntum) => ntum,
         Err(e) => return Err(e.into()),
     };
@@ -86,7 +86,7 @@ mod tests {
             .transact_result(Err(ContextError::ConnectionDropped("booga".to_string())));
 
         let result: Result<UiStartResponse, CommandError> =
-            transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context, 1000);
 
         assert_eq!(result, Err(ConnectionProblem("booga".to_string())));
     }
@@ -97,7 +97,7 @@ mod tests {
             .transact_result(Err(ContextError::PayloadError(10, "booga".to_string())));
 
         let result: Result<UiStartResponse, CommandError> =
-            transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context, 1000);
 
         assert_eq!(result, Err(Payload(10, "booga".to_string())));
     }
@@ -110,7 +110,7 @@ mod tests {
         let stderr_arc = context.stderr_arc();
 
         let result: Result<UiStartResponse, CommandError> =
-            transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context, 1000);
 
         assert_eq!(result, Err(Transmission("booga".to_string())));
         assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
@@ -128,7 +128,7 @@ mod tests {
         let stderr_arc = context.stderr_arc();
 
         let result: Result<UiStartResponse, CommandError> =
-            transaction(UiStartOrder {}, &mut context);
+            transaction(UiStartOrder {}, &mut context, 1000);
 
         assert_eq!(
             result,
