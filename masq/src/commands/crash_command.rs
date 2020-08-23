@@ -2,23 +2,46 @@
 
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::{send, Command, CommandError};
-use clap::{App, SubCommand};
+use clap::{App, SubCommand, Arg};
 use masq_lib::messages::UiCrashRequest;
 use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct CrashCommand {
+    actor: String,
     panic_message: String,
 }
 
 pub fn crash_subcommand() -> App<'static, 'static> {
     SubCommand::with_name("crash")
-        .about("Causes the Node to crash with a specified message. Only valid if the Node has been started with --crash-point message")
+        .about("Causes an element of the Node to crash with a specified message. Only valid if the Node has been started with '--crash-point message'")
+        .arg(Arg::with_name ("actor")
+            .help ("Name of actor inside the Node that should be made to crash")
+            .index (1)
+            .possible_values(&[
+                "BlockchainBridge",
+                "Dispatcher",
+                "Accountant",
+                "Hopper",
+                "Neighborhood",
+                "ProxyClient",
+                "ProxyServer",
+                "UiGateway",
+                "StreamHandlerPool",
+            ])
+            .case_insensitive(true)
+            .default_value("UiGateway"))
+        .arg(Arg::with_name ("message")
+            .help ("Panic message that should be produced by the crash")
+            .index (2)
+            .default_value("Intentional crash")
+        )
 }
 
 impl Command for CrashCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let input = UiCrashRequest {
+            actor: self.actor.clone(),
             panic_message: self.panic_message.clone(),
         };
         let result = send(input, context);
@@ -30,10 +53,15 @@ impl Command for CrashCommand {
 }
 
 impl CrashCommand {
-    pub fn new(panic_message: &str) -> Self {
-        Self {
-            panic_message: panic_message.to_string(),
-        }
+    pub fn new(pieces: &[String]) -> Result<Self, String> {
+        let matches = match crash_subcommand().get_matches_from_safe(pieces) {
+            Ok(matches) => matches,
+            Err(e) => return Err(format!("{}", e)),
+        };
+        Ok (Self {
+            actor: matches.value_of("actor").expect("actor parameter is not properly defaulted").to_uppercase().to_string(),
+            panic_message: matches.value_of("message").expect("message parameter is not properly defaulted").to_string(),
+        })
     }
 }
 
@@ -51,7 +79,7 @@ mod tests {
         let factory = CommandFactoryReal::new();
         let mut context = CommandContextMock::new().send_result(Ok(()));
         let subject = factory
-            .make(vec!["crash".to_string(), "panic message".to_string()])
+            .make(vec!["crash".to_string(), "BlockchainBridge".to_string(), "panic message".to_string()])
             .unwrap();
 
         let result = subject.execute(&mut context);
@@ -69,7 +97,7 @@ mod tests {
         let stderr_arc = context.stderr_arc();
         let factory = CommandFactoryReal::new();
         let subject = factory
-            .make(vec!["crash".to_string(), "These are the times".to_string()])
+            .make(vec!["crash".to_string(), "neighborHooD".to_string(), "These are the times".to_string()])
             .unwrap();
 
         let result = subject.execute(&mut context);
@@ -81,6 +109,7 @@ mod tests {
         assert_eq!(
             *send_params,
             vec![UiCrashRequest {
+                actor: "NEIGHBORHOOD".to_string(),
                 panic_message: "These are the times".to_string()
             }
             .tmb(0)]
@@ -88,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn crash_command_without_a_message() {
+    fn crash_command_without_actor_or_message() {
         let send_params_arc = Arc::new(Mutex::new(vec![]));
         let mut context = CommandContextMock::new()
             .send_params(&send_params_arc)
@@ -107,6 +136,7 @@ mod tests {
         assert_eq!(
             *send_params,
             vec![UiCrashRequest {
+                actor: "UIGATEWAY".to_string(),
                 panic_message: "Intentional crash".to_string()
             }
             .tmb(0)]
@@ -117,7 +147,11 @@ mod tests {
     fn crash_command_handles_send_failure() {
         let mut context = CommandContextMock::new()
             .send_result(Err(ContextError::ConnectionDropped("blah".to_string())));
-        let subject = CrashCommand::new("message");
+        let subject = CrashCommand::new(&[
+            "crash".to_string(),
+            "ProxyClient".to_string(),
+            "message".to_string(),
+        ]).unwrap();
 
         let result = subject.execute(&mut context);
 

@@ -28,7 +28,7 @@ use crate::sub_lib::neighborhood::RemoveNeighborMessage;
 use crate::sub_lib::neighborhood::RouteQueryMessage;
 use crate::sub_lib::neighborhood::RouteQueryResponse;
 use crate::sub_lib::neighborhood::{DispatcherNodeQueryMessage, GossipFailure_0v1};
-use crate::sub_lib::peer_actors::PeerActors;
+use crate::sub_lib::peer_actors::{PeerActors};
 use crate::sub_lib::peer_actors::{BindMessage, StartMessage};
 use crate::sub_lib::proxy_client::{ClientResponsePayload_0v1, InboundServerData};
 use crate::sub_lib::proxy_client::{DnsResolveFailure_0v1, ProxyClientSubs};
@@ -420,8 +420,8 @@ pub fn make_ui_gateway_subs_from(addr: &Addr<Recorder>) -> UiGatewaySubs {
         bind: recipient!(addr, BindMessage),
         ui_message_sub: recipient!(addr, UiCarrierMessage),
         from_ui_message_sub: recipient!(addr, FromUiMessage),
-        new_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
-        new_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
+        node_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
+        node_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
     }
 }
 
@@ -432,6 +432,7 @@ pub fn make_blockchain_bridge_subs_from(addr: &Addr<Recorder>) -> BlockchainBrid
         retrieve_transactions: recipient!(addr, RetrieveTransactions),
         set_gas_price_sub: recipient!(addr, SetGasPriceMsg),
         set_consuming_db_password_sub: recipient!(addr, SetDbPasswordMsg),
+        ui_sub: recipient!(addr, NodeFromUiMessage),
     }
 }
 

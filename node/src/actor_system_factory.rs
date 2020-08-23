@@ -448,7 +448,7 @@ mod tests {
     use crate::sub_lib::neighborhood::{NeighborhoodDotGraphRequest, RouteQueryMessage};
     use crate::sub_lib::neighborhood::{NeighborhoodMode, RemoveNeighborMessage};
     use crate::sub_lib::node_addr::NodeAddr;
-    use crate::sub_lib::peer_actors::StartMessage;
+    use crate::sub_lib::peer_actors::{StartMessage};
     use crate::sub_lib::proxy_client::{
         ClientResponsePayload_0v1, DnsResolveFailure_0v1, InboundServerData,
     };
@@ -646,8 +646,8 @@ mod tests {
                 bind: recipient!(addr, BindMessage),
                 ui_message_sub: recipient!(addr, UiCarrierMessage),
                 from_ui_message_sub: recipient!(addr, FromUiMessage),
-                new_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
-                new_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
+                node_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
+                node_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
             }
         }
 
@@ -699,6 +699,7 @@ mod tests {
                 retrieve_transactions: addr.clone().recipient::<RetrieveTransactions>(),
                 set_gas_price_sub: addr.clone().recipient::<SetGasPriceMsg>(),
                 set_consuming_db_password_sub: addr.clone().recipient::<SetDbPasswordMsg>(),
+                ui_sub: addr.clone().recipient::<NodeFromUiMessage>(),
             }
         }
     }

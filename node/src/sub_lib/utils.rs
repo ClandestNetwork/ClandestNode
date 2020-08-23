@@ -8,6 +8,8 @@ use masq_lib::shared_schema::ConfiguratorError;
 use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
+use masq_lib::messages::UiCrashRequest;
+use crate::sub_lib::logger::Logger;
 
 static DEAD_STREAM_ERRORS: [ErrorKind; 5] = [
     ErrorKind::BrokenPipe,
@@ -109,6 +111,18 @@ pub fn make_new_multi_config<'a>(
     MultiConfig::try_new(schema, vcls, streams, running_test)
 }
 
+pub fn handle_ui_crash_request (msg: UiCrashRequest, logger: &Logger, crashable: bool, crash_key: &str) {
+    if msg.actor != crash_key {
+        return
+    }
+    if crashable {
+        panic! ("{}", msg.panic_message);
+    }
+    else {
+        info! (logger, "Rejected crash attempt: '{}'", msg.panic_message);
+    }
+}
+
 #[cfg(test)]
 pub fn make_new_test_multi_config<'a>(
     schema: &App<'a, 'a>,
@@ -120,6 +134,7 @@ pub fn make_new_test_multi_config<'a>(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::test_utils::logging::{init_test_logging, TestLogHandler};
 
     #[test]
     fn indicates_dead_stream_identifies_dead_stream_errors() {
@@ -174,5 +189,44 @@ pub mod tests {
     #[test]
     fn node_mailbox_capacity_is_unbound() {
         assert_eq!(NODE_MAILBOX_CAPACITY, 0)
+    }
+
+    #[test]
+    fn handle_ui_crash_message_doesnt_crash_if_not_crashable() {
+        init_test_logging();
+        let logger = Logger::new("Example");
+        let msg = UiCrashRequest {
+            actor: "CRASHKEY".to_string(),
+            panic_message: "Foiled again!".to_string()
+        };
+
+        handle_ui_crash_request(msg, &logger, false, "CRASHKEY");
+
+        TestLogHandler::new().exists_log_containing("INFO: Example: Rejected crash attempt: 'Foiled again!'");
+    }
+
+    #[test]
+    fn handle_ui_crash_message_doesnt_crash_if_no_actor_match() {
+        let logger = Logger::new("Example");
+        let msg = UiCrashRequest {
+            actor: "CRASHKEY".to_string(),
+            panic_message: "Foiled again!".to_string()
+        };
+
+        handle_ui_crash_request(msg, &logger, true, "mismatch");
+
+        // no panic; test passes
+    }
+
+    #[test]
+    #[should_panic (expected = "Foiled again!")]
+    fn handle_ui_crash_message_crashes_if_everythings_just_right() {
+        let logger = Logger::new("Example");
+        let msg = UiCrashRequest {
+            actor: "CRASHKEY".to_string(),
+            panic_message: "Foiled again!".to_string()
+        };
+
+        handle_ui_crash_request(msg, &logger, true, "CRASHKEY");
     }
 }

@@ -23,12 +23,9 @@ pub struct CommandFactoryReal {}
 impl CommandFactory for CommandFactoryReal {
     fn make(&self, pieces: Vec<String>) -> Result<Box<dyn Command>, CommandFactoryError> {
         let boxed_command: Box<dyn Command> = match pieces[0].as_str() {
-            "crash" => {
-                if pieces.len() > 1 {
-                    Box::new(CrashCommand::new(pieces[1].as_str()))
-                } else {
-                    Box::new(CrashCommand::new("Intentional crash"))
-                }
+            "crash" => match CrashCommand::new (&pieces[..]) {
+                Ok(command) => Box::new(command),
+                Err(msg) => return Err(CommandSyntax(msg)),
             }
             "setup" => match SetupCommand::new(pieces) {
                 Ok(command) => Box::new(command),

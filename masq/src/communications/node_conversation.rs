@@ -14,7 +14,6 @@ pub enum ClientError {
     FallbackFailed(String),
     PacketType(String),
     Deserialization(UnmarshalError),
-    MessageType(String, MessagePath),
     Timeout(u64),
 }
 

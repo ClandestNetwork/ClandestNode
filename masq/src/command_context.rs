@@ -9,6 +9,7 @@ use crate::communications::node_conversation::ClientError;
 use masq_lib::ui_gateway::MessageBody;
 use std::io;
 use std::io::{Read, Write};
+use masq_lib::messages::{UNMARSHAL_ERROR, TIMEOUT_ERROR};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -22,9 +23,12 @@ pub enum ContextError {
 impl From<ClientError> for ContextError {
     fn from(client_error: ClientError) -> Self {
         match client_error {
-            ClientError::FallbackFailed(e) => ContextError::ConnectionDropped(e),
             ClientError::ConnectionDropped => ContextError::ConnectionDropped(String::new()),
-            e => panic!("No provision for error {:?}", e),
+            ClientError::Deserialization(_) => ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent corrupted packet".to_string()),
+            ClientError::NoServer(port, _) => ContextError::ConnectionDropped(format!("No server listening on port {} where it's supposed to be", port)),
+            ClientError::FallbackFailed(e) => ContextError::ConnectionDropped(e),
+            ClientError::PacketType(e) => ContextError::PayloadError(UNMARSHAL_ERROR, format!("Node or Daemon sent unrecognized '{}' packet", e)),
+            ClientError::Timeout(ms) => ContextError::PayloadError(TIMEOUT_ERROR, format!("No response from Node or Daemon after {}ms", ms)),
         }
     }
 }
@@ -124,12 +128,34 @@ mod tests {
     };
     use crate::communications::broadcast_handler::StreamFactoryReal;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use masq_lib::messages::{FromMessageBody, UiCrashRequest, UiSetupRequest};
+    use masq_lib::messages::{FromMessageBody, UiCrashRequest, UiSetupRequest, TIMEOUT_ERROR, UNMARSHAL_ERROR};
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::utils::find_free_port;
+    use masq_lib::ui_traffic_converter::{UnmarshalError, TrafficConversionError};
+
+    #[test]
+    fn error_conversion_happy_path() {
+        let result: Vec<ContextError> = vec![
+            ClientError::FallbackFailed("fallback reason".to_string()),
+            ClientError::ConnectionDropped,
+            ClientError::NoServer(1234, "blah".to_string()),
+            ClientError::Timeout(1234),
+            ClientError::Deserialization(UnmarshalError::Critical(TrafficConversionError::MissingFieldError("blah".to_string()))),
+            ClientError::PacketType("blah".to_string()),
+        ].into_iter().map (|e| e.into()).collect();
+
+        assert_eq! (result, vec![
+            ContextError::ConnectionDropped("fallback reason".to_string()),
+            ContextError::ConnectionDropped("".to_string()),
+            ContextError::ConnectionDropped("No server listening on port 1234 where it's supposed to be".to_string()),
+            ContextError::PayloadError(TIMEOUT_ERROR, "No response from Node or Daemon after 1234ms".to_string()),
+            ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent corrupted packet".to_string()),
+            ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent unrecognized 'blah' packet".to_string()),
+        ]);
+    }
 
     #[test]
     fn sets_active_port_correctly_initially() {
@@ -248,6 +274,7 @@ mod tests {
         let response = subject
             .send(
                 UiCrashRequest {
+                    actor: "Dispatcher".to_string(),
                     panic_message: "Message".to_string(),
                 }
                 .tmb(0),

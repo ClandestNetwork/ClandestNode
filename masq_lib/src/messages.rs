@@ -20,6 +20,7 @@ pub const NODE_NOT_RUNNING_ERROR: u64 = 0x8000_0000_0000_0002;
 pub const NODE_ALREADY_RUNNING_ERROR: u64 = 0x8000_0000_0000_0003;
 pub const UNMARSHAL_ERROR: u64 = 0x8000_0000_0000_0004;
 pub const SETUP_ERROR: u64 = 0x8000_0000_0000_0005;
+pub const TIMEOUT_ERROR: u64 = 0x8000_0000_0000_0006;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiMessageError {
@@ -176,10 +177,20 @@ macro_rules! conversation_message {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiCrashRequest {
+    pub actor: String,
     #[serde(rename = "panicMessage")]
     pub panic_message: String,
 }
 fire_and_forget_message!(UiCrashRequest, "crash");
+
+impl UiCrashRequest {
+    pub fn new (actor: &str, panic_message: &str) -> Self {
+        Self {
+            actor: actor.to_string(),
+            panic_message: panic_message.to_string(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiSetupRequestValue {
