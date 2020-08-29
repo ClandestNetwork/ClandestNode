@@ -92,7 +92,7 @@ impl Main {
         let mut current_piece = String::new();
         input.chars().for_each(|c| {
             if c.is_whitespace() && !active_double && !active_single {
-                if current_piece.len() > 0 {
+                if !current_piece.is_empty() {
                     pieces.push(current_piece.clone());
                     current_piece.clear();
                 }

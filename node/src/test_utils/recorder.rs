@@ -28,7 +28,7 @@ use crate::sub_lib::neighborhood::RemoveNeighborMessage;
 use crate::sub_lib::neighborhood::RouteQueryMessage;
 use crate::sub_lib::neighborhood::RouteQueryResponse;
 use crate::sub_lib::neighborhood::{DispatcherNodeQueryMessage, GossipFailure_0v1};
-use crate::sub_lib::peer_actors::{PeerActors};
+use crate::sub_lib::peer_actors::PeerActors;
 use crate::sub_lib::peer_actors::{BindMessage, StartMessage};
 use crate::sub_lib::proxy_client::{ClientResponsePayload_0v1, InboundServerData};
 use crate::sub_lib::proxy_client::{DnsResolveFailure_0v1, ProxyClientSubs};
@@ -353,6 +353,7 @@ pub fn make_dispatcher_subs_from(addr: &Addr<Recorder>) -> DispatcherSubs {
         bind: recipient!(addr, BindMessage),
         from_dispatcher_client: recipient!(addr, TransmitDataMsg),
         stream_shutdown_sub: recipient!(addr, StreamShutdownMsg),
+        ui_sub: recipient!(addr, NodeFromUiMessage),
     }
 }
 

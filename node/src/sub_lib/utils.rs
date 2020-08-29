@@ -1,15 +1,15 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
+use crate::sub_lib::logger::Logger;
 use clap::App;
 use masq_lib::command::StdStreams;
+use masq_lib::messages::UiCrashRequest;
 use masq_lib::multi_config::{MultiConfig, VirtualCommandLine};
 use masq_lib::shared_schema::ConfiguratorError;
 #[cfg(test)]
 use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
-use masq_lib::messages::UiCrashRequest;
-use crate::sub_lib::logger::Logger;
 
 static DEAD_STREAM_ERRORS: [ErrorKind; 5] = [
     ErrorKind::BrokenPipe,
@@ -111,15 +111,19 @@ pub fn make_new_multi_config<'a>(
     MultiConfig::try_new(schema, vcls, streams, running_test)
 }
 
-pub fn handle_ui_crash_request (msg: UiCrashRequest, logger: &Logger, crashable: bool, crash_key: &str) {
+pub fn handle_ui_crash_request(
+    msg: UiCrashRequest,
+    logger: &Logger,
+    crashable: bool,
+    crash_key: &str,
+) {
     if msg.actor != crash_key {
-        return
+        return;
     }
     if crashable {
-        panic! ("{}", msg.panic_message);
-    }
-    else {
-        info! (logger, "Rejected crash attempt: '{}'", msg.panic_message);
+        panic!("{}", msg.panic_message);
+    } else {
+        info!(logger, "Rejected crash attempt: '{}'", msg.panic_message);
     }
 }
 
@@ -197,12 +201,13 @@ pub mod tests {
         let logger = Logger::new("Example");
         let msg = UiCrashRequest {
             actor: "CRASHKEY".to_string(),
-            panic_message: "Foiled again!".to_string()
+            panic_message: "Foiled again!".to_string(),
         };
 
         handle_ui_crash_request(msg, &logger, false, "CRASHKEY");
 
-        TestLogHandler::new().exists_log_containing("INFO: Example: Rejected crash attempt: 'Foiled again!'");
+        TestLogHandler::new()
+            .exists_log_containing("INFO: Example: Rejected crash attempt: 'Foiled again!'");
     }
 
     #[test]
@@ -210,7 +215,7 @@ pub mod tests {
         let logger = Logger::new("Example");
         let msg = UiCrashRequest {
             actor: "CRASHKEY".to_string(),
-            panic_message: "Foiled again!".to_string()
+            panic_message: "Foiled again!".to_string(),
         };
 
         handle_ui_crash_request(msg, &logger, true, "mismatch");
@@ -219,12 +224,12 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic (expected = "Foiled again!")]
+    #[should_panic(expected = "Foiled again!")]
     fn handle_ui_crash_message_crashes_if_everythings_just_right() {
         let logger = Logger::new("Example");
         let msg = UiCrashRequest {
             actor: "CRASHKEY".to_string(),
-            panic_message: "Foiled again!".to_string()
+            panic_message: "Foiled again!".to_string(),
         };
 
         handle_ui_crash_request(msg, &logger, true, "CRASHKEY");

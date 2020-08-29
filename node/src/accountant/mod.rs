@@ -45,6 +45,7 @@ use receivable_dao::ReceivableDao;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+pub const CRASH_KEY: &str = "ACCOUNTANT";
 pub const DEFAULT_PAYABLE_SCAN_INTERVAL: u64 = 3600; // one hour
 pub const DEFAULT_PAYMENT_RECEIVED_SCAN_INTERVAL: u64 = 3600; // one hour
 

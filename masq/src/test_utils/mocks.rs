@@ -69,8 +69,15 @@ impl CommandContext for CommandContextMock {
         self.send_results.borrow_mut().remove(0)
     }
 
-    fn transact(&mut self, message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError> {
-        self.transact_params.lock().unwrap().push((message, timeout_millis));
+    fn transact(
+        &mut self,
+        message: MessageBody,
+        timeout_millis: u64,
+    ) -> Result<MessageBody, ContextError> {
+        self.transact_params
+            .lock()
+            .unwrap()
+            .push((message, timeout_millis));
         self.transact_results.borrow_mut().remove(0)
     }
 

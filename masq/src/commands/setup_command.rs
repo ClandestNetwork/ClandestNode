@@ -186,14 +186,17 @@ mod tests {
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![(UiSetupRequest {
-                values: vec![
-                    UiSetupRequestValue::new("chain", "ropsten"),
-                    UiSetupRequestValue::clear("log-level"),
-                    UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
-                ]
-            }
-            .tmb(0), 1000)]
+            vec![(
+                UiSetupRequest {
+                    values: vec![
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::clear("log-level"),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                    ]
+                }
+                .tmb(0),
+                1000
+            )]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                   VALUE                                                            STATUS\n\
@@ -240,15 +243,18 @@ neighborhood-mode      zero-hop                                                 
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![(UiSetupRequest {
-                values: vec![
-                    UiSetupRequestValue::new("chain", "ropsten"),
-                    UiSetupRequestValue::new("clandestine-port", "8534"),
-                    UiSetupRequestValue::clear("log-level"),
-                    UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
-                ]
-            }
-            .tmb(0), 1000)]
+            vec![(
+                UiSetupRequest {
+                    values: vec![
+                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("clandestine-port", "8534"),
+                        UiSetupRequestValue::clear("log-level"),
+                        UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
+                    ]
+                }
+                .tmb(0),
+                1000
+            )]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
 "NAME                   VALUE                                                            STATUS\n\

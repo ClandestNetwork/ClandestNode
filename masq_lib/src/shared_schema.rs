@@ -235,7 +235,6 @@ pub fn shared_app(head: App<'static, 'static>) -> App<'static, 'static> {
             .value_name("CRASH-POINT")
             .min_values(0)
             .max_values(1)
-            .default_value(&DEFAULT_CRASH_POINT_VALUE)
             .possible_values(&CrashPoint::variants())
             .case_insensitive(true)
             .hidden(true),

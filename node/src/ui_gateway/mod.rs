@@ -30,6 +30,8 @@ use actix::Handler;
 use actix::Recipient;
 use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 
+pub const CRASH_KEY: &str = "UIGATEWAY";
+
 // TODO: Once we switch all the way over to MASQNode-UIv2 protocol, this entire struct should
 // disappear.
 struct UiGatewayOutSubs {
@@ -109,6 +111,7 @@ impl Handler<BindMessage> for UiGateway {
             msg.peer_actors.accountant.ui_message_sub.clone(),
             msg.peer_actors.neighborhood.from_ui_message_sub.clone(),
             msg.peer_actors.blockchain_bridge.ui_sub.clone(),
+            msg.peer_actors.dispatcher.ui_sub.clone(),
         ];
         self.websocket_supervisor = match WebSocketSupervisorReal::new(
             self.port,

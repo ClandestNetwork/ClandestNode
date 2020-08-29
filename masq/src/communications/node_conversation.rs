@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use crate::communications::connection_manager::OutgoingMessageType;
-use crossbeam_channel::{Receiver, Sender, RecvTimeoutError};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UnmarshalError;
 use std::time::Duration;
@@ -59,38 +59,45 @@ impl NodeConversation {
         if let MessagePath::Conversation(_) = outgoing_msg.path {
             panic! ("Cannot use NodeConversation::send() to send message with MessagePath::Conversation(_). Use NodeCoversation::transact() instead.")
         }
-eprintln! ("node_conversation.send: send");
+        eprintln!("node_conversation.send: send");
         match self
             .conversations_to_manager_tx
-            .send(OutgoingMessageType::FireAndForgetMessage(
-                outgoing_msg.clone(),
-            )) {
+            .send(OutgoingMessageType::FireAndForgetMessage(outgoing_msg))
+        {
             Ok(_) => Ok(()),
             Err(e) => panic!("ConnectionManager is dead: {:?}", e),
         }
     }
 
-    pub fn transact(&self, mut outgoing_msg: MessageBody, timeout_millis: u64) -> Result<MessageBody, ClientError> {
+    pub fn transact(
+        &self,
+        mut outgoing_msg: MessageBody,
+        timeout_millis: u64,
+    ) -> Result<MessageBody, ClientError> {
         if outgoing_msg.path == MessagePath::FireAndForget {
             panic! ("Cannot use NodeConversation::transact() to send message with MessagePath::FireAndForget. Use NodeCoversation::send() instead.")
         }
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
-eprintln!("node_conversation.transact: send");
+        eprintln!("node_conversation.transact: send");
         match self
             .conversations_to_manager_tx
             .send(OutgoingMessageType::ConversationMessage(
                 outgoing_msg.clone(),
             )) {
             Ok(_) => {
-eprintln! ("node_conversation.transact: recv beginning");
-                let recv_result = self.manager_to_conversation_rx.recv_timeout(Duration::from_millis(timeout_millis));
-eprintln! ("node_conversation.transact: recv complete");
+                eprintln!("node_conversation.transact: recv beginning");
+                let recv_result = self
+                    .manager_to_conversation_rx
+                    .recv_timeout(Duration::from_millis(timeout_millis));
+                eprintln!("node_conversation.transact: recv complete");
                 match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => {
                         Err(ClientError::ConnectionDropped)
                     }
-                    Ok(Err(NodeConversationTermination::Resend)) => self.transact(outgoing_msg, timeout_millis),
+                    Ok(Err(NodeConversationTermination::Resend)) => {
+                        self.transact(outgoing_msg, timeout_millis)
+                    }
                     Ok(Err(NodeConversationTermination::Fatal)) => {
                         Err(ClientError::ConnectionDropped)
                     }
@@ -177,7 +184,10 @@ mod tests {
             .send(Ok(UiShutdownResponse {}.tmb(42)))
             .unwrap();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).err().unwrap();
+        let result = subject
+            .transact(UiShutdownRequest {}.tmb(0), 1000)
+            .err()
+            .unwrap();
 
         assert_eq!(result, ClientError::ConnectionDropped);
     }
@@ -229,7 +239,10 @@ mod tests {
     fn transact_handles_send_error() {
         let (subject, _, _) = make_subject();
 
-        let result = subject.transact(UiShutdownRequest {}.tmb(0), 1000).err().unwrap();
+        let result = subject
+            .transact(UiShutdownRequest {}.tmb(0), 1000)
+            .err()
+            .unwrap();
 
         assert_eq!(result, ClientError::ConnectionDropped);
     }
@@ -257,7 +270,7 @@ mod tests {
             .err()
             .unwrap();
 
-        assert_eq! (result, ClientError::Timeout(100));
+        assert_eq!(result, ClientError::Timeout(100));
     }
 
     #[test]
@@ -271,9 +284,7 @@ mod tests {
         subject.send(message.clone().tmb(0)).unwrap();
 
         let outgoing_message = match message_body_send_rx.recv().unwrap() {
-            OutgoingMessageType::FireAndForgetMessage(message_body) => {
-                message_body
-            }
+            OutgoingMessageType::FireAndForgetMessage(message_body) => message_body,
             x => panic!("Expected FireAndForgetMessage, got {:?}", x),
         };
         assert_eq!(

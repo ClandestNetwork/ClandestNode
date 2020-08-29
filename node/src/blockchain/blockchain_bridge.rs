@@ -11,20 +11,20 @@ use crate::sub_lib::blockchain_bridge::ReportAccountsPayable;
 use crate::sub_lib::blockchain_bridge::SetDbPasswordMsg;
 use crate::sub_lib::blockchain_bridge::{BlockchainBridgeSubs, SetGasPriceMsg};
 use crate::sub_lib::logger::Logger;
-use crate::sub_lib::peer_actors::{BindMessage};
+use crate::sub_lib::peer_actors::BindMessage;
 use crate::sub_lib::set_consuming_wallet_message::SetConsumingWalletMessage;
 use crate::sub_lib::ui_gateway::{UiCarrierMessage, UiMessage};
+use crate::sub_lib::utils::handle_ui_crash_request;
 use crate::sub_lib::wallet::Wallet;
 use actix::Context;
 use actix::Handler;
 use actix::Message;
 use actix::{Actor, MessageResult};
 use actix::{Addr, Recipient};
-use std::convert::TryFrom;
 use masq_lib::crash_point::CrashPoint;
+use masq_lib::messages::{FromMessageBody, UiCrashRequest};
 use masq_lib::ui_gateway::NodeFromUiMessage;
-use masq_lib::messages::{UiCrashRequest, FromMessageBody};
-use crate::sub_lib::utils::handle_ui_crash_request;
+use std::convert::TryFrom;
 
 pub const CRASH_KEY: &str = "BLOCKCHAINBRIDGE";
 
@@ -186,8 +186,8 @@ impl Handler<NodeFromUiMessage> for BlockchainBridge {
     type Result = ();
 
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
-        if let Ok((crash_request, _)) = UiCrashRequest::fmb (msg.body) {
-            handle_ui_crash_request (crash_request, &self.logger, self.crashable, CRASH_KEY)
+        if let Ok((crash_request, _)) = UiCrashRequest::fmb(msg.body) {
+            handle_ui_crash_request(crash_request, &self.logger, self.crashable, CRASH_KEY)
         }
     }
 }
@@ -309,6 +309,8 @@ mod tests {
     use ethsign::{Protected, SecretKey};
     use ethsign_crypto::Keccak256;
     use futures::future::Future;
+    use masq_lib::crash_point::CrashPoint;
+    use masq_lib::messages::ToMessageBody;
     use rustc_hex::FromHex;
     use std::cell::RefCell;
     use std::num::NonZeroU32;
@@ -316,8 +318,6 @@ mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime};
     use web3::types::{Address, H256, U256};
-    use masq_lib::crash_point::CrashPoint;
-    use masq_lib::messages::ToMessageBody;
 
     fn stub_bi() -> Box<dyn BlockchainInterface> {
         Box::new(BlockchainInterfaceMock::default())
@@ -1101,10 +1101,11 @@ mod tests {
         );
         let addr: Addr<BlockchainBridge> = subject.start();
 
-        addr.try_send (NodeFromUiMessage {
+        addr.try_send(NodeFromUiMessage {
             client_id: 0,
-            body: UiCrashRequest::new ("MISMATCH", "panic message").tmb(0)
-        }).unwrap();
+            body: UiCrashRequest::new("MISMATCH", "panic message").tmb(0),
+        })
+        .unwrap();
 
         System::current().stop();
         system.run();
@@ -1122,18 +1123,21 @@ mod tests {
         );
         let addr: Addr<BlockchainBridge> = subject.start();
 
-        addr.try_send (NodeFromUiMessage {
+        addr.try_send(NodeFromUiMessage {
             client_id: 0,
-            body: UiCrashRequest::new (CRASH_KEY, "panic message").tmb(0)
-        }).unwrap();
+            body: UiCrashRequest::new(CRASH_KEY, "panic message").tmb(0),
+        })
+        .unwrap();
 
         System::current().stop();
         system.run();
-        TestLogHandler::new().exists_log_containing("INFO: BlockchainBridge: Rejected crash attempt: 'panic message'");
+        TestLogHandler::new().exists_log_containing(
+            "INFO: BlockchainBridge: Rejected crash attempt: 'panic message'",
+        );
     }
 
     #[test]
-    #[should_panic (expected = "panic message")]
+    #[should_panic(expected = "panic message")]
     fn can_be_crashed() {
         let system = System::new("test");
         let mut config = BootstrapperConfig::new();
@@ -1145,10 +1149,11 @@ mod tests {
         );
         let addr: Addr<BlockchainBridge> = subject.start();
 
-        addr.try_send (NodeFromUiMessage {
+        addr.try_send(NodeFromUiMessage {
             client_id: 0,
-            body: UiCrashRequest::new (CRASH_KEY, "panic message").tmb(0)
-        }).unwrap();
+            body: UiCrashRequest::new(CRASH_KEY, "panic message").tmb(0),
+        })
+        .unwrap();
 
         System::current().stop();
         system.run();

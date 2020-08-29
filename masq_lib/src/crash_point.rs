@@ -3,7 +3,7 @@
 use clap::arg_enum;
 
 arg_enum! {
-    #[derive(Debug, PartialEq, Clone)]
+    #[derive(Debug, PartialEq, Clone, Copy)]
     pub enum CrashPoint {
         Message,
         Panic,
@@ -45,10 +45,10 @@ mod tests {
 
     #[test]
     fn into() {
-        assert_eq!(CrashPoint::from (NONE), CrashPoint::None);
-        assert_eq!(CrashPoint::from (PANIC), CrashPoint::Panic);
-        assert_eq!(CrashPoint::from (ERROR), CrashPoint::Error);
-        assert_eq!(CrashPoint::from (MESSAGE), CrashPoint::Message);
+        assert_eq!(CrashPoint::from(NONE), CrashPoint::None);
+        assert_eq!(CrashPoint::from(PANIC), CrashPoint::Panic);
+        assert_eq!(CrashPoint::from(ERROR), CrashPoint::Error);
+        assert_eq!(CrashPoint::from(MESSAGE), CrashPoint::Message);
     }
 
     #[test]

@@ -6,10 +6,10 @@ use crate::communications::broadcast_handler::{
 };
 use crate::communications::connection_manager::ConnectionManager;
 use crate::communications::node_conversation::ClientError;
+use masq_lib::messages::{TIMEOUT_ERROR, UNMARSHAL_ERROR};
 use masq_lib::ui_gateway::MessageBody;
 use std::io;
 use std::io::{Read, Write};
-use masq_lib::messages::{UNMARSHAL_ERROR, TIMEOUT_ERROR};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -24,11 +24,23 @@ impl From<ClientError> for ContextError {
     fn from(client_error: ClientError) -> Self {
         match client_error {
             ClientError::ConnectionDropped => ContextError::ConnectionDropped(String::new()),
-            ClientError::Deserialization(_) => ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent corrupted packet".to_string()),
-            ClientError::NoServer(port, _) => ContextError::ConnectionDropped(format!("No server listening on port {} where it's supposed to be", port)),
+            ClientError::Deserialization(_) => ContextError::PayloadError(
+                UNMARSHAL_ERROR,
+                "Node or Daemon sent corrupted packet".to_string(),
+            ),
+            ClientError::NoServer(port, _) => ContextError::ConnectionDropped(format!(
+                "No server listening on port {} where it's supposed to be",
+                port
+            )),
             ClientError::FallbackFailed(e) => ContextError::ConnectionDropped(e),
-            ClientError::PacketType(e) => ContextError::PayloadError(UNMARSHAL_ERROR, format!("Node or Daemon sent unrecognized '{}' packet", e)),
-            ClientError::Timeout(ms) => ContextError::PayloadError(TIMEOUT_ERROR, format!("No response from Node or Daemon after {}ms", ms)),
+            ClientError::PacketType(e) => ContextError::PayloadError(
+                UNMARSHAL_ERROR,
+                format!("Node or Daemon sent unrecognized '{}' packet", e),
+            ),
+            ClientError::Timeout(ms) => ContextError::PayloadError(
+                TIMEOUT_ERROR,
+                format!("No response from Node or Daemon after {}ms", ms),
+            ),
         }
     }
 }
@@ -36,7 +48,11 @@ impl From<ClientError> for ContextError {
 pub trait CommandContext {
     fn active_port(&self) -> u16;
     fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
-    fn transact(&mut self, message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError>;
+    fn transact(
+        &mut self,
+        message: MessageBody,
+        timeout_millis: u64,
+    ) -> Result<MessageBody, ContextError>;
     fn stdin(&mut self) -> &mut dyn Read;
     fn stdout(&mut self) -> &mut dyn Write;
     fn stderr(&mut self) -> &mut dyn Write;
@@ -57,22 +73,26 @@ impl CommandContext for CommandContextReal {
 
     fn send(&mut self, outgoing_message: MessageBody) -> Result<(), ContextError> {
         let conversation = self.connection.start_conversation();
-let opcode = outgoing_message.opcode.clone();
-eprintln! ("command_context.send for {} beginning", opcode);
+        let opcode = outgoing_message.opcode.clone();
+        eprintln!("command_context.send for {} beginning", opcode);
         let result = match conversation.send(outgoing_message) {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
         };
-eprintln! ("command_context.send for {} complete", opcode);
+        eprintln!("command_context.send for {} complete", opcode);
         result
     }
 
-    fn transact(&mut self, outgoing_message: MessageBody, timeout_millis: u64) -> Result<MessageBody, ContextError> {
+    fn transact(
+        &mut self,
+        outgoing_message: MessageBody,
+        timeout_millis: u64,
+    ) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
-let opcode = outgoing_message.opcode.clone();
-eprintln! ("command_context.transact for {} beginning", opcode);
+        let opcode = outgoing_message.opcode.clone();
+        eprintln!("command_context.transact for {} beginning", opcode);
         let incoming_message_result = conversation.transact(outgoing_message, timeout_millis);
-eprintln! ("command_context.transact for {} complete", opcode);
+        eprintln!("command_context.transact for {} complete", opcode);
         let incoming_message = match incoming_message_result {
             Err(e) => return Err(e.into()),
             Ok(message) => match message.payload {
@@ -128,13 +148,15 @@ mod tests {
     };
     use crate::communications::broadcast_handler::StreamFactoryReal;
     use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
-    use masq_lib::messages::{FromMessageBody, UiCrashRequest, UiSetupRequest, TIMEOUT_ERROR, UNMARSHAL_ERROR};
+    use masq_lib::messages::{
+        FromMessageBody, UiCrashRequest, UiSetupRequest, TIMEOUT_ERROR, UNMARSHAL_ERROR,
+    };
     use masq_lib::messages::{ToMessageBody, UiShutdownRequest, UiShutdownResponse};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayReader, ByteArrayWriter};
     use masq_lib::ui_gateway::MessageBody;
     use masq_lib::ui_gateway::MessagePath::Conversation;
+    use masq_lib::ui_traffic_converter::{TrafficConversionError, UnmarshalError};
     use masq_lib::utils::find_free_port;
-    use masq_lib::ui_traffic_converter::{UnmarshalError, TrafficConversionError};
 
     #[test]
     fn error_conversion_happy_path() {
@@ -143,18 +165,37 @@ mod tests {
             ClientError::ConnectionDropped,
             ClientError::NoServer(1234, "blah".to_string()),
             ClientError::Timeout(1234),
-            ClientError::Deserialization(UnmarshalError::Critical(TrafficConversionError::MissingFieldError("blah".to_string()))),
+            ClientError::Deserialization(UnmarshalError::Critical(
+                TrafficConversionError::MissingFieldError("blah".to_string()),
+            )),
             ClientError::PacketType("blah".to_string()),
-        ].into_iter().map (|e| e.into()).collect();
+        ]
+        .into_iter()
+        .map(|e| e.into())
+        .collect();
 
-        assert_eq! (result, vec![
-            ContextError::ConnectionDropped("fallback reason".to_string()),
-            ContextError::ConnectionDropped("".to_string()),
-            ContextError::ConnectionDropped("No server listening on port 1234 where it's supposed to be".to_string()),
-            ContextError::PayloadError(TIMEOUT_ERROR, "No response from Node or Daemon after 1234ms".to_string()),
-            ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent corrupted packet".to_string()),
-            ContextError::PayloadError(UNMARSHAL_ERROR, "Node or Daemon sent unrecognized 'blah' packet".to_string()),
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                ContextError::ConnectionDropped("fallback reason".to_string()),
+                ContextError::ConnectionDropped("".to_string()),
+                ContextError::ConnectionDropped(
+                    "No server listening on port 1234 where it's supposed to be".to_string()
+                ),
+                ContextError::PayloadError(
+                    TIMEOUT_ERROR,
+                    "No response from Node or Daemon after 1234ms".to_string()
+                ),
+                ContextError::PayloadError(
+                    UNMARSHAL_ERROR,
+                    "Node or Daemon sent corrupted packet".to_string()
+                ),
+                ContextError::PayloadError(
+                    UNMARSHAL_ERROR,
+                    "Node or Daemon sent unrecognized 'blah' packet".to_string()
+                ),
+            ]
+        );
     }
 
     #[test]

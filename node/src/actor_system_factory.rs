@@ -86,7 +86,7 @@ impl ActorSystemFactoryReal {
     ) {
         let db_initializer = DbInitializerReal::new();
         // make all the actors
-        let (dispatcher_subs, pool_bind_sub) = actor_factory.make_and_start_dispatcher();
+        let (dispatcher_subs, pool_bind_sub) = actor_factory.make_and_start_dispatcher(&config);
         let proxy_server_subs = actor_factory.make_and_start_proxy_server(
             main_cryptde,
             alias_cryptde,
@@ -182,7 +182,10 @@ impl ActorSystemFactoryReal {
 }
 
 pub trait ActorFactory: Send {
-    fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>);
+    fn make_and_start_dispatcher(
+        &self,
+        config: &BootstrapperConfig,
+    ) -> (DispatcherSubs, Recipient<PoolBindMessage>);
     fn make_and_start_proxy_server(
         &self,
         main_cryptde: &'static dyn CryptDE,
@@ -219,8 +222,12 @@ pub trait ActorFactory: Send {
 pub struct ActorFactoryReal {}
 
 impl ActorFactory for ActorFactoryReal {
-    fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
-        let addr: Addr<Dispatcher> = Arbiter::start(|_| Dispatcher::new());
+    fn make_and_start_dispatcher(
+        &self,
+        config: &BootstrapperConfig,
+    ) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
+        let crash_point = config.crash_point;
+        let addr: Addr<Dispatcher> = Arbiter::start(move |_| Dispatcher::new(crash_point));
         (
             Dispatcher::make_subs_from(&addr),
             addr.recipient::<PoolBindMessage>(),
@@ -448,7 +455,7 @@ mod tests {
     use crate::sub_lib::neighborhood::{NeighborhoodDotGraphRequest, RouteQueryMessage};
     use crate::sub_lib::neighborhood::{NeighborhoodMode, RemoveNeighborMessage};
     use crate::sub_lib::node_addr::NodeAddr;
-    use crate::sub_lib::peer_actors::{StartMessage};
+    use crate::sub_lib::peer_actors::StartMessage;
     use crate::sub_lib::proxy_client::{
         ClientResponsePayload_0v1, DnsResolveFailure_0v1, InboundServerData,
     };
@@ -506,13 +513,17 @@ mod tests {
     }
 
     impl<'a> ActorFactory for ActorFactoryMock<'a> {
-        fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
+        fn make_and_start_dispatcher(
+            &self,
+            _config: &BootstrapperConfig,
+        ) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
             let addr: Addr<Recorder> = ActorFactoryMock::start_recorder(&self.dispatcher);
             let dispatcher_subs = DispatcherSubs {
                 ibcd_sub: recipient!(addr, InboundClientData),
                 bind: recipient!(addr, BindMessage),
                 from_dispatcher_client: recipient!(addr, TransmitDataMsg),
                 stream_shutdown_sub: recipient!(addr, StreamShutdownMsg),
+                ui_sub: recipient!(addr, NodeFromUiMessage),
             };
             (dispatcher_subs, addr.recipient::<PoolBindMessage>())
         }

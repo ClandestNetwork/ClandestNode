@@ -184,7 +184,7 @@ pub struct UiCrashRequest {
 fire_and_forget_message!(UiCrashRequest, "crash");
 
 impl UiCrashRequest {
-    pub fn new (actor: &str, panic_message: &str) -> Self {
+    pub fn new(actor: &str, panic_message: &str) -> Self {
         Self {
             actor: actor.to_string(),
             panic_message: panic_message.to_string(),

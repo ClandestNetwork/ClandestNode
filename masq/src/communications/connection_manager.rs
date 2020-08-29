@@ -170,7 +170,7 @@ impl ConnectionManagerThread {
 
     fn spawn_thread(mut inner: CmsInner) {
         thread::spawn(move || loop {
-eprintln! ("About to select!");
+            eprintln!("About to select!");
             inner = Self::thread_loop_guts(inner)
         });
     }
@@ -194,7 +194,7 @@ eprintln! ("About to select!");
     }
 
     fn handle_conversation_trigger(mut inner: CmsInner) -> CmsInner {
-eprintln! ("handle_conversation_trigger");
+        eprintln!("handle_conversation_trigger");
         let (manager_to_conversation_tx, manager_to_conversation_rx) = unbounded();
         let context_id = inner.next_context_id;
         inner.next_context_id += 1;
@@ -206,7 +206,7 @@ eprintln! ("handle_conversation_trigger");
         inner
             .conversations
             .insert(context_id, manager_to_conversation_tx);
-eprintln!("Sending new conversation {}", conversation.context_id());
+        eprintln!("Sending new conversation {}", conversation.context_id());
         match inner.conversation_return_tx.send(conversation) {
             Ok(_) => (),
             Err(_) => {
@@ -220,13 +220,13 @@ eprintln!("Sending new conversation {}", conversation.context_id());
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
-eprintln! ("handle_incoming_message_body");
+        eprintln!("handle_incoming_message_body");
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
                     MessagePath::Conversation(context_id) => {
                         if let Some(sender) = inner.conversations.get(&context_id) {
-eprintln! ("Sending message body to conversation {}", context_id);
+                            eprintln!("Sending message body to conversation {}", context_id);
                             match sender.send(Ok(message_body)) {
                                 Ok(_) => {
                                     inner.conversations_waiting.remove(&context_id);
@@ -240,14 +240,14 @@ eprintln! ("Sending message body to conversation {}", context_id);
                         }
                     }
                     MessagePath::FireAndForget => {
-eprintln! ("Broadcasting message body");
+                        eprintln!("Broadcasting message body");
                         inner.broadcast_handle.send(message_body)
-                    },
+                    }
                 },
                 Err(e) => {
                     if e.is_fatal() {
                         // Fatal connection error: connection is dead, need to reestablish
-eprintln! ("Falling back");
+                        eprintln!("Falling back");
                         return Self::fallback(inner);
                     } else {
                         // Non-fatal connection error: connection to server is still up, but we have
@@ -257,9 +257,9 @@ eprintln! ("Falling back");
                 }
             },
             Err(_) => {
-eprintln! ("Falling back");
-                return Self::fallback(inner)
-            },
+                eprintln!("Falling back");
+                return Self::fallback(inner);
+            }
         };
         inner
     }
@@ -268,7 +268,7 @@ eprintln! ("Falling back");
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-eprintln! ("handle_outgoing_message_body");
+        eprintln!("handle_outgoing_message_body");
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -312,14 +312,14 @@ eprintln! ("Sending message body to talker_half");
         mut inner: CmsInner,
         redirect_order: Result<(u16, u64), RecvError>,
     ) -> CmsInner {
-eprintln! ("handle_redirect_order");
+        eprintln!("handle_redirect_order");
         let (node_port, redirecting_context_id) =
             redirect_order.expect("Received message from beyond the grave");
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         let talker_half = match make_client_listener(node_port, listener_to_manager_tx) {
             Ok(th) => th,
             Err(_) => {
-eprintln! ("Sending unpleasant redirect response");
+                eprintln!("Sending unpleasant redirect response");
                 let _ = inner
                     .redirect_response_tx
                     .send(Err(ClientListenerError::Broken));
@@ -336,7 +336,7 @@ eprintln! ("Sending unpleasant redirect response");
             } else {
                 NodeConversationTermination::Graceful
             };
-eprintln !("Sending unpleasant news to conversation {}", context_id);
+            eprintln!("Sending unpleasant news to conversation {}", context_id);
             let _ = inner
                 .conversations
                 .get(context_id)
@@ -539,13 +539,21 @@ mod tests {
         let conversation2 = subject.start_conversation();
 
         let conversation1_handle = thread::spawn(move || {
-            let response1 = conversation1.transact(UiShutdownRequest {}.tmb(0), 1000).unwrap();
-            let response2 = conversation1.transact(UiStartOrder {}.tmb(0), 1000).unwrap();
+            let response1 = conversation1
+                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .unwrap();
+            let response2 = conversation1
+                .transact(UiStartOrder {}.tmb(0), 1000)
+                .unwrap();
             (response1, response2)
         });
         let conversation2_handle = thread::spawn(move || {
-            let response1 = conversation2.transact(UiShutdownRequest {}.tmb(0), 1000).unwrap();
-            let response2 = conversation2.transact(UiStartOrder {}.tmb(0), 1000).unwrap();
+            let response1 = conversation2
+                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .unwrap();
+            let response2 = conversation2
+                .transact(UiStartOrder {}.tmb(0), 1000)
+                .unwrap();
             (response1, response2)
         });
 

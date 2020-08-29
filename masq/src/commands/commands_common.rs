@@ -32,7 +32,11 @@ where
     }
 }
 
-pub fn transaction<I, O>(input: I, context: &mut dyn CommandContext, timeout_millis: u64) -> Result<O, CommandError>
+pub fn transaction<I, O>(
+    input: I,
+    context: &mut dyn CommandContext,
+    timeout_millis: u64,
+) -> Result<O, CommandError>
 where
     I: ToMessageBody,
     O: FromMessageBody,
