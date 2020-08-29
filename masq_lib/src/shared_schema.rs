@@ -87,7 +87,6 @@ pub const REAL_USER_HELP: &str =
 
 lazy_static! {
     pub static ref DEFAULT_UI_PORT_VALUE: String = DEFAULT_UI_PORT.to_string();
-    pub static ref DEFAULT_CRASH_POINT_VALUE: String = format!("{}", CrashPoint::None);
     pub static ref UI_PORT_HELP: String = format!(
         "The port at which user interfaces will connect to the Node. Best to accept the default unless \
         you know what you're doing. Must be between {} and {}.",

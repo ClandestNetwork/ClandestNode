@@ -200,6 +200,7 @@ condition the UI can correct.
 ##### Layout:
 ```
 "payload": {
+    "actor": <string>
     "panicMessage": <string>
 }
 ```
@@ -211,6 +212,9 @@ and the reactions of the software around it to that crash.
 It makes the Node panic and crash at a specified time that can be chosen by the tester. The normal rule for the
 Node is that it's not allowed to crash because of anything it receives over the network from the outside; this
 message is an exception to that rule, which is why it must be enabled by a special parameter.
+
+The `actor` field in the payload is the name of the actor (Node subsystem) that will be forced to crash by the
+message. As of this writing, the only valid value is "BlockchainBridge".
 
 The `panicMessage` field in the payload is the message that will be passed to the `panic!()` macro by the Node
 immediately upon receiving the message.

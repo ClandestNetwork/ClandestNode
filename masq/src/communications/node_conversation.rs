@@ -59,7 +59,6 @@ impl NodeConversation {
         if let MessagePath::Conversation(_) = outgoing_msg.path {
             panic! ("Cannot use NodeConversation::send() to send message with MessagePath::Conversation(_). Use NodeCoversation::transact() instead.")
         }
-        eprintln!("node_conversation.send: send");
         match self
             .conversations_to_manager_tx
             .send(OutgoingMessageType::FireAndForgetMessage(outgoing_msg))
@@ -78,18 +77,15 @@ impl NodeConversation {
             panic! ("Cannot use NodeConversation::transact() to send message with MessagePath::FireAndForget. Use NodeCoversation::send() instead.")
         }
         outgoing_msg.path = MessagePath::Conversation(self.context_id());
-        eprintln!("node_conversation.transact: send");
         match self
             .conversations_to_manager_tx
             .send(OutgoingMessageType::ConversationMessage(
                 outgoing_msg.clone(),
             )) {
             Ok(_) => {
-                eprintln!("node_conversation.transact: recv beginning");
                 let recv_result = self
                     .manager_to_conversation_rx
                     .recv_timeout(Duration::from_millis(timeout_millis));
-                eprintln!("node_conversation.transact: recv complete");
                 match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => {

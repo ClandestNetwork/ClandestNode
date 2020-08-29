@@ -73,14 +73,10 @@ impl CommandContext for CommandContextReal {
 
     fn send(&mut self, outgoing_message: MessageBody) -> Result<(), ContextError> {
         let conversation = self.connection.start_conversation();
-        let opcode = outgoing_message.opcode.clone();
-        eprintln!("command_context.send for {} beginning", opcode);
-        let result = match conversation.send(outgoing_message) {
+        match conversation.send(outgoing_message) {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),
-        };
-        eprintln!("command_context.send for {} complete", opcode);
-        result
+        }
     }
 
     fn transact(
@@ -89,10 +85,7 @@ impl CommandContext for CommandContextReal {
         timeout_millis: u64,
     ) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
-        let opcode = outgoing_message.opcode.clone();
-        eprintln!("command_context.transact for {} beginning", opcode);
         let incoming_message_result = conversation.transact(outgoing_message, timeout_millis);
-        eprintln!("command_context.transact for {} complete", opcode);
         let incoming_message = match incoming_message_result {
             Err(e) => return Err(e.into()),
             Ok(message) => match message.payload {
