@@ -357,11 +357,12 @@ impl ConnectionManagerThread {
         inner.active_port = inner.daemon_port;
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
-        let talker_half = match make_client_listener(inner.active_port, listener_to_manager_tx) {
-            Ok(th) => th,
-            Err(e) => panic!("Lost connection, couldn't fall back to Daemon: {:?}", e),
+        match make_client_listener(inner.active_port, listener_to_manager_tx) {
+            Ok(th) =>  {
+                inner.talker_half = th
+            },
+            Err(_) => (),
         };
-        inner.talker_half = talker_half;
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner
     }
@@ -811,11 +812,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Lost connection, couldn't fall back to Daemon")]
     fn handles_listener_fallback_from_daemon() {
         let daemon_port = find_free_port();
-        let (conversation_tx, _) = unbounded();
-        let (decoy_tx, _) = unbounded();
+        let (conversation_tx, conversation_rx) = unbounded();
+        let (decoy_tx, decoy_rx) = unbounded();
         let mut inner = make_inner();
         inner.active_port = daemon_port;
         inner.daemon_port = daemon_port;
@@ -825,6 +825,10 @@ mod tests {
         inner.conversations_waiting.insert(4);
 
         let _ = ConnectionManagerThread::handle_incoming_message_body(inner, Err(RecvError));
+
+        let disappointment = conversation_rx.try_recv ().unwrap();
+        assert_eq! (disappointment, Err(NodeConversationTermination::Fatal));
+        assert_eq! (decoy_rx.try_recv(), Err(TryRecvError::Disconnected));
     }
 
     #[test]
