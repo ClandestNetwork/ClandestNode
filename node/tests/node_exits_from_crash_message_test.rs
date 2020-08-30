@@ -3,13 +3,9 @@
 pub mod utils;
 
 use crate::utils::CommandConfig;
-use futures::future::*;
 use masq_lib::messages::{ToMessageBody, UiCrashRequest};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
 use masq_lib::utils::{find_free_port, localhost};
-use tokio::prelude::*;
-use tokio::runtime::Runtime;
-#[cfg(not(target_os = "windows"))]
 use websocket::{ClientBuilder, OwnedMessage};
 
 #[test]
@@ -79,14 +75,12 @@ fn start_node_and_request_crash(crash_key: &str) {
         }
         .tmb(0),
     );
-    let client = ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str())
+    let mut client = ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str())
         .expect("Couldn't create ClientBuilder")
         .add_protocol("MASQNode-UIv2")
-        .async_connect_insecure()
-        .and_then(|(s, _)| s.send(OwnedMessage::Text(msg)));
-    let mut rt = Runtime::new().expect("Couldn't create Runtime");
-    rt.block_on(client)
-        .expect("Couldn't block on descriptor_client");
+        .connect_insecure()
+        .unwrap();
+    client.send_message(&OwnedMessage::Text(msg)).unwrap();
 
     let success = node.wait_for_exit().unwrap().status.success();
     assert!(!success, "Did not fail as expected");
