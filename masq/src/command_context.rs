@@ -276,6 +276,7 @@ mod tests {
 
     #[test]
     fn transact_works_when_server_sends_connection_error() {
+eprintln! ("Test begins");
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();

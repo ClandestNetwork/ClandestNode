@@ -126,16 +126,27 @@ fn make_client_listener(
     port: u16,
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
+eprintln! ("make_client_listener");
     let builder =
         ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
     let result = builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure();
+eprintln! ("Connect complete");
     let client = match result {
-        Ok(c) => c,
-        Err(_) => return Err(ClientListenerError::Broken),
+        Ok(c) => {
+eprintln! ("Success");
+            c
+        },
+        Err(_) => {
+eprintln! ("Failure: Broken");
+            return Err(ClientListenerError::Broken)
+        },
     };
     let (listener_half, talker_half) = client.split().unwrap();
+eprintln! ("Split client; making client_listener");
     let client_listener = ClientListener::new();
+eprintln! ("Starting client_listener");
     client_listener.start(listener_half, listener_to_manager_tx);
+eprintln! ("Started");
     Ok(talker_half)
 }
 
@@ -217,6 +228,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
+eprintln! ("handle_incoming_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
@@ -258,6 +270,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
+eprintln! ("handle_outgoing_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -265,11 +278,14 @@ impl ConnectionManagerThread {
                     let conversation_result = inner.conversations.get(&context_id);
                     if conversation_result.is_some() {
                         let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
+eprintln! ("ConnectionManager sent message: {:?}", send_message_result);
                         match send_message_result {
                             Ok(_) => {
+eprintln! ("ConnectionManager has new waiting conversation: {}", context_id);
                                 inner.conversations_waiting.insert(context_id);
                             },
                             Err(_) => {
+eprintln! ("ConnectionManager got error: falling back");
                                 inner = Self::fallback(inner);
                             },
                         }
