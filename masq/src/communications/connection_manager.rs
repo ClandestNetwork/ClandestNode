@@ -126,11 +126,15 @@ fn make_client_listener(
     port: u16,
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
-eprintln! ("make_client_listener");
+    let url = format!("ws://{}:{}", localhost(), port);
+eprintln! ("make_client_listener: {}", url);
     let builder =
-        ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
-    let result = builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure();
-eprintln! ("Connect complete");
+        ClientBuilder::new(url.as_str()).expect("Bad URL");
+eprintln! ("builder created");
+    let mut result = builder.add_protocol(NODE_UI_PROTOCOL);
+eprintln! ("protocol added");
+    let result = result.connect_insecure();
+eprintln! ("connect complete");
     let client = match result {
         Ok(c) => {
 eprintln! ("Success");
