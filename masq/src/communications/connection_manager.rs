@@ -357,12 +357,18 @@ impl ConnectionManagerThread {
         inner.active_port = inner.daemon_port;
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
+eprintln! ("Attempting fallback");
         match make_client_listener(inner.active_port, listener_to_manager_tx) {
             Ok(th) =>  {
+eprintln! ("Fallback succeeded");
                 inner.talker_half = th
             },
-            Err(_) => (),
+            Err(_) => {
+eprintln! ("Fallback failed");
+                ()
+            },
         };
+eprintln! ("Disappointing waiting conversations");
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner
     }
@@ -372,6 +378,7 @@ impl ConnectionManagerThread {
         error: NodeConversationTermination,
     ) -> CmsInner {
         inner.conversations_waiting.iter().for_each(|context_id| {
+eprintln! ("  Disappointing conversation {}", context_id);
             let _ = inner
                 .conversations
                 .get(context_id)

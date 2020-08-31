@@ -83,9 +83,11 @@ impl NodeConversation {
                 outgoing_msg.clone(),
             )) {
             Ok(_) => {
+eprintln! ("Successful send to ConnectionManager");
                 let recv_result = self
                     .manager_to_conversation_rx
                     .recv_timeout(Duration::from_millis(timeout_millis));
+eprintln! ("Response from ConnectionManager: {:?}", recv_result);
                 match recv_result {
                     Ok(Ok(body)) => Ok(body),
                     Ok(Err(NodeConversationTermination::Graceful)) => {

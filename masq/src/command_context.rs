@@ -85,7 +85,9 @@ impl CommandContext for CommandContextReal {
         timeout_millis: u64,
     ) -> Result<MessageBody, ContextError> {
         let conversation = self.connection.start_conversation();
+eprintln! ("CommandContext beginning transact");
         let incoming_message_result = conversation.transact(outgoing_message, timeout_millis);
+eprintln! ("CommandContext transact returned {:?}", incoming_message_result);
         let incoming_message = match incoming_message_result {
             Err(e) => return Err(e.into()),
             Ok(message) => match message.payload {
@@ -280,7 +282,9 @@ mod tests {
         let mut subject =
             CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
+eprintln! ("Test beginning transact");
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1), 1000);
+eprintln! ("Test completed transact: {:?}", response);
 
         stop_handle.stop();
         match response {
