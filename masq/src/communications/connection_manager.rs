@@ -5,7 +5,7 @@ use crate::communications::broadcast_handler::{
 };
 use crate::communications::client_listener_thread::{ClientListener, ClientListenerError};
 use crate::communications::node_conversation::{NodeConversation, NodeConversationTermination};
-use crossbeam_channel::unbounded;
+use crossbeam_channel::{unbounded, RecvTimeoutError};
 use crossbeam_channel::{Receiver, RecvError, Sender};
 use masq_lib::messages::FromMessageBody;
 use masq_lib::messages::{UiRedirect, NODE_UI_PROTOCOL};
@@ -17,8 +17,10 @@ use std::net::TcpStream;
 use std::thread;
 use websocket::sender::Writer;
 use websocket::ws::sender::Sender as WsSender;
-use websocket::ClientBuilder;
+use websocket::{ClientBuilder, WebSocketResult};
 use websocket::OwnedMessage;
+use websocket::sync::Client;
+use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
@@ -64,7 +66,7 @@ impl ConnectionManager {
     ) -> Result<(), ClientListenerError> {
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = make_client_listener(port, listener_to_manager_tx)?;
+        let talker_half = make_client_listener(port, listener_to_manager_tx, 1000)?;
         let (conversation_return_tx, conversation_return_rx) = unbounded();
         let (redirect_order_tx, redirect_order_rx) = unbounded();
         let (redirect_response_tx, redirect_response_rx) = unbounded();
@@ -125,15 +127,20 @@ impl ConnectionManager {
 fn make_client_listener(
     port: u16,
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
+    timeout_millis: u64,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
     let url = format!("ws://{}:{}", localhost(), port);
 eprintln! ("make_client_listener: {}", url);
     let builder =
         ClientBuilder::new(url.as_str()).expect("Bad URL");
 eprintln! ("builder created");
-    let mut result = builder.add_protocol(NODE_UI_PROTOCOL);
-eprintln! ("protocol added");
-    let result = result.connect_insecure();
+    let result = builder.add_protocol(NODE_UI_PROTOCOL);
+eprintln! ("protocol added; about to wait for timeout");
+    let result = match connect_insecure_timeout(result, timeout_millis) {
+        Err (RecvTimeoutError::Disconnected) => return Err(ClientListenerError::Closed),
+        Err (RecvTimeoutError::Timeout) => return Err (ClientListenerError::Timeout),
+        Ok (r) => r,
+    };
 eprintln! ("connect complete");
     let client = match result {
         Ok(c) => {
@@ -152,6 +159,19 @@ eprintln! ("Starting client_listener");
     client_listener.start(listener_half, listener_to_manager_tx);
 eprintln! ("Started");
     Ok(talker_half)
+}
+
+fn connect_insecure_timeout (mut builder: ClientBuilder<'static>, timeout_millis: u64) -> Result<WebSocketResult<Client<TcpStream>>, RecvTimeoutError> {
+    let (tx, rx) = unbounded();
+eprintln! ("Spawning connect thread");
+    thread::spawn (move || {
+eprintln! ("Starting connect");
+        let result = builder.connect_insecure();
+eprintln! ("Connect complete");
+        tx.send (result).expect ("Channel died");
+    });
+eprintln! ("Waiting for connect");
+    rx.recv_timeout (Duration::from_millis (timeout_millis))
 }
 
 struct CmsInner {
@@ -321,7 +341,7 @@ eprintln! ("ConnectionManager got error: falling back");
         let (node_port, redirecting_context_id) =
             redirect_order.expect("Received message from beyond the grave");
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = match make_client_listener(node_port, listener_to_manager_tx) {
+        let talker_half = match make_client_listener(node_port, listener_to_manager_tx, 1000) {
             Ok(th) => th,
             Err(_) => {
                 let _ = inner
@@ -378,14 +398,13 @@ eprintln! ("ConnectionManager got error: falling back");
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
 eprintln! ("Attempting fallback");
-        match make_client_listener(inner.active_port, listener_to_manager_tx) {
+        match make_client_listener(inner.active_port, listener_to_manager_tx, 1000) {
             Ok(th) =>  {
 eprintln! ("Fallback succeeded");
                 inner.talker_half = th
             },
             Err(_) => {
 eprintln! ("Fallback failed");
-                ()
             },
         };
 eprintln! ("Disappointing waiting conversations");
