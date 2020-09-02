@@ -503,6 +503,7 @@ mod tests {
             .queue_response(
                 UiStartResponse {
                     new_process_id: 11,
+                    node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@1.2.3.4".to_string(),
                     redirect_ui_port: 12,
                 }
                 .tmb(1),
@@ -510,6 +511,7 @@ mod tests {
             .queue_response(
                 UiStartResponse {
                     new_process_id: 21,
+                    node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@2.3.4.5".to_string(),
                     redirect_ui_port: 22,
                 }
                 .tmb(2),
@@ -538,6 +540,7 @@ mod tests {
             conversation1_response2,
             UiStartResponse {
                 new_process_id: 11,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@1.2.3.4".to_string(),
                 redirect_ui_port: 12
             }
             .tmb(1)
@@ -547,6 +550,7 @@ mod tests {
             conversation2_response2,
             UiStartResponse {
                 new_process_id: 21,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@2.3.4.5".to_string(),
                 redirect_ui_port: 22
             }
             .tmb(2)
