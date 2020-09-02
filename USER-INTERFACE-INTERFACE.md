@@ -478,6 +478,7 @@ information is presently in its Setup space.
 ```
 "payload": {
     "newProcessId": <integer>,
+    "nodeDescriptor": <string>,
     "redirectUiPort": <integer greater than 1024>,
 }
 ```
@@ -485,6 +486,9 @@ information is presently in its Setup space.
 If a `start` attempt is successful, this response will arrive.
 
 The `newProcessId` field is the system-dependent process ID of the newly-running Node.
+
+The `nodeDescriptor` field contains the Node descriptor of the newly-running Node; it will
+look something like this: `Rm91cnNjb3JlIGFuZCBzZXZlbiB5ZWFy@123.124.125.126`
 
 The `redirectUiPort` field is the WebSockets port on which the UI can now connect to the Node. The UI that actually
 starts the Node can take advantage of this to preemptively connect to the Node without processing a Redirect; but

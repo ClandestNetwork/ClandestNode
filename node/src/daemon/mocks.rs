@@ -1,7 +1,10 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use crate::daemon::launch_verifier::{LaunchVerification, LaunchVerifier, VerifierTools};
+use crate::daemon::launch_verifier::{
+    DescriptorError, LaunchVerification, LaunchVerifier, VerifierTools,
+};
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub struct LaunchVerifierMock {
@@ -45,7 +48,8 @@ pub struct VerifierToolsMock {
     process_is_running_results: RefCell<Vec<bool>>,
     kill_process_params: Arc<Mutex<Vec<u32>>>,
     delay_params: Arc<Mutex<Vec<u64>>>,
-    get_node_descriptor_results: RefCell<Vec<Result<String, ()>>>
+    get_node_descriptor_params: Arc<Mutex<Vec<PathBuf>>>,
+    get_node_descriptor_results: RefCell<Vec<Result<String, DescriptorError>>>,
 }
 
 impl VerifierTools for VerifierToolsMock {
@@ -75,7 +79,11 @@ impl VerifierTools for VerifierToolsMock {
         self.delay_params.lock().unwrap().push(milliseconds);
     }
 
-    fn get_node_discriminator(&self) -> Result<String, ()> {
+    fn get_node_descriptor(&self, logfile: &PathBuf) -> Result<String, DescriptorError> {
+        self.get_node_descriptor_params
+            .lock()
+            .unwrap()
+            .push(logfile.clone());
         self.get_node_descriptor_results.borrow_mut().remove(0)
     }
 }
@@ -89,6 +97,7 @@ impl VerifierToolsMock {
             process_is_running_results: RefCell::new(vec![]),
             kill_process_params: Arc::new(Mutex::new(vec![])),
             delay_params: Arc::new(Mutex::new(vec![])),
+            get_node_descriptor_params: Arc::new(Mutex::new(vec![])),
             get_node_descriptor_results: RefCell::new(vec![]),
         }
     }
@@ -125,8 +134,13 @@ impl VerifierToolsMock {
         self
     }
 
-    pub fn get_node_descriptor_result(self, result: Result<String, ()>) -> Self {
-        self.get_node_descriptor_results.borrow_mut().push (result);
+    pub fn get_node_descriptor_params(mut self, params: &Arc<Mutex<Vec<PathBuf>>>) -> Self {
+        self.get_node_descriptor_params = params.clone();
+        self
+    }
+
+    pub fn get_node_descriptor_result(self, result: Result<String, DescriptorError>) -> Self {
+        self.get_node_descriptor_results.borrow_mut().push(result);
         self
     }
 }
