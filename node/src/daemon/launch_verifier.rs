@@ -22,6 +22,7 @@ pub trait VerifierTools {
     fn process_is_running(&self, process_id: u32) -> bool;
     fn kill_process(&self, process_id: u32);
     fn delay(&self, milliseconds: u64);
+    fn get_node_discriminator(&self) -> Result<String, ()>;
 }
 
 pub struct VerifierToolsReal {
@@ -62,6 +63,10 @@ impl VerifierTools for VerifierToolsReal {
 
     fn delay(&self, milliseconds: u64) {
         thread::sleep(Duration::from_millis(milliseconds));
+    }
+
+    fn get_node_discriminator(&self) -> Result<String, ()> {
+        unimplemented!()
     }
 }
 
@@ -122,7 +127,7 @@ impl VerifierToolsReal {
 
 #[derive(Debug, PartialEq)]
 pub enum LaunchVerification {
-    Launched,             // Responded to contact via UiGateway
+    Launched(String),     // Responded to contact via UiGateway
     CleanFailure,         // No response from UiGateway, no process at process_id
     DirtyFailure,         // No response from UiGateway, process at process_id, killed, disappeared
     InterventionRequired, // No response from UiGateway, process at process_id, killed, still there
@@ -147,7 +152,10 @@ impl Default for LaunchVerifierReal {
 impl LaunchVerifier for LaunchVerifierReal {
     fn verify_launch(&self, process_id: u32, ui_port: u16) -> LaunchVerification {
         if self.await_ui_connection(ui_port) {
-            Launched
+            match self.verifier_tools.get_node_discriminator() {
+                Err (e) => unimplemented!("{:?}", e),
+                Ok (node_discriminator) => Launched (node_discriminator),
+            }
         } else if self.verifier_tools.process_is_running(process_id) {
             self.verifier_tools.kill_process(process_id);
             if self.await_process_death(process_id) {
@@ -218,13 +226,14 @@ mod tests {
             .delay_params(&delay_parms_arc)
             .can_connect_to_ui_gateway_result(false)
             .can_connect_to_ui_gateway_result(false)
-            .can_connect_to_ui_gateway_result(true);
+            .can_connect_to_ui_gateway_result(true)
+            .get_node_descriptor_result(Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string()));
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
         let result = subject.verify_launch(1234, 4321);
 
-        assert_eq!(result, Launched);
+        assert_eq!(result, Launched("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string()));
         let can_connect_to_ui_gateway_parms = can_connect_to_ui_gateway_params_arc.lock().unwrap();
         assert_eq!(*can_connect_to_ui_gateway_parms, vec![4321, 4321, 4321]);
         let delay_params = delay_parms_arc.lock().unwrap();
@@ -414,6 +423,11 @@ mod tests {
             "Interval should have been less than 500, but was {}",
             interval
         );
+    }
+
+    #[test]
+    fn get_node_descriptor_works_if_log_file_is_present_and_contains_node_descriptor() {
+        unimplemented!()
     }
 
     #[test]

@@ -76,6 +76,7 @@ impl ChannelFactoryReal {
 #[derive(PartialEq, Debug)]
 pub struct LaunchSuccess {
     pub new_process_id: u32,
+    pub node_descriptor: String,
     pub redirect_ui_port: u16,
 }
 
@@ -241,6 +242,7 @@ impl Daemon {
                         client_id,
                         UiStartResponse {
                             new_process_id: success.new_process_id,
+                            node_descriptor: success.node_descriptor,
                             redirect_ui_port: success.redirect_ui_port,
                         }
                         .tmb(context_id),
@@ -1078,6 +1080,7 @@ mod tests {
             .launch_params(&launch_params_arc)
             .launch_result(Ok(Some(LaunchSuccess {
                 new_process_id: 2345,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 5432,
             })));
         let verifier_tools = VerifierToolsMock::new();
@@ -1126,6 +1129,7 @@ mod tests {
             payload,
             UiStartResponse {
                 new_process_id: 2345,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 5432
             }
         );
@@ -1167,6 +1171,7 @@ mod tests {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let launcher = LauncherMock::new().launch_result(Ok(Some(LaunchSuccess {
             new_process_id: 2345,
+            node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
             redirect_ui_port: 5432,
         })));
         let verifier_tools = VerifierToolsMock::new()
@@ -1337,6 +1342,7 @@ mod tests {
             .launch_params(&launch_params_arc)
             .launch_result(Ok(Some(LaunchSuccess {
                 new_process_id: 54321,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 7777,
             })));
         let verifier_tools = VerifierToolsMock::new();
@@ -1374,6 +1380,7 @@ mod tests {
             target: MessageTarget::ClientId(1234),
             body: UiStartResponse {
                 new_process_id: 54321,
+                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 7777,
             }
             .tmb(2345),

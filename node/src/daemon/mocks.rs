@@ -45,6 +45,7 @@ pub struct VerifierToolsMock {
     process_is_running_results: RefCell<Vec<bool>>,
     kill_process_params: Arc<Mutex<Vec<u32>>>,
     delay_params: Arc<Mutex<Vec<u64>>>,
+    get_node_descriptor_results: RefCell<Vec<Result<String, ()>>>
 }
 
 impl VerifierTools for VerifierToolsMock {
@@ -73,6 +74,10 @@ impl VerifierTools for VerifierToolsMock {
     fn delay(&self, milliseconds: u64) {
         self.delay_params.lock().unwrap().push(milliseconds);
     }
+
+    fn get_node_discriminator(&self) -> Result<String, ()> {
+        self.get_node_descriptor_results.borrow_mut().remove(0)
+    }
 }
 
 impl VerifierToolsMock {
@@ -84,6 +89,7 @@ impl VerifierToolsMock {
             process_is_running_results: RefCell::new(vec![]),
             kill_process_params: Arc::new(Mutex::new(vec![])),
             delay_params: Arc::new(Mutex::new(vec![])),
+            get_node_descriptor_results: RefCell::new(vec![]),
         }
     }
 
@@ -116,6 +122,11 @@ impl VerifierToolsMock {
 
     pub fn delay_params(mut self, params: &Arc<Mutex<Vec<u64>>>) -> Self {
         self.delay_params = params.clone();
+        self
+    }
+
+    pub fn get_node_descriptor_result(self, result: Result<String, ()>) -> Self {
+        self.get_node_descriptor_results.borrow_mut().push (result);
         self
     }
 }

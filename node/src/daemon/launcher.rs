@@ -160,8 +160,9 @@ impl Launcher for LauncherReal {
         match self.execer.exec(params_vec, crashed_recipient) {
             Ok(new_process_id) => {
                 match self.verifier.verify_launch(new_process_id, redirect_ui_port) {
-                    Launched => Ok(Some(LaunchSuccess {
+                    Launched(node_descriptor) => Ok(Some(LaunchSuccess {
                         new_process_id,
+                        node_descriptor,
                         redirect_ui_port
                     })),
                     CleanFailure => Err(format! ("Node started in process {}, but died immediately.", new_process_id)),
@@ -426,7 +427,7 @@ mod tests {
         let verify_launch_params_arc = Arc::new(Mutex::new(vec![]));
         let verifier = LaunchVerifierMock::new()
             .verify_launch_params(&verify_launch_params_arc)
-            .verify_launch_result(Launched);
+            .verify_launch_result(Launched("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string()));
         let mut subject = LauncherReal::new(unbounded().0);
         subject.execer = Box::new(execer);
         subject.verifier = Box::new(verifier);
