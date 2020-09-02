@@ -8,6 +8,8 @@ use masq_lib::messages::{FromMessageBody, ToMessageBody, UiMessageError};
 use masq_lib::ui_gateway::MessageBody;
 use std::fmt::Debug;
 
+pub const STANDARD_COMMAND_TIMEOUT_MILLIS: u64 = 5000;
+
 #[derive(Debug, PartialEq)]
 pub enum CommandError {
     ConnectionProblem(String),

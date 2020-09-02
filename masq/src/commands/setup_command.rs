@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::CommandContext;
-use crate::commands::commands_common::{transaction, Command, CommandError};
+use crate::commands::commands_common::{transaction, Command, CommandError, STANDARD_COMMAND_TIMEOUT_MILLIS};
 use clap::{value_t, App, SubCommand};
 use masq_lib::messages::FromMessageBody;
 use masq_lib::messages::{
@@ -29,7 +29,7 @@ impl Command for SetupCommand {
         let out_message = UiSetupRequest {
             values: self.values.clone(),
         };
-        let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context, 1000);
+        let result: Result<UiSetupResponse, CommandError> = transaction(out_message, context, STANDARD_COMMAND_TIMEOUT_MILLIS);
         match result {
             Ok(response) => {
                 Self::dump_setup(UiSetupInner::from(response), context.stdout());
@@ -195,7 +195,7 @@ mod tests {
                     ]
                 }
                 .tmb(0),
-                1000
+                STANDARD_COMMAND_TIMEOUT_MILLIS
             )]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),
@@ -253,7 +253,7 @@ neighborhood-mode      zero-hop                                                 
                     ]
                 }
                 .tmb(0),
-                1000
+                STANDARD_COMMAND_TIMEOUT_MILLIS
             )]
         );
         assert_eq! (stdout_arc.lock().unwrap().get_string(),

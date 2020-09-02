@@ -4,7 +4,7 @@ use crate::command_context::ContextError::ConnectionRefused;
 use crate::communications::broadcast_handler::{
     BroadcastHandler, BroadcastHandlerReal, StreamFactory,
 };
-use crate::communications::connection_manager::ConnectionManager;
+use crate::communications::connection_manager::{ConnectionManager, REDIRECT_TIMEOUT_MILLIS};
 use crate::communications::node_conversation::ClientError;
 use masq_lib::messages::{TIMEOUT_ERROR, UNMARSHAL_ERROR};
 use masq_lib::ui_gateway::MessageBody;
@@ -123,7 +123,7 @@ impl CommandContextReal {
         let mut connection = ConnectionManager::new();
         let broadcast_handler = BroadcastHandlerReal::new();
         let broadcast_handle = broadcast_handler.start(broadcast_stream_factory);
-        match connection.connect(daemon_ui_port, broadcast_handle) {
+        match connection.connect(daemon_ui_port, broadcast_handle, REDIRECT_TIMEOUT_MILLIS) {
             Ok(_) => Ok(Self {
                 connection,
                 stdin: Box::new(io::stdin()),

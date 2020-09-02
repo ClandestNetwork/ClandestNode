@@ -22,6 +22,9 @@ use websocket::OwnedMessage;
 use websocket::sync::Client;
 use std::time::Duration;
 
+pub const REDIRECT_TIMEOUT_MILLIS: u64 = 500;
+pub const FALLBACK_TIMEOUT_MILLIS: u64 = 500;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
     ConversationMessage(MessageBody),
@@ -34,6 +37,19 @@ enum Demand {
     Conversation,
     ActivePort,
     Close,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RedirectOrder {
+    port: u16,
+    context_id: u64,
+    timeout_millis: u64,
+}
+
+impl RedirectOrder {
+    pub fn new (port: u16, context_id: u64, timeout_millis: u64) -> Self {
+        Self {port, context_id, timeout_millis}
+    }
 }
 
 pub struct ConnectionManager {
@@ -63,10 +79,11 @@ impl ConnectionManager {
         &mut self,
         port: u16,
         broadcast_handle: Box<dyn BroadcastHandle>,
+        timeout_millis: u64,
     ) -> Result<(), ClientListenerError> {
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = make_client_listener(port, listener_to_manager_tx, 1000)?;
+        let talker_half = make_client_listener(port, listener_to_manager_tx, timeout_millis)?;
         let (conversation_return_tx, conversation_return_rx) = unbounded();
         let (redirect_order_tx, redirect_order_rx) = unbounded();
         let (redirect_response_tx, redirect_response_rx) = unbounded();
@@ -188,7 +205,7 @@ struct CmsInner {
     listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     talker_half: Writer<TcpStream>,
     broadcast_handle: Box<dyn BroadcastHandle>,
-    redirect_order_rx: Receiver<(u16, u64)>,
+    redirect_order_rx: Receiver<RedirectOrder>,
     redirect_response_tx: Sender<Result<(), ClientListenerError>>,
     active_port_response_tx: Sender<u16>,
 }
@@ -336,12 +353,14 @@ eprintln! ("ConnectionManager got error: falling back");
 
     fn handle_redirect_order(
         mut inner: CmsInner,
-        redirect_order: Result<(u16, u64), RecvError>,
+        redirect_order_result: Result<RedirectOrder, RecvError>,
     ) -> CmsInner {
-        let (node_port, redirecting_context_id) =
-            redirect_order.expect("Received message from beyond the grave");
+        let redirect_order = match redirect_order_result {
+            Ok(ro) => ro,
+            Err(_) => return inner, // Sender died; ignore
+        };
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = match make_client_listener(node_port, listener_to_manager_tx, 1000) {
+        let talker_half = match make_client_listener(redirect_order.port, listener_to_manager_tx, redirect_order.timeout_millis) {
             Ok(th) => th,
             Err(_) => {
                 let _ = inner
@@ -350,12 +369,12 @@ eprintln! ("ConnectionManager got error: falling back");
                 return inner;
             }
         };
-        inner.node_port = Some(node_port);
-        inner.active_port = node_port;
+        inner.node_port = Some(redirect_order.port);
+        inner.active_port = redirect_order.port;
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
         inner.conversations_waiting.iter().for_each(|context_id| {
-            let error = if *context_id == redirecting_context_id {
+            let error = if *context_id == redirect_order.context_id {
                 NodeConversationTermination::Resend
             } else {
                 NodeConversationTermination::Graceful
@@ -398,7 +417,7 @@ eprintln! ("ConnectionManager got error: falling back");
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
 eprintln! ("Attempting fallback");
-        match make_client_listener(inner.active_port, listener_to_manager_tx, 1000) {
+        match make_client_listener(inner.active_port, listener_to_manager_tx, FALLBACK_TIMEOUT_MILLIS) {
             Ok(th) =>  {
 eprintln! ("Fallback succeeded");
                 inner.talker_half = th
@@ -443,7 +462,7 @@ eprintln! ("  Disappointing conversation {}", context_id);
 
 struct BroadcastHandleRedirect {
     next_handle: Box<dyn BroadcastHandle>,
-    redirect_order_tx: Sender<(u16, u64)>,
+    redirect_order_tx: Sender<RedirectOrder>,
 }
 
 impl BroadcastHandle for BroadcastHandleRedirect {
@@ -452,7 +471,7 @@ impl BroadcastHandle for BroadcastHandleRedirect {
             Ok((redirect, _)) => {
                 let context_id = redirect.context_id.unwrap_or(0);
                 self.redirect_order_tx
-                    .send((redirect.port, context_id))
+                    .send(RedirectOrder::new(redirect.port, context_id, REDIRECT_TIMEOUT_MILLIS))
                     .expect("ConnectionManagerThread is dead");
             }
             Err(_) => {
@@ -464,7 +483,7 @@ impl BroadcastHandle for BroadcastHandleRedirect {
 
 struct RedirectBroadcastHandler {
     next_handle: Box<dyn BroadcastHandle>,
-    redirect_order_tx: Sender<(u16, u64)>,
+    redirect_order_tx: Sender<RedirectOrder>,
 }
 
 impl BroadcastHandler for RedirectBroadcastHandler {
@@ -479,7 +498,7 @@ impl BroadcastHandler for RedirectBroadcastHandler {
 impl RedirectBroadcastHandler {
     pub fn new(
         next_handle: Box<dyn BroadcastHandle>,
-        redirect_order_tx: Sender<(u16, u64)>,
+        redirect_order_tx: Sender<RedirectOrder>,
     ) -> Self {
         Self {
             next_handle,
@@ -540,7 +559,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(BroadcastHandleMock::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
         (subject, stop_handle)
     }
@@ -811,7 +830,7 @@ mod tests {
         let mut inner = make_inner();
         inner.redirect_response_tx = redirect_response_tx;
 
-        ConnectionManagerThread::handle_redirect_order(inner, Ok((node_port, 0)));
+        ConnectionManagerThread::handle_redirect_order(inner, Ok(RedirectOrder::new(node_port, 0, 1000)));
 
         let response = redirect_response_rx.try_recv().unwrap();
         assert_eq!(response, Err(ClientListenerError::Broken));
@@ -834,7 +853,7 @@ mod tests {
         inner.conversations = conversations;
         inner.conversations_waiting = conversations_waiting;
 
-        inner = ConnectionManagerThread::handle_redirect_order(inner, Ok((node_port, 1)));
+        inner = ConnectionManagerThread::handle_redirect_order(inner, Ok(RedirectOrder::new(node_port, 1, 1000)));
 
         let get_existing_keys = |inner: &CmsInner| {
             inner
@@ -1014,7 +1033,7 @@ mod tests {
         let broadcast_handler = BroadcastHandleMock::new().send_params(&send_params_arc);
         let mut subject = ConnectionManager::new();
         subject
-            .connect(daemon_port, Box::new(broadcast_handler))
+            .connect(daemon_port, Box::new(broadcast_handler), 1000)
             .unwrap();
         let conversation = subject.start_conversation();
 
@@ -1270,7 +1289,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(BroadcastHandleMock::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
         let conversation1 = subject.start_conversation();
         let conversation2 = subject.start_conversation();
