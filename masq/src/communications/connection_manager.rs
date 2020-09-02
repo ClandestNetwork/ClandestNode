@@ -5,7 +5,7 @@ use crate::communications::broadcast_handler::{
 };
 use crate::communications::client_listener_thread::{ClientListener, ClientListenerError};
 use crate::communications::node_conversation::{NodeConversation, NodeConversationTermination};
-use crossbeam_channel::unbounded;
+use crossbeam_channel::{unbounded, RecvTimeoutError};
 use crossbeam_channel::{Receiver, RecvError, Sender};
 use masq_lib::messages::FromMessageBody;
 use masq_lib::messages::{UiRedirect, NODE_UI_PROTOCOL};
@@ -15,15 +15,20 @@ use masq_lib::utils::localhost;
 use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
 use std::thread;
+use std::time::Duration;
 use websocket::sender::Writer;
+use websocket::sync::Client;
 use websocket::ws::sender::Sender as WsSender;
-use websocket::ClientBuilder;
 use websocket::OwnedMessage;
+use websocket::{ClientBuilder, WebSocketResult};
+
+pub const REDIRECT_TIMEOUT_MILLIS: u64 = 500;
+pub const FALLBACK_TIMEOUT_MILLIS: u64 = 500;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OutgoingMessageType {
     ConversationMessage(MessageBody),
-    FireAndForgetMessage(MessageBody, u64),
+    FireAndForgetMessage(MessageBody),
     SignOff(u64),
 }
 
@@ -32,6 +37,23 @@ enum Demand {
     Conversation,
     ActivePort,
     Close,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RedirectOrder {
+    port: u16,
+    context_id: u64,
+    timeout_millis: u64,
+}
+
+impl RedirectOrder {
+    pub fn new(port: u16, context_id: u64, timeout_millis: u64) -> Self {
+        Self {
+            port,
+            context_id,
+            timeout_millis,
+        }
+    }
 }
 
 pub struct ConnectionManager {
@@ -61,10 +83,11 @@ impl ConnectionManager {
         &mut self,
         port: u16,
         broadcast_handle: Box<dyn BroadcastHandle>,
+        timeout_millis: u64,
     ) -> Result<(), ClientListenerError> {
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = make_client_listener(port, listener_to_manager_tx)?;
+        let talker_half = make_client_listener(port, listener_to_manager_tx, timeout_millis)?;
         let (conversation_return_tx, conversation_return_rx) = unbounded();
         let (redirect_order_tx, redirect_order_rx) = unbounded();
         let (redirect_response_tx, redirect_response_rx) = unbounded();
@@ -125,10 +148,16 @@ impl ConnectionManager {
 fn make_client_listener(
     port: u16,
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
+    timeout_millis: u64,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
-    let builder =
-        ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()).expect("Bad URL");
-    let result = builder.add_protocol(NODE_UI_PROTOCOL).connect_insecure();
+    let url = format!("ws://{}:{}", localhost(), port);
+    let builder = ClientBuilder::new(url.as_str()).expect("Bad URL");
+    let result = builder.add_protocol(NODE_UI_PROTOCOL);
+    let result = match connect_insecure_timeout(result, timeout_millis) {
+        Err(RecvTimeoutError::Disconnected) => return Err(ClientListenerError::Closed),
+        Err(RecvTimeoutError::Timeout) => return Err(ClientListenerError::Timeout),
+        Ok(r) => r,
+    };
     let client = match result {
         Ok(c) => c,
         Err(_) => return Err(ClientListenerError::Broken),
@@ -137,6 +166,18 @@ fn make_client_listener(
     let client_listener = ClientListener::new();
     client_listener.start(listener_half, listener_to_manager_tx);
     Ok(talker_half)
+}
+
+fn connect_insecure_timeout(
+    mut builder: ClientBuilder<'static>,
+    timeout_millis: u64,
+) -> Result<WebSocketResult<Client<TcpStream>>, RecvTimeoutError> {
+    let (tx, rx) = unbounded();
+    thread::spawn(move || {
+        let result = builder.connect_insecure();
+        tx.send(result).expect("Channel died");
+    });
+    rx.recv_timeout(Duration::from_millis(timeout_millis))
 }
 
 struct CmsInner {
@@ -153,7 +194,7 @@ struct CmsInner {
     listener_to_manager_rx: Receiver<Result<MessageBody, ClientListenerError>>,
     talker_half: Writer<TcpStream>,
     broadcast_handle: Box<dyn BroadcastHandle>,
-    redirect_order_rx: Receiver<(u16, u64)>,
+    redirect_order_rx: Receiver<RedirectOrder>,
     redirect_response_tx: Sender<Result<(), ClientListenerError>>,
     active_port_response_tx: Sender<u16>,
 }
@@ -247,7 +288,9 @@ impl ConnectionManagerThread {
                     }
                 }
             },
-            Err(_) => return Self::fallback(inner),
+            Err(_) => {
+                return Self::fallback(inner);
+            }
         };
         inner
     }
@@ -256,8 +299,9 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-        match msg_result_result.expect ("Received message from beyond the grave") {
-            OutgoingMessageType::ConversationMessage (message_body) => match message_body.path {
+        match msg_result_result {
+            Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
+            Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
                 MessagePath::Conversation(context_id) => {
                     let conversation_result = inner.conversations.get(&context_id);
                     if conversation_result.is_some() {
@@ -274,16 +318,16 @@ impl ConnectionManagerThread {
                 },
                 MessagePath::FireAndForget => panic!("NodeConversation should have prevented sending a FireAndForget message with transact()"),
             },
-            OutgoingMessageType::FireAndForgetMessage(message_body, context_id) => match message_body.path {
-                MessagePath::FireAndForget => if let Some (conversation_tx) = inner.conversations.get (&context_id) {
+            Ok(OutgoingMessageType::FireAndForgetMessage(message_body)) => match message_body.path {
+                MessagePath::FireAndForget => {
                     match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
-                        Ok (_) => {let _ = conversation_tx.send(Err(NodeConversationTermination::FiredAndForgotten));},
+                        Ok (_) => (),
                         Err (_) => inner = Self::fallback(inner),
                     }
                 }
                 MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
             },
-            OutgoingMessageType::SignOff(context_id) => {
+            Ok(OutgoingMessageType::SignOff(context_id)) => {
                 let _ = inner.conversations.remove (&context_id);
                 let _ = inner.conversations_waiting.remove (&context_id);
             },
@@ -293,12 +337,18 @@ impl ConnectionManagerThread {
 
     fn handle_redirect_order(
         mut inner: CmsInner,
-        redirect_order: Result<(u16, u64), RecvError>,
+        redirect_order_result: Result<RedirectOrder, RecvError>,
     ) -> CmsInner {
-        let (node_port, redirecting_context_id) =
-            redirect_order.expect("Received message from beyond the grave");
+        let redirect_order = match redirect_order_result {
+            Ok(ro) => ro,
+            Err(_) => return inner, // Sender died; ignore
+        };
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = match make_client_listener(node_port, listener_to_manager_tx) {
+        let talker_half = match make_client_listener(
+            redirect_order.port,
+            listener_to_manager_tx,
+            redirect_order.timeout_millis,
+        ) {
             Ok(th) => th,
             Err(_) => {
                 let _ = inner
@@ -307,12 +357,12 @@ impl ConnectionManagerThread {
                 return inner;
             }
         };
-        inner.node_port = Some(node_port);
-        inner.active_port = node_port;
+        inner.node_port = Some(redirect_order.port);
+        inner.active_port = redirect_order.port;
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
         inner.conversations_waiting.iter().for_each(|context_id| {
-            let error = if *context_id == redirecting_context_id {
+            let error = if *context_id == redirect_order.context_id {
                 NodeConversationTermination::Resend
             } else {
                 NodeConversationTermination::Graceful
@@ -354,11 +404,13 @@ impl ConnectionManagerThread {
         inner.active_port = inner.daemon_port;
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
-        let talker_half = match make_client_listener(inner.active_port, listener_to_manager_tx) {
-            Ok(th) => th,
-            Err(e) => panic!("Lost connection, couldn't fall back to Daemon: {:?}", e),
+        if let Ok(talker_half) = make_client_listener(
+            inner.active_port,
+            listener_to_manager_tx,
+            FALLBACK_TIMEOUT_MILLIS,
+        ) {
+            inner.talker_half = talker_half;
         };
-        inner.talker_half = talker_half;
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner
     }
@@ -393,7 +445,7 @@ impl ConnectionManagerThread {
 
 struct BroadcastHandleRedirect {
     next_handle: Box<dyn BroadcastHandle>,
-    redirect_order_tx: Sender<(u16, u64)>,
+    redirect_order_tx: Sender<RedirectOrder>,
 }
 
 impl BroadcastHandle for BroadcastHandleRedirect {
@@ -402,7 +454,11 @@ impl BroadcastHandle for BroadcastHandleRedirect {
             Ok((redirect, _)) => {
                 let context_id = redirect.context_id.unwrap_or(0);
                 self.redirect_order_tx
-                    .send((redirect.port, context_id))
+                    .send(RedirectOrder::new(
+                        redirect.port,
+                        context_id,
+                        REDIRECT_TIMEOUT_MILLIS,
+                    ))
                     .expect("ConnectionManagerThread is dead");
             }
             Err(_) => {
@@ -414,7 +470,7 @@ impl BroadcastHandle for BroadcastHandleRedirect {
 
 struct RedirectBroadcastHandler {
     next_handle: Box<dyn BroadcastHandle>,
-    redirect_order_tx: Sender<(u16, u64)>,
+    redirect_order_tx: Sender<RedirectOrder>,
 }
 
 impl BroadcastHandler for RedirectBroadcastHandler {
@@ -429,7 +485,7 @@ impl BroadcastHandler for RedirectBroadcastHandler {
 impl RedirectBroadcastHandler {
     pub fn new(
         next_handle: Box<dyn BroadcastHandle>,
-        redirect_order_tx: Sender<(u16, u64)>,
+        redirect_order_tx: Sender<RedirectOrder>,
     ) -> Self {
         Self {
             next_handle,
@@ -490,7 +546,7 @@ mod tests {
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(BroadcastHandleMock::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
         (subject, stop_handle)
     }
@@ -521,13 +577,21 @@ mod tests {
         let conversation2 = subject.start_conversation();
 
         let conversation1_handle = thread::spawn(move || {
-            let response1 = conversation1.transact(UiShutdownRequest {}.tmb(0)).unwrap();
-            let response2 = conversation1.transact(UiStartOrder {}.tmb(0)).unwrap();
+            let response1 = conversation1
+                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .unwrap();
+            let response2 = conversation1
+                .transact(UiStartOrder {}.tmb(0), 1000)
+                .unwrap();
             (response1, response2)
         });
         let conversation2_handle = thread::spawn(move || {
-            let response1 = conversation2.transact(UiShutdownRequest {}.tmb(0)).unwrap();
-            let response2 = conversation2.transact(UiStartOrder {}.tmb(0)).unwrap();
+            let response1 = conversation2
+                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .unwrap();
+            let response2 = conversation2
+                .transact(UiStartOrder {}.tmb(0), 1000)
+                .unwrap();
             (response1, response2)
         });
 
@@ -757,7 +821,10 @@ mod tests {
         let mut inner = make_inner();
         inner.redirect_response_tx = redirect_response_tx;
 
-        ConnectionManagerThread::handle_redirect_order(inner, Ok((node_port, 0)));
+        ConnectionManagerThread::handle_redirect_order(
+            inner,
+            Ok(RedirectOrder::new(node_port, 0, 1000)),
+        );
 
         let response = redirect_response_rx.try_recv().unwrap();
         assert_eq!(response, Err(ClientListenerError::Broken));
@@ -780,7 +847,10 @@ mod tests {
         inner.conversations = conversations;
         inner.conversations_waiting = conversations_waiting;
 
-        inner = ConnectionManagerThread::handle_redirect_order(inner, Ok((node_port, 1)));
+        inner = ConnectionManagerThread::handle_redirect_order(
+            inner,
+            Ok(RedirectOrder::new(node_port, 1, 1000)),
+        );
 
         let get_existing_keys = |inner: &CmsInner| {
             inner
@@ -804,11 +874,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Lost connection, couldn't fall back to Daemon")]
     fn handles_listener_fallback_from_daemon() {
         let daemon_port = find_free_port();
-        let (conversation_tx, _) = unbounded();
-        let (decoy_tx, _) = unbounded();
+        let (conversation_tx, conversation_rx) = unbounded();
+        let (decoy_tx, decoy_rx) = unbounded();
         let mut inner = make_inner();
         inner.active_port = daemon_port;
         inner.daemon_port = daemon_port;
@@ -818,6 +887,10 @@ mod tests {
         inner.conversations_waiting.insert(4);
 
         let _ = ConnectionManagerThread::handle_incoming_message_body(inner, Err(RecvError));
+
+        let disappointment = conversation_rx.try_recv().unwrap();
+        assert_eq!(disappointment, Err(NodeConversationTermination::Fatal));
+        assert_eq!(decoy_rx.try_recv(), Err(TryRecvError::Disconnected));
     }
 
     #[test]
@@ -957,11 +1030,11 @@ mod tests {
         let broadcast_handler = BroadcastHandleMock::new().send_params(&send_params_arc);
         let mut subject = ConnectionManager::new();
         subject
-            .connect(daemon_port, Box::new(broadcast_handler))
+            .connect(daemon_port, Box::new(broadcast_handler), 1000)
             .unwrap();
         let conversation = subject.start_conversation();
 
-        let result = conversation.transact(request).unwrap();
+        let result = conversation.transact(request, 1000).unwrap();
 
         let request_body = node_stop_handle.stop()[0].clone().unwrap();
         daemon_stop_handle.stop();
@@ -1052,39 +1125,29 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let stop_handle = server.start();
         let (_, talker_half) = make_client(port).split().unwrap();
-        let (demand_tx, demand_rx) = unbounded();
         let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
-        let (conversation_return_tx, conversation_return_rx) = unbounded();
         let (_listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         let (_redirect_order_tx, redirect_order_rx) = unbounded();
         let mut inner = make_inner();
         inner.next_context_id = 1;
-        inner.conversation_return_tx = conversation_return_tx;
         inner.conversations_to_manager_tx = conversations_to_manager_tx;
         inner.conversations_to_manager_rx = conversations_to_manager_rx;
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
-        inner.demand_rx = demand_rx;
         inner.redirect_order_rx = redirect_order_rx;
-        demand_tx.send(Demand::Conversation).unwrap();
-        inner = ConnectionManagerThread::thread_loop_guts(inner);
-        let conversation = conversation_return_rx.try_recv().unwrap();
         let outgoing_message = UiUnmarshalError {
             message: "".to_string(),
             bad_data: "".to_string(),
         }
         .tmb(0);
 
-        let inner = ConnectionManagerThread::handle_outgoing_message_body(
+        let _ = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
             Ok(OutgoingMessageType::FireAndForgetMessage(
                 outgoing_message.clone(),
-                conversation.context_id(),
             )),
         );
 
-        assert_eq!(inner.conversations.len(), 1);
-        assert_eq!(inner.conversations_waiting.is_empty(), true);
         let mut outgoing_messages = stop_handle.stop();
         assert_eq!(
             UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()),
@@ -1200,7 +1263,6 @@ mod tests {
                     bad_data: String::new(),
                 }
                 .tmb(0),
-                2,
             )),
         );
 
@@ -1218,38 +1280,13 @@ mod tests {
     }
 
     #[test]
-    fn handles_outgoing_fire_and_forget_message_from_nonexistent_conversation() {
-        let conversations = vec![(1, unbounded().0), (2, unbounded().0)]
-            .into_iter()
-            .collect::<HashMap<u64, Sender<Result<MessageBody, NodeConversationTermination>>>>();
-        let mut inner = make_inner();
-        inner.conversations = conversations;
-        inner.conversations_waiting = vec_to_set(vec![1]);
-
-        inner = ConnectionManagerThread::handle_outgoing_message_body(
-            inner,
-            Ok(OutgoingMessageType::FireAndForgetMessage(
-                UiUnmarshalError {
-                    message: String::new(),
-                    bad_data: String::new(),
-                }
-                .tmb(0),
-                42,
-            )),
-        );
-
-        assert_eq!(inner.conversations.len(), 2);
-        assert_eq!(inner.conversations_waiting.len(), 1);
-    }
-
-    #[test]
     fn handles_close_order() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_owned_message(OwnedMessage::Close(None));
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
         subject
-            .connect(port, Box::new(BroadcastHandleMock::new()))
+            .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
         let conversation1 = subject.start_conversation();
         let conversation2 = subject.start_conversation();
@@ -1257,7 +1294,7 @@ mod tests {
         subject.close();
 
         let _ = stop_handle.stop();
-        let result = conversation1.transact(UiShutdownRequest {}.tmb(0));
+        let result = conversation1.transact(UiShutdownRequest {}.tmb(0), 1000);
         assert_eq!(result, Err(ClientError::ConnectionDropped));
         let result = conversation2.send(
             UiUnmarshalError {
@@ -1266,7 +1303,7 @@ mod tests {
             }
             .tmb(0),
         );
-        assert_eq!(result, Err(ClientError::ConnectionDropped));
+        assert_eq!(result, Ok(()));
     }
 
     fn make_inner() -> CmsInner {

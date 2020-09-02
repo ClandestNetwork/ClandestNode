@@ -14,6 +14,7 @@ use websocket::OwnedMessage;
 pub enum ClientListenerError {
     Closed,
     Broken,
+    Timeout,
     UnexpectedPacket,
 }
 
@@ -22,6 +23,7 @@ impl ClientListenerError {
         match self {
             ClientListenerError::Closed => true,
             ClientListenerError::Broken => true,
+            ClientListenerError::Timeout => true,
             ClientListenerError::UnexpectedPacket => false,
         }
     }
@@ -281,6 +283,7 @@ mod tests {
     fn client_listener_errors_know_their_own_fatality() {
         assert_eq!(ClientListenerError::Closed.is_fatal(), true);
         assert_eq!(ClientListenerError::Broken.is_fatal(), true);
+        assert_eq!(ClientListenerError::Timeout.is_fatal(), true);
         assert_eq!(ClientListenerError::UnexpectedPacket.is_fatal(), false);
     }
 

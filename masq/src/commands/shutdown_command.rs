@@ -2,9 +2,11 @@
 
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::CommandError::{
-    ConnectionDropped, Other, Payload, Transmission,
+    ConnectionProblem, Other, Payload, Transmission,
 };
-use crate::commands::commands_common::{transaction, Command, CommandError};
+use crate::commands::commands_common::{
+    transaction, Command, CommandError, STANDARD_COMMAND_TIMEOUT_MILLIS,
+};
 use clap::{App, SubCommand};
 use masq_lib::messages::{UiShutdownRequest, UiShutdownResponse, NODE_NOT_RUNNING_ERROR};
 use masq_lib::utils::localhost;
@@ -32,10 +34,11 @@ pub fn shutdown_subcommand() -> App<'static, 'static> {
 impl Command for ShutdownCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let input = UiShutdownRequest {};
-        let output: Result<UiShutdownResponse, CommandError> = transaction(input, context);
+        let output: Result<UiShutdownResponse, CommandError> =
+            transaction(input, context, STANDARD_COMMAND_TIMEOUT_MILLIS);
         match output {
             Ok(_) => (),
-            Err(ConnectionDropped(_)) => {
+            Err(ConnectionProblem(_)) => {
                 writeln!(
                     context.stdout(),
                     "MASQNode was instructed to shut down and has broken its connection"
@@ -236,7 +239,10 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(
+            *transact_params,
+            vec![(UiShutdownRequest {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+        );
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has broken its connection\n"
@@ -264,7 +270,10 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(
+            *transact_params,
+            vec![(UiShutdownRequest {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+        );
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has broken its connection\n"
@@ -297,7 +306,10 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(
+            *transact_params,
+            vec![(UiShutdownRequest {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+        );
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
             "MASQNode was instructed to shut down and has stopped answering\n"
@@ -331,7 +343,10 @@ mod tests {
 
         assert_eq!(result, Err(Other("Shutdown failed".to_string())));
         let transact_params = transact_params_arc.lock().unwrap();
-        assert_eq!(*transact_params, vec![UiShutdownRequest {}.tmb(0)]);
+        assert_eq!(
+            *transact_params,
+            vec![(UiShutdownRequest {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+        );
         assert_eq!(stdout_arc.lock().unwrap().get_string(), String::new());
         assert_eq!(
             stderr_arc.lock().unwrap().get_string(),

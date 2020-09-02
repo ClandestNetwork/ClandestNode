@@ -28,7 +28,7 @@ impl CommandProcessorFactory for CommandProcessorFactoryReal {
         let ui_port = value_t!(matches, "ui-port", u16).expect("ui-port is not properly defaulted");
         match CommandContextReal::new(ui_port, broadcast_stream_factory) {
             Ok(context) => Ok(Box::new(CommandProcessorReal { context })),
-            Err(ContextError::ConnectionRefused(s)) => Err(CommandError::ConnectionRefused(s)),
+            Err(ContextError::ConnectionRefused(s)) => Err(CommandError::ConnectionProblem(s)),
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }
@@ -75,7 +75,7 @@ mod tests {
 
     impl Command for TestCommand {
         fn execute<'a>(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
-            match context.transact(UiShutdownRequest {}.tmb(1)) {
+            match context.transact(UiShutdownRequest {}.tmb(1), 1000) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(CommandError::Other(format!("{:?}", e))),
             }
@@ -96,8 +96,8 @@ mod tests {
 
         match result {
             Ok(_) => panic!("Success! Was hoping for failure."),
-            Err(CommandError::ConnectionRefused(_)) => (),
-            Err(e) => panic!("Expected ConnectionRefused, got {:?}", e),
+            Err(CommandError::ConnectionProblem(_)) => (),
+            Err(e) => panic!("Expected ConnectionProblem, got {:?}", e),
         }
     }
 

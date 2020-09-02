@@ -70,7 +70,10 @@ impl BroadcastHandlerReal {
         stdout: &mut dyn Write,
         stderr: &mut dyn Write,
     ) {
-        let message_body = message_body_result.expect("Message from beyond the grave");
+        let message_body = match message_body_result {
+            Ok(mb) => mb,
+            Err(_) => return, // Receiver died; masq is going down
+        };
         match &message_body.opcode {
             o if o == UiSetupBroadcast::type_opcode() => {
                 SetupCommand::handle_broadcast(message_body, stdout, stderr)

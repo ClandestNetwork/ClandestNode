@@ -258,7 +258,7 @@ pub mod standard {
             value_m!(multi_config, "ui-port", u16).unwrap_or(DEFAULT_UI_PORT);
 
         privileged_config.crash_point =
-            value_m!(multi_config, "crash-point", CrashPoint).expect("Internal Error");
+            value_m!(multi_config, "crash-point", CrashPoint).unwrap_or(CrashPoint::None);
 
         match value_m!(multi_config, "fake-public-key", String) {
             None => (),

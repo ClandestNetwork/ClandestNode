@@ -70,6 +70,8 @@ use std::convert::TryFrom;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+pub const CRASH_KEY: &str = "NEIGHBORHOOD";
+
 pub struct Neighborhood {
     cryptde: &'static dyn CryptDE,
     hopper: Option<Recipient<IncipientCoresPackage>>,
