@@ -71,8 +71,8 @@ impl BroadcastHandlerReal {
         stderr: &mut dyn Write,
     ) {
         let message_body = match message_body_result {
-            Ok (mb) => mb,
-            Err (_) => return, // Receiver died; masq is going down
+            Ok(mb) => mb,
+            Err(_) => return, // Receiver died; masq is going down
         };
         match &message_body.opcode {
             o if o == UiSetupBroadcast::type_opcode() => {

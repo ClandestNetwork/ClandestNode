@@ -15,12 +15,12 @@ use masq_lib::utils::localhost;
 use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
 use std::thread;
-use websocket::sender::Writer;
-use websocket::ws::sender::Sender as WsSender;
-use websocket::{ClientBuilder, WebSocketResult};
-use websocket::OwnedMessage;
-use websocket::sync::Client;
 use std::time::Duration;
+use websocket::sender::Writer;
+use websocket::sync::Client;
+use websocket::ws::sender::Sender as WsSender;
+use websocket::OwnedMessage;
+use websocket::{ClientBuilder, WebSocketResult};
 
 pub const REDIRECT_TIMEOUT_MILLIS: u64 = 500;
 pub const FALLBACK_TIMEOUT_MILLIS: u64 = 500;
@@ -47,8 +47,12 @@ pub struct RedirectOrder {
 }
 
 impl RedirectOrder {
-    pub fn new (port: u16, context_id: u64, timeout_millis: u64) -> Self {
-        Self {port, context_id, timeout_millis}
+    pub fn new(port: u16, context_id: u64, timeout_millis: u64) -> Self {
+        Self {
+            port,
+            context_id,
+            timeout_millis,
+        }
     }
 }
 
@@ -147,48 +151,33 @@ fn make_client_listener(
     timeout_millis: u64,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
     let url = format!("ws://{}:{}", localhost(), port);
-eprintln! ("make_client_listener: {}", url);
-    let builder =
-        ClientBuilder::new(url.as_str()).expect("Bad URL");
-eprintln! ("builder created");
+    let builder = ClientBuilder::new(url.as_str()).expect("Bad URL");
     let result = builder.add_protocol(NODE_UI_PROTOCOL);
-eprintln! ("protocol added; about to wait for timeout");
     let result = match connect_insecure_timeout(result, timeout_millis) {
-        Err (RecvTimeoutError::Disconnected) => return Err(ClientListenerError::Closed),
-        Err (RecvTimeoutError::Timeout) => return Err (ClientListenerError::Timeout),
-        Ok (r) => r,
+        Err(RecvTimeoutError::Disconnected) => return Err(ClientListenerError::Closed),
+        Err(RecvTimeoutError::Timeout) => return Err(ClientListenerError::Timeout),
+        Ok(r) => r,
     };
-eprintln! ("connect complete");
     let client = match result {
-        Ok(c) => {
-eprintln! ("Success");
-            c
-        },
-        Err(_) => {
-eprintln! ("Failure: Broken");
-            return Err(ClientListenerError::Broken)
-        },
+        Ok(c) => c,
+        Err(_) => return Err(ClientListenerError::Broken),
     };
     let (listener_half, talker_half) = client.split().unwrap();
-eprintln! ("Split client; making client_listener");
     let client_listener = ClientListener::new();
-eprintln! ("Starting client_listener");
     client_listener.start(listener_half, listener_to_manager_tx);
-eprintln! ("Started");
     Ok(talker_half)
 }
 
-fn connect_insecure_timeout (mut builder: ClientBuilder<'static>, timeout_millis: u64) -> Result<WebSocketResult<Client<TcpStream>>, RecvTimeoutError> {
+fn connect_insecure_timeout(
+    mut builder: ClientBuilder<'static>,
+    timeout_millis: u64,
+) -> Result<WebSocketResult<Client<TcpStream>>, RecvTimeoutError> {
     let (tx, rx) = unbounded();
-eprintln! ("Spawning connect thread");
-    thread::spawn (move || {
-eprintln! ("Starting connect");
+    thread::spawn(move || {
         let result = builder.connect_insecure();
-eprintln! ("Connect complete");
-        tx.send (result).expect ("Channel died");
+        tx.send(result).expect("Channel died");
     });
-eprintln! ("Waiting for connect");
-    rx.recv_timeout (Duration::from_millis (timeout_millis))
+    rx.recv_timeout(Duration::from_millis(timeout_millis))
 }
 
 struct CmsInner {
@@ -269,7 +258,6 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
-eprintln! ("handle_incoming_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
@@ -311,7 +299,6 @@ eprintln! ("handle_incoming_message_body: {:?}", msg_result_result);
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-eprintln! ("handle_outgoing_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -319,14 +306,11 @@ eprintln! ("handle_outgoing_message_body: {:?}", msg_result_result);
                     let conversation_result = inner.conversations.get(&context_id);
                     if conversation_result.is_some() {
                         let send_message_result = inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body)));
-eprintln! ("ConnectionManager sent message: {:?}", send_message_result);
                         match send_message_result {
                             Ok(_) => {
-eprintln! ("ConnectionManager has new waiting conversation: {}", context_id);
                                 inner.conversations_waiting.insert(context_id);
                             },
                             Err(_) => {
-eprintln! ("ConnectionManager got error: falling back");
                                 inner = Self::fallback(inner);
                             },
                         }
@@ -360,7 +344,11 @@ eprintln! ("ConnectionManager got error: falling back");
             Err(_) => return inner, // Sender died; ignore
         };
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
-        let talker_half = match make_client_listener(redirect_order.port, listener_to_manager_tx, redirect_order.timeout_millis) {
+        let talker_half = match make_client_listener(
+            redirect_order.port,
+            listener_to_manager_tx,
+            redirect_order.timeout_millis,
+        ) {
             Ok(th) => th,
             Err(_) => {
                 let _ = inner
@@ -416,17 +404,13 @@ eprintln! ("ConnectionManager got error: falling back");
         inner.active_port = inner.daemon_port;
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
-eprintln! ("Attempting fallback");
-        match make_client_listener(inner.active_port, listener_to_manager_tx, FALLBACK_TIMEOUT_MILLIS) {
-            Ok(th) =>  {
-eprintln! ("Fallback succeeded");
-                inner.talker_half = th
-            },
-            Err(_) => {
-eprintln! ("Fallback failed");
-            },
+        if let Ok(talker_half) = make_client_listener(
+            inner.active_port,
+            listener_to_manager_tx,
+            FALLBACK_TIMEOUT_MILLIS,
+        ) {
+            inner.talker_half = talker_half;
         };
-eprintln! ("Disappointing waiting conversations");
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner
     }
@@ -436,7 +420,6 @@ eprintln! ("Disappointing waiting conversations");
         error: NodeConversationTermination,
     ) -> CmsInner {
         inner.conversations_waiting.iter().for_each(|context_id| {
-eprintln! ("  Disappointing conversation {}", context_id);
             let _ = inner
                 .conversations
                 .get(context_id)
@@ -471,7 +454,11 @@ impl BroadcastHandle for BroadcastHandleRedirect {
             Ok((redirect, _)) => {
                 let context_id = redirect.context_id.unwrap_or(0);
                 self.redirect_order_tx
-                    .send(RedirectOrder::new(redirect.port, context_id, REDIRECT_TIMEOUT_MILLIS))
+                    .send(RedirectOrder::new(
+                        redirect.port,
+                        context_id,
+                        REDIRECT_TIMEOUT_MILLIS,
+                    ))
                     .expect("ConnectionManagerThread is dead");
             }
             Err(_) => {
@@ -830,7 +817,10 @@ mod tests {
         let mut inner = make_inner();
         inner.redirect_response_tx = redirect_response_tx;
 
-        ConnectionManagerThread::handle_redirect_order(inner, Ok(RedirectOrder::new(node_port, 0, 1000)));
+        ConnectionManagerThread::handle_redirect_order(
+            inner,
+            Ok(RedirectOrder::new(node_port, 0, 1000)),
+        );
 
         let response = redirect_response_rx.try_recv().unwrap();
         assert_eq!(response, Err(ClientListenerError::Broken));
@@ -853,7 +843,10 @@ mod tests {
         inner.conversations = conversations;
         inner.conversations_waiting = conversations_waiting;
 
-        inner = ConnectionManagerThread::handle_redirect_order(inner, Ok(RedirectOrder::new(node_port, 1, 1000)));
+        inner = ConnectionManagerThread::handle_redirect_order(
+            inner,
+            Ok(RedirectOrder::new(node_port, 1, 1000)),
+        );
 
         let get_existing_keys = |inner: &CmsInner| {
             inner
@@ -891,9 +884,9 @@ mod tests {
 
         let _ = ConnectionManagerThread::handle_incoming_message_body(inner, Err(RecvError));
 
-        let disappointment = conversation_rx.try_recv ().unwrap();
-        assert_eq! (disappointment, Err(NodeConversationTermination::Fatal));
-        assert_eq! (decoy_rx.try_recv(), Err(TryRecvError::Disconnected));
+        let disappointment = conversation_rx.try_recv().unwrap();
+        assert_eq!(disappointment, Err(NodeConversationTermination::Fatal));
+        assert_eq!(decoy_rx.try_recv(), Err(TryRecvError::Disconnected));
     }
 
     #[test]
