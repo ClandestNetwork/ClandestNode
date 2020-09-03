@@ -15,7 +15,7 @@ use masq_lib::utils::localhost;
 use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use websocket::sender::Writer;
 use websocket::sync::Client;
 use websocket::ws::sender::Sender as WsSender;
@@ -174,8 +174,22 @@ fn connect_insecure_timeout(
 ) -> Result<WebSocketResult<Client<TcpStream>>, RecvTimeoutError> {
     let (tx, rx) = unbounded();
     thread::spawn(move || {
+        let begin = Instant::now();
         let result = builder.connect_insecure();
-        tx.send(result).expect("Channel died");
+        let interval = begin.duration_since(begin);
+        let result_str = match &result {
+            Ok(_) => "success".to_string(),
+            Err(e) => format!("{:?}", e),
+        };
+        match tx.send(result) {
+            Ok(_) => (),
+            Err(_) => eprintln!(
+                "connect_insecure_timeout returned after {}ms, having blown a {}ms timeout: {:?}",
+                interval.as_millis(),
+                timeout_millis,
+                result_str
+            ),
+        }
     });
     rx.recv_timeout(Duration::from_millis(timeout_millis))
 }
