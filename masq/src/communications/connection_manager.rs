@@ -176,7 +176,7 @@ fn connect_insecure_timeout(
     thread::spawn(move || {
         let begin = Instant::now();
         let result = builder.connect_insecure();
-        let interval = begin.duration_since(begin);
+        let interval = Instant::now().duration_since(begin);
         let result_str = match &result {
             Ok(_) => "success".to_string(),
             Err(e) => format!("{:?}", e),
@@ -558,6 +558,7 @@ mod tests {
     ) -> (ConnectionManager, MockWebSocketsServerStopHandle) {
         let port = server.port();
         let stop_handle = server.start();
+        thread::sleep (Duration::from_millis(500)); // let the server get started
         let mut subject = ConnectionManager::new();
         subject
             .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
@@ -1295,6 +1296,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port).queue_owned_message(OwnedMessage::Close(None));
         let stop_handle = server.start();
         let mut subject = ConnectionManager::new();
+        thread::sleep (Duration::from_millis(500)); // let the server get started
         subject
             .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
