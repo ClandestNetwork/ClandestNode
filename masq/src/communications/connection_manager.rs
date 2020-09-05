@@ -1169,10 +1169,13 @@ mod tests {
     #[test]
     fn handles_outgoing_conversation_messages_to_dead_server() {
         let daemon_port = find_free_port();
+        eprintln!("daemon_port: {}", daemon_port);
         let daemon_server = MockWebSocketsServer::new(daemon_port)
             .queue_string("disconnect")
             .write_logs();
+        eprintln!("daemon_server created");
         let daemon_stop_handle = daemon_server.start();
+        eprintln!("daemon_server started");
         let (conversation1_tx, conversation1_rx) = unbounded();
         let (conversation2_tx, conversation2_rx) = unbounded();
         let (conversation3_tx, conversation3_rx) = unbounded();
@@ -1197,23 +1200,29 @@ mod tests {
             thread::sleep(Duration::from_millis(500));
         }
 
+        eprintln!("inner constructed");
         inner = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
             Ok(OutgoingMessageType::ConversationMessage(
                 UiSetupRequest { values: vec![] }.tmb(2),
             )),
         );
+        eprintln!("Stopping daemon");
 
         let _ = daemon_stop_handle.stop();
+        eprintln!("asserting conversation_1");
         assert_eq!(conversation1_rx.try_recv(), Err(TryRecvError::Empty)); // Wasn't waiting
+        eprintln!("asserting conversation_2");
         assert_eq!(
             conversation2_rx.try_recv(),
             Ok(Err(NodeConversationTermination::Fatal))
         ); // sender
+        eprintln!("asserting conversation_3");
         assert_eq!(
             conversation3_rx.try_recv(),
             Ok(Err(NodeConversationTermination::Fatal))
         ); // innocent bystander
+        eprintln!("asserting conversations_waiting");
         assert_eq!(inner.conversations_waiting.is_empty(), true);
     }
 
