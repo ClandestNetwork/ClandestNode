@@ -85,6 +85,7 @@ impl ConnectionManager {
         broadcast_handle: Box<dyn BroadcastHandle>,
         timeout_millis: u64,
     ) -> Result<(), ClientListenerError> {
+        eprintln! ("connect called");
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         let talker_half = make_client_listener(port, listener_to_manager_tx, timeout_millis)?;
@@ -150,6 +151,7 @@ fn make_client_listener(
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
     timeout_millis: u64,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
+    eprintln! ("make_client_listener called");
     let url = format!("ws://{}:{}", localhost(), port);
     let builder = ClientBuilder::new(url.as_str()).expect("Bad URL");
     let result = builder.add_protocol(NODE_UI_PROTOCOL);
@@ -225,6 +227,7 @@ impl ConnectionManagerThread {
 
     fn spawn_thread(mut inner: CmsInner) {
         thread::spawn(move || loop {
+            eprintln! ("Calling thread_loop_guts");
             inner = Self::thread_loop_guts(inner)
         });
     }
@@ -353,6 +356,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         redirect_order_result: Result<RedirectOrder, RecvError>,
     ) -> CmsInner {
+        eprintln! ("handle_redirect_order called");
         let redirect_order = match redirect_order_result {
             Ok(ro) => ro,
             Err(_) => return inner, // Sender died; ignore
@@ -414,6 +418,7 @@ impl ConnectionManagerThread {
     }
 
     fn fallback(mut inner: CmsInner) -> CmsInner {
+        eprintln! ("fallback called");
         inner.node_port = None;
         inner.active_port = inner.daemon_port;
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
