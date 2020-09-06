@@ -118,7 +118,7 @@ impl CommandContextReal {
         daemon_ui_port: u16,
         broadcast_stream_factory: Box<dyn StreamFactory>,
     ) -> Result<Self, ContextError> {
-        eprintln! ("CommandContextReal::new called");
+        eprintln!("CommandContextReal::new called");
         let mut connection = ConnectionManager::new();
         let broadcast_handler = BroadcastHandlerReal::new();
         let broadcast_handle = broadcast_handler.start(broadcast_stream_factory);
