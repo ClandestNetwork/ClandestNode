@@ -277,7 +277,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_incoming_message_body");
+        eprintln!("handle_incoming_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
