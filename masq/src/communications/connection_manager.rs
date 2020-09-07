@@ -60,7 +60,7 @@ pub struct ConnectionManager {
     demand_tx: Sender<Demand>,
     conversation_return_rx: Receiver<NodeConversation>,
     redirect_response_rx: Receiver<Result<(), ClientListenerError>>,
-    active_port_response_rx: Receiver<u16>,
+    active_port_response_rx: Receiver<Option<u16>>,
 }
 
 impl Default for ConnectionManager {
@@ -100,7 +100,7 @@ impl ConnectionManager {
         self.redirect_response_rx = redirect_response_rx;
         self.active_port_response_rx = active_port_response_rx;
         let inner = CmsInner {
-            active_port: port,
+            active_port: Some(port),
             daemon_port: port,
             node_port: None,
             conversations: HashMap::new(),
@@ -121,7 +121,7 @@ impl ConnectionManager {
         Ok(())
     }
 
-    pub fn active_ui_port(&self) -> u16 {
+    pub fn active_ui_port(&self) -> Option<u16> {
         self.demand_tx
             .send(Demand::ActivePort)
             .expect("ConnectionManagerThread is dead");
@@ -197,7 +197,7 @@ fn connect_insecure_timeout(
 }
 
 struct CmsInner {
-    active_port: u16,
+    active_port: Option<u16>,
     daemon_port: u16,
     node_port: Option<u16>,
     conversations: HashMap<u64, Sender<Result<MessageBody, NodeConversationTermination>>>,
@@ -212,7 +212,7 @@ struct CmsInner {
     broadcast_handle: Box<dyn BroadcastHandle>,
     redirect_order_rx: Receiver<RedirectOrder>,
     redirect_response_tx: Sender<Result<(), ClientListenerError>>,
-    active_port_response_tx: Sender<u16>,
+    active_port_response_tx: Sender<Option<u16>>,
 }
 
 pub struct ConnectionManagerThread {}
@@ -376,7 +376,7 @@ impl ConnectionManagerThread {
             }
         };
         inner.node_port = Some(redirect_order.port);
-        inner.active_port = redirect_order.port;
+        inner.active_port = Some(redirect_order.port);
         inner.listener_to_manager_rx = listener_to_manager_rx;
         inner.talker_half = talker_half;
         inner.conversations_waiting.iter().for_each(|context_id| {
@@ -420,11 +420,24 @@ impl ConnectionManagerThread {
     fn fallback(mut inner: CmsInner) -> CmsInner {
         eprintln!("fallback called");
         inner.node_port = None;
-        inner.active_port = inner.daemon_port;
+        match &inner.active_port {
+            None => {
+                inner =
+                    Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
+                return inner;
+            }
+            Some(active_port) if *active_port == inner.daemon_port => {
+                inner.active_port = None;
+                inner =
+                    Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
+                return inner;
+            }
+            Some(_) => inner.active_port = Some(inner.daemon_port),
+        }
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
         if let Ok(talker_half) = make_client_listener(
-            inner.active_port,
+            inner.active_port.expect("Active port disappeared!"),
             listener_to_manager_tx,
             FALLBACK_TIMEOUT_MILLIS,
         ) {
@@ -798,7 +811,7 @@ mod tests {
         let (conversation_tx, conversation_rx) = unbounded();
         let (decoy_tx, decoy_rx) = unbounded();
         let mut inner = make_inner();
-        inner.active_port = node_port;
+        inner.active_port = Some(node_port);
         inner.daemon_port = daemon_port;
         inner.node_port = Some(node_port);
         inner.conversations.insert(4, conversation_tx);
@@ -813,7 +826,7 @@ mod tests {
             Err(NodeConversationTermination::Fatal)
         );
         assert_eq!(decoy_rx.try_recv().is_err(), true); // no disconnect notification sent to conversation not waiting
-        assert_eq!(inner.active_port, daemon_port);
+        assert_eq!(inner.active_port, Some(daemon_port));
         assert_eq!(inner.daemon_port, daemon_port);
         assert_eq!(inner.node_port, None);
         assert_eq!(inner.conversations_waiting.is_empty(), true);
@@ -828,6 +841,66 @@ mod tests {
             outgoing_messages.remove(0),
             Ok(UiSetupRequest { values: vec![] }.tmb(4))
         );
+    }
+
+    #[test]
+    fn doesnt_fall_back_from_daemon() {
+        let unoccupied_port = find_free_port();
+        let (waiting_conversation_tx, waiting_conversation_rx) = unbounded();
+        let (idle_conversation_tx, idle_conversation_rx) = unbounded();
+        let mut inner = make_inner();
+        inner.daemon_port = unoccupied_port;
+        inner.active_port = Some(unoccupied_port);
+        inner.node_port = None;
+        inner.conversations.insert(4, waiting_conversation_tx);
+        inner.conversations.insert(5, idle_conversation_tx);
+        inner.conversations_waiting.insert(4);
+
+        let inner = ConnectionManagerThread::fallback(inner);
+
+        let disconnect_notification = waiting_conversation_rx.try_recv().unwrap();
+        assert_eq!(
+            disconnect_notification,
+            Err(NodeConversationTermination::Fatal)
+        );
+        let disconnect_notification = idle_conversation_rx.try_recv().unwrap();
+        assert_eq!(
+            disconnect_notification,
+            Err(NodeConversationTermination::Fatal)
+        );
+        assert_eq!(inner.daemon_port, unoccupied_port);
+        assert_eq!(inner.active_port, None);
+        assert_eq!(inner.node_port, None);
+    }
+
+    #[test]
+    fn doesnt_fall_back_from_disconnected() {
+        let unoccupied_port = find_free_port();
+        let (waiting_conversation_tx, waiting_conversation_rx) = unbounded();
+        let (idle_conversation_tx, idle_conversation_rx) = unbounded();
+        let mut inner = make_inner();
+        inner.daemon_port = unoccupied_port;
+        inner.active_port = None;
+        inner.node_port = None;
+        inner.conversations.insert(4, waiting_conversation_tx);
+        inner.conversations.insert(5, idle_conversation_tx);
+        inner.conversations_waiting.insert(4);
+
+        let inner = ConnectionManagerThread::fallback(inner);
+
+        let disconnect_notification = waiting_conversation_rx.try_recv().unwrap();
+        assert_eq!(
+            disconnect_notification,
+            Err(NodeConversationTermination::Fatal)
+        );
+        let disconnect_notification = idle_conversation_rx.try_recv().unwrap();
+        assert_eq!(
+            disconnect_notification,
+            Err(NodeConversationTermination::Fatal)
+        );
+        assert_eq!(inner.daemon_port, unoccupied_port);
+        assert_eq!(inner.active_port, None);
+        assert_eq!(inner.node_port, None);
     }
 
     #[test]
@@ -895,7 +968,7 @@ mod tests {
         let (conversation_tx, conversation_rx) = unbounded();
         let (decoy_tx, decoy_rx) = unbounded();
         let mut inner = make_inner();
-        inner.active_port = daemon_port;
+        inner.active_port = Some(daemon_port);
         inner.daemon_port = daemon_port;
         inner.node_port = None;
         inner.conversations.insert(4, conversation_tx);
@@ -906,7 +979,8 @@ mod tests {
 
         let disappointment = conversation_rx.try_recv().unwrap();
         assert_eq!(disappointment, Err(NodeConversationTermination::Fatal));
-        assert_eq!(decoy_rx.try_recv(), Err(TryRecvError::Disconnected));
+        let disappointment = decoy_rx.try_recv().unwrap();
+        assert_eq!(disappointment, Err(NodeConversationTermination::Fatal));
     }
 
     #[test]
@@ -925,7 +999,7 @@ mod tests {
         let (conversation_tx, conversation_rx) = unbounded();
         let (decoy_tx, decoy_rx) = unbounded();
         let mut inner = make_inner();
-        inner.active_port = node_port;
+        inner.active_port = Some(node_port);
         inner.daemon_port = daemon_port;
         inner.node_port = Some(node_port);
         inner.conversations.insert(4, conversation_tx);
@@ -943,7 +1017,7 @@ mod tests {
             Err(NodeConversationTermination::Fatal)
         );
         assert_eq!(decoy_rx.try_recv().is_err(), true); // no disconnect notification sent to conversation not waiting
-        assert_eq!(inner.active_port, daemon_port);
+        assert_eq!(inner.active_port, Some(daemon_port));
         assert_eq!(inner.daemon_port, daemon_port);
         assert_eq!(inner.node_port, None);
         assert_eq!(inner.conversations_waiting.is_empty(), true);
@@ -966,7 +1040,7 @@ mod tests {
         let node_port = find_free_port();
         let (conversation_tx, conversation_rx) = unbounded();
         let mut inner = make_inner();
-        inner.active_port = node_port;
+        inner.active_port = Some(node_port);
         inner.daemon_port = daemon_port;
         inner.node_port = Some(node_port);
         inner.conversations.insert(4, conversation_tx);
@@ -978,7 +1052,7 @@ mod tests {
         );
 
         assert_eq!(conversation_rx.try_recv().is_err(), true); // no disconnect notification sent
-        assert_eq!(inner.active_port, node_port);
+        assert_eq!(inner.active_port, Some(node_port));
         assert_eq!(inner.daemon_port, daemon_port);
         assert_eq!(inner.node_port, Some(node_port));
         assert_eq!(inner.conversations_waiting.is_empty(), false);
@@ -1212,9 +1286,7 @@ mod tests {
                 UiSetupRequest { values: vec![] }.tmb(2),
             )),
         );
-        eprintln!("Stopping daemon");
 
-        let _ = daemon_stop_handle.stop();
         eprintln!("asserting conversation_1");
         assert_eq!(conversation1_rx.try_recv(), Err(TryRecvError::Empty)); // Wasn't waiting
         eprintln!("asserting conversation_2");
@@ -1229,6 +1301,8 @@ mod tests {
         ); // innocent bystander
         eprintln!("asserting conversations_waiting");
         assert_eq!(inner.conversations_waiting.is_empty(), true);
+        eprintln!("Stopping daemon");
+        let _ = daemon_stop_handle.stop();
     }
 
     #[test]
@@ -1334,7 +1408,7 @@ mod tests {
 
     fn make_inner() -> CmsInner {
         CmsInner {
-            active_port: 0,
+            active_port: Some(0),
             daemon_port: 0,
             node_port: None,
             conversations: HashMap::new(),

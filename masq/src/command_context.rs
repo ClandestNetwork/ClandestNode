@@ -46,7 +46,7 @@ impl From<ClientError> for ContextError {
 }
 
 pub trait CommandContext {
-    fn active_port(&self) -> u16;
+    fn active_port(&self) -> Option<u16>;
     fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
     fn transact(
         &mut self,
@@ -67,7 +67,7 @@ pub struct CommandContextReal {
 }
 
 impl CommandContext for CommandContextReal {
-    fn active_port(&self) -> u16 {
+    fn active_port(&self) -> Option<u16> {
         self.connection.active_ui_port()
     }
 
@@ -200,7 +200,7 @@ mod tests {
 
         let subject = CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
 
-        assert_eq!(subject.active_port(), port);
+        assert_eq!(subject.active_port(), Some(port));
         handle.kill();
     }
 

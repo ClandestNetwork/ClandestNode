@@ -48,7 +48,7 @@ impl CommandFactoryMock {
 }
 
 pub struct CommandContextMock {
-    active_port_results: RefCell<Vec<u16>>,
+    active_port_results: RefCell<Vec<Option<u16>>>,
     send_params: Arc<Mutex<Vec<MessageBody>>>,
     send_results: RefCell<Vec<Result<(), ContextError>>>,
     transact_params: Arc<Mutex<Vec<(MessageBody, u64)>>>,
@@ -60,7 +60,7 @@ pub struct CommandContextMock {
 }
 
 impl CommandContext for CommandContextMock {
-    fn active_port(&self) -> u16 {
+    fn active_port(&self) -> Option<u16> {
         self.active_port_results.borrow_mut().remove(0)
     }
 
@@ -123,7 +123,7 @@ impl CommandContextMock {
         Self::default()
     }
 
-    pub fn active_port_result(self, result: u16) -> Self {
+    pub fn active_port_result(self, result: Option<u16>) -> Self {
         self.active_port_results.borrow_mut().push(result);
         self
     }
