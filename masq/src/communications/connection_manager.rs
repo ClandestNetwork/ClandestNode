@@ -242,6 +242,7 @@ impl ConnectionManagerThread {
     }
 
     fn handle_demand(inner: CmsInner, demand_result: Result<Demand, RecvError>) -> CmsInner {
+        eprintln!("handle_demand");
         match demand_result {
             Ok(Demand::Conversation) => Self::handle_conversation_trigger(inner),
             Ok(Demand::ActivePort) => Self::handle_active_port_request(inner),
@@ -251,6 +252,7 @@ impl ConnectionManagerThread {
     }
 
     fn handle_conversation_trigger(mut inner: CmsInner) -> CmsInner {
+        eprintln!("handle_conversation_trigger");
         let (manager_to_conversation_tx, manager_to_conversation_rx) = unbounded();
         let context_id = inner.next_context_id;
         inner.next_context_id += 1;
@@ -275,6 +277,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
+        eprintln!("handle_incoming_message_body");
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
@@ -316,6 +319,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
+        eprintln!("handle_outgoing_message_body");
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -400,6 +404,7 @@ impl ConnectionManagerThread {
     }
 
     fn handle_active_port_request(inner: CmsInner) -> CmsInner {
+        eprintln!("handle_active_port_request");
         inner
             .active_port_response_tx
             .send(inner.active_port)
@@ -408,6 +413,7 @@ impl ConnectionManagerThread {
     }
 
     fn handle_close(mut inner: CmsInner) -> CmsInner {
+        eprintln!("handle_close");
         inner = Self::disappoint_all_conversations(inner, NodeConversationTermination::Graceful);
         let _ = inner
             .talker_half
