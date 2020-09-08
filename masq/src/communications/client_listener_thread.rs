@@ -60,7 +60,7 @@ impl ClientListener {
             .expect("ClientListener thread handle poisoned");
         match handle_opt_guard.take() {
             Some(receiver) => match receiver.try_recv() {
-                Ok(_) => false,
+                Ok(_) => false, // don't put it back; leave signal_out as None
                 Err(_) => {
                     handle_opt_guard.replace(receiver);
                     true
@@ -98,32 +98,43 @@ impl ClientListenerThread {
                 {
                     Ok(OwnedMessage::Text(string)) => {
                         match UiTrafficConverter::new_unmarshal(&string) {
-                            Ok(body) => match self.message_body_tx.send(Ok(body)) {
+                            Ok(body) => match self.message_body_tx.send(Ok(body.clone())) {
                                 Ok(_) => (),
-                                Err(_) => break,
+                                Err(_) => {
+                                    eprintln!("ClientListenerThread found dead channel trying to send to ConnectionManager: {:?}", body);
+                                    break
+                                },
                             },
                             Err(_) => match self
                                 .message_body_tx
                                 .send(Err(ClientListenerError::UnexpectedPacket))
                             {
                                 Ok(_) => (),
-                                Err(_) => break,
+                                Err(_) => {
+                                    eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unmarshal failure: {}", string);
+                                    break
+                                },
                             },
                         }
                     }
                     Ok(OwnedMessage::Close(_)) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Closed));
+                        eprintln!("ClientListenerThread received a Close message: stopping");
                         break;
                     }
-                    Ok(_) => match self
+                    Ok(unexpected) => match self
                         .message_body_tx
                         .send(Err(ClientListenerError::UnexpectedPacket))
                     {
                         Ok(_) => (),
-                        Err(_) => break,
+                        Err(_) => {
+                            eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unexpected WebSockets message: {:?}", unexpected);
+                            break
+                        },
                     },
-                    Err(_) => {
+                    Err(error) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Broken));
+                        eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of receive error: {:?}", error);
                         break;
                     }
                 }
@@ -170,8 +181,8 @@ mod tests {
         assert_eq!(message_body, expected_message.tmb(1));
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
-        wait_for_stop(subject);
-        // assert_eq!(subject.is_running(), false);
+        wait_for_stop(&subject);
+        assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -196,8 +207,8 @@ mod tests {
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq!(error, ClientListenerError::Closed);
-        wait_for_stop(subject);
-        // assert_eq!(subject.is_running(), false);
+        wait_for_stop(&subject);
+        assert_eq!(subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -221,8 +232,8 @@ mod tests {
 
         let error = message_body_rx.recv().unwrap().err().unwrap();
         assert_eq!(error, ClientListenerError::Broken);
-        wait_for_stop(subject);
-        // assert_eq!(subject.is_running(), false);
+        wait_for_stop(&subject);
+        assert_eq!(subject.is_running(), false);
         let _ = stop_handle.stop();
     }
 
@@ -249,8 +260,8 @@ mod tests {
         assert_eq!(error, ClientListenerError::UnexpectedPacket);
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
-        wait_for_stop(subject);
-        // assert_eq!(subject.is_running(), false);
+        wait_for_stop(&subject);
+        assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -275,8 +286,8 @@ mod tests {
         assert_eq!(error, ClientListenerError::UnexpectedPacket);
         assert_eq!(subject.is_running(), true);
         let _ = stop_handle.stop();
-        wait_for_stop(subject);
-        // assert_eq!(subject.is_running(), false);
+        wait_for_stop(&subject);
+        assert_eq!(subject.is_running(), false);
     }
 
     #[test]
@@ -287,7 +298,7 @@ mod tests {
         assert_eq!(ClientListenerError::UnexpectedPacket.is_fatal(), false);
     }
 
-    fn wait_for_stop(listener: ClientListener) {
+    fn wait_for_stop(listener: &ClientListener) {
         let mut retries = 10;
         while retries > 0 {
             retries -= 1;

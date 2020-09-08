@@ -235,9 +235,9 @@ impl ConnectionManagerThread {
     fn thread_loop_guts(inner: CmsInner) -> CmsInner {
         select! {
             recv(inner.demand_rx) -> demand_result => Self::handle_demand (inner, demand_result),
-            recv(inner.listener_to_manager_rx) -> message_body_result_result => Self::handle_incoming_message_body (inner, message_body_result_result),
             recv(inner.conversations_to_manager_rx) -> message_body_result_result => Self::handle_outgoing_message_body (inner, message_body_result_result),
             recv(inner.redirect_order_rx) -> redirect_order_result => Self::handle_redirect_order (inner, redirect_order_result),
+            recv(inner.listener_to_manager_rx) -> message_body_result_result => Self::handle_incoming_message_body (inner, message_body_result_result),
         }
     }
 
