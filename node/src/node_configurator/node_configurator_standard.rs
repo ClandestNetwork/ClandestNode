@@ -2388,7 +2388,7 @@ mod tests {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--chain", "ropsten");
+            .param("--chain", TEST_DEFAULT_CHAIN_NAME);
         let args_vec: Vec<String> = args.into();
 
         let config = subject
@@ -2397,7 +2397,7 @@ mod tests {
 
         assert_eq!(
             config.blockchain_bridge_config.chain_id,
-            chain_id_from_name("ropsten")
+            chain_id_from_name(TEST_DEFAULT_CHAIN_NAME)
         );
     }
 

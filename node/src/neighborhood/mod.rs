@@ -1274,7 +1274,6 @@ mod tests {
         neighborhood_from_nodes,
     };
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::rate_pack;
     use crate::test_utils::recorder::make_recorder;
     use crate::test_utils::recorder::peer_actors_builder;
     use crate::test_utils::recorder::Recorder;
@@ -1283,6 +1282,7 @@ mod tests {
     use crate::test_utils::{assert_contains, make_wallet};
     use crate::test_utils::{assert_matches, make_meaningless_route};
     use crate::test_utils::{main_cryptde, make_paying_wallet, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{rate_pack, TEST_DEFAULT_CHAIN_NAME};
     use actix::dev::{MessageResponse, ResponseChannel};
     use actix::Message;
     use actix::Recipient;
@@ -1340,7 +1340,7 @@ mod tests {
             None,
             "cant_create_non_mainnet_neighborhood_with_mainnet_neighbors",
         );
-        bc.blockchain_bridge_config.chain_id = chain_id_from_name("testnet");
+        bc.blockchain_bridge_config.chain_id = chain_id_from_name(TEST_DEFAULT_CHAIN_NAME);
 
         let _ = Neighborhood::new(cryptde, &bc);
     }

@@ -13,6 +13,7 @@ use crate::sub_lib::stream_handler_pool::DispatcherNodeQueryResponse;
 use crate::sub_lib::stream_handler_pool::TransmitDataMsg;
 use crate::sub_lib::utils::node_descriptor_delimiter;
 use crate::sub_lib::wallet::Wallet;
+use crate::test_utils::TEST_DEFAULT_CHAIN_NAME;
 use actix::Message;
 use actix::Recipient;
 use core::fmt;
@@ -190,7 +191,7 @@ impl NodeDescriptor {
             if pieces.len() == 2 {
                 (true, pieces)
             } else {
-                let chain_id = chain_id_from_name("testnet");
+                let chain_id = chain_id_from_name(TEST_DEFAULT_CHAIN_NAME);
                 let delimiter = node_descriptor_delimiter(chain_id);
                 let pieces: Vec<&str> = s.splitn(2, delimiter).collect();
                 if pieces.len() == 2 {
