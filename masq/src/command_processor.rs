@@ -6,6 +6,7 @@ use crate::commands::commands_common::{Command, CommandError};
 use crate::communications::broadcast_handler::StreamFactory;
 use crate::schema::app;
 use clap::value_t;
+use crate::notifications::crashed_notification::CrashNotifierReal;
 
 pub trait CommandProcessorFactory {
     fn make(
@@ -26,7 +27,7 @@ impl CommandProcessorFactory for CommandProcessorFactoryReal {
     ) -> Result<Box<dyn CommandProcessor>, CommandError> {
         let matches = app().get_matches_from(args);
         let ui_port = value_t!(matches, "ui-port", u16).expect("ui-port is not properly defaulted");
-        match CommandContextReal::new(ui_port, broadcast_stream_factory) {
+        match CommandContextReal::new(ui_port, broadcast_stream_factory, Box::new (CrashNotifierReal::new())) {
             Ok(context) => Ok(Box::new(CommandProcessorReal { context })),
             Err(ContextError::ConnectionRefused(s)) => Err(CommandError::ConnectionProblem(s)),
             Err(e) => panic!("Unexpected error: {:?}", e),

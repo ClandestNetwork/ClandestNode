@@ -379,6 +379,7 @@ pub enum CrashReason {
     ChildWaitFailure(String),
     NoInformation,
     Unrecognized(String),
+    DaemonCrashed,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

@@ -10,6 +10,7 @@ use masq_lib::messages::{TIMEOUT_ERROR, UNMARSHAL_ERROR};
 use masq_lib::ui_gateway::MessageBody;
 use std::io;
 use std::io::{Read, Write};
+use crate::notifications::crashed_notification::CrashNotifier;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextError {
@@ -117,10 +118,11 @@ impl CommandContextReal {
     pub fn new(
         daemon_ui_port: u16,
         broadcast_stream_factory: Box<dyn StreamFactory>,
+        crash_notifier: Box<dyn CrashNotifier>,
     ) -> Result<Self, ContextError> {
         eprintln!("CommandContextReal::new called");
         let mut connection = ConnectionManager::new();
-        let broadcast_handler = BroadcastHandlerReal::new();
+        let broadcast_handler = BroadcastHandlerReal::new(crash_notifier);
         let broadcast_handle = broadcast_handler.start(broadcast_stream_factory);
         match connection.connect(daemon_ui_port, broadcast_handle, REDIRECT_TIMEOUT_MILLIS) {
             Ok(_) => Ok(Self {
@@ -151,6 +153,19 @@ mod tests {
     use masq_lib::ui_gateway::MessagePath::Conversation;
     use masq_lib::ui_traffic_converter::{TrafficConversionError, UnmarshalError};
     use masq_lib::utils::find_free_port;
+
+    pub struct NullCrashNotifier {}
+
+    impl CrashNotifier for NullCrashNotifier {
+        fn handle_broadcast(&self, _: MessageBody, _: &mut dyn Write, _: &mut dyn Write) {
+        }
+    }
+    
+    impl NullCrashNotifier {
+        pub fn boxed() -> Box<Self> {
+            Box::new (Self{})
+        }
+    }
 
     #[test]
     fn error_conversion_happy_path() {
@@ -198,10 +213,10 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let handle = server.start();
 
-        let subject = CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+        let subject = CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed()).unwrap();
 
         assert_eq!(subject.active_port(), Some(port));
-        handle.kill();
+        handle.stop();
     }
 
     #[test]
@@ -215,7 +230,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port).queue_response(UiShutdownResponse {}.tmb(1));
         let stop_handle = server.start();
         let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed()).unwrap();
         subject.stdin = Box::new(stdin);
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
@@ -246,7 +261,7 @@ mod tests {
     fn works_when_server_isnt_present() {
         let port = find_free_port();
 
-        let result = CommandContextReal::new(port, Box::new(StreamFactoryReal::new()));
+        let result = CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed());
 
         match result {
             Err(ConnectionRefused(_)) => (),
@@ -265,7 +280,7 @@ mod tests {
         });
         let stop_handle = server.start();
         let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed()).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1), 1000);
 
@@ -279,7 +294,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();
         let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed()).unwrap();
 
         let response = subject.transact(UiSetupRequest { values: vec![] }.tmb(1), 1000);
 
@@ -301,7 +316,7 @@ mod tests {
         let server = MockWebSocketsServer::new(port);
         let stop_handle = server.start();
         let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+            CommandContextReal::new(port, Box::new(StreamFactoryReal::new()), NullCrashNotifier::boxed()).unwrap();
         subject.stdin = Box::new(stdin);
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
@@ -321,7 +336,6 @@ mod tests {
         write!(subject.stdout(), "This is stdout.").unwrap();
         write!(subject.stderr(), "This is stderr.").unwrap();
 
-        stop_handle.stop();
         assert_eq!(response, ());
         assert_eq!(input, "This is stdin.".to_string());
         assert_eq!(
@@ -332,5 +346,6 @@ mod tests {
             stderr_arc.lock().unwrap().get_string(),
             "This is stderr.".to_string()
         );
+        stop_handle.stop();
     }
 }

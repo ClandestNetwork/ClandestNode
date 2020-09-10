@@ -7,7 +7,7 @@ use crate::communications::client_listener_thread::{ClientListener, ClientListen
 use crate::communications::node_conversation::{NodeConversation, NodeConversationTermination};
 use crossbeam_channel::{unbounded, RecvTimeoutError};
 use crossbeam_channel::{Receiver, RecvError, Sender};
-use masq_lib::messages::FromMessageBody;
+use masq_lib::messages::{FromMessageBody, UiNodeCrashedBroadcast, CrashReason, ToMessageBody};
 use masq_lib::messages::{UiRedirect, NODE_UI_PROTOCOL};
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
@@ -21,6 +21,7 @@ use websocket::sync::Client;
 use websocket::ws::sender::Sender as WsSender;
 use websocket::OwnedMessage;
 use websocket::{ClientBuilder, WebSocketResult};
+use std::thread::JoinHandle;
 
 pub const REDIRECT_TIMEOUT_MILLIS: u64 = 500;
 pub const FALLBACK_TIMEOUT_MILLIS: u64 = 500;
@@ -222,14 +223,23 @@ impl ConnectionManagerThread {
         let (conversations_to_manager_tx, conversations_to_manager_rx) = unbounded();
         inner.conversations_to_manager_tx = conversations_to_manager_tx;
         inner.conversations_to_manager_rx = conversations_to_manager_rx;
-        Self::spawn_thread(inner);
+        let _ = Self::spawn_thread(inner);
     }
 
-    fn spawn_thread(mut inner: CmsInner) {
+    fn spawn_thread(mut inner: CmsInner) -> JoinHandle<()> {
         thread::spawn(move || loop {
             eprintln!("Calling thread_loop_guts");
+            if inner.active_port == None {
+                eprintln!("thread_loop_guts detects daemon crash: sending broadcast");
+                let msg_body = UiNodeCrashedBroadcast {
+                    process_id: 0,
+                    crash_reason: CrashReason::DaemonCrashed,
+                }.tmb (0);
+                inner.broadcast_handle.send (msg_body);
+                break;
+            }
             inner = Self::thread_loop_guts(inner)
-        });
+        })
     }
 
     fn thread_loop_guts(inner: CmsInner) -> CmsInner {
@@ -319,7 +329,7 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_outgoing_message_body");
+        eprintln!("handle_outgoing_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -428,26 +438,39 @@ impl ConnectionManagerThread {
         inner.node_port = None;
         match &inner.active_port {
             None => {
+                eprintln! ("active_port is None; strange that we got this far");
                 inner =
                     Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
                 return inner;
             }
             Some(active_port) if *active_port == inner.daemon_port => {
+                eprintln! ("Already fell back to Daemon; setting active_port to None this time");
                 inner.active_port = None;
                 inner =
                     Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
                 return inner;
             }
-            Some(_) => inner.active_port = Some(inner.daemon_port),
+            Some(_) => {
+                eprintln! ("Falling back from Node to Daemon");
+                inner.active_port = Some(inner.daemon_port)
+            },
         }
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
-        if let Ok(talker_half) = make_client_listener(
+        eprintln! ("Restarting ClientListenerThread");
+        match make_client_listener(
             inner.active_port.expect("Active port disappeared!"),
             listener_to_manager_tx,
             FALLBACK_TIMEOUT_MILLIS,
         ) {
-            inner.talker_half = talker_half;
+            Ok(talker_half) => {
+                eprintln! ("ClientListenerThread restarted");
+                inner.talker_half = talker_half
+            },
+            Err(e) => {
+                eprintln! ("ClientListenerThread could not be restarted: {:?}", e);
+                unimplemented! ("Test-drive me")
+            },
         };
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner
@@ -542,7 +565,7 @@ mod tests {
         MockWebSocketsServer, MockWebSocketsServerStopHandle,
     };
     use crossbeam_channel::TryRecvError;
-    use masq_lib::messages::{FromMessageBody, ToMessageBody};
+    use masq_lib::messages::{FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast, CrashReason};
     use masq_lib::messages::{
         UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupBroadcast, UiSetupRequest,
         UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
@@ -799,6 +822,24 @@ mod tests {
         assert_eq!(inner.conversations_waiting, vec_to_set(vec![]));
 
         let _ = stop_handle.stop();
+    }
+
+    #[test]
+    fn when_fallback_fails_daemon_crash_broadcast_is_sent () {
+        let mut inner = make_inner();
+        let broadcast_handle_send_params_arc = Arc::new (Mutex::new (vec![]));
+        let broadcast_handle = BroadcastHandleMock::new()
+            .send_params(&broadcast_handle_send_params_arc);
+        inner.active_port = None;
+        inner.broadcast_handle = Box::new (broadcast_handle);
+
+        let join_handle = ConnectionManagerThread::spawn_thread(inner);
+
+        let _ = join_handle.join();
+        let mut broadcast_handle_send_params = broadcast_handle_send_params_arc.lock().unwrap();
+        let message_body: MessageBody = (*broadcast_handle_send_params).remove(0);
+        let crash_broadcast = UiNodeCrashedBroadcast::fmb (message_body).unwrap().0;
+        assert_eq! (crash_broadcast.crash_reason, CrashReason::DaemonCrashed);
     }
 
     #[test]
@@ -1133,7 +1174,6 @@ mod tests {
         let result = conversation.transact(request, 1000).unwrap();
 
         let request_body = node_stop_handle.stop()[0].clone().unwrap();
-        daemon_stop_handle.stop();
         assert_eq!(
             UiFinancialsRequest::fmb(request_body).unwrap().0,
             UiFinancialsRequest {
@@ -1156,6 +1196,7 @@ mod tests {
         assert_eq!(context_id, 1);
         let send_params = send_params_arc.lock().unwrap();
         assert_eq!(*send_params, vec![]);
+        daemon_stop_handle.stop();
     }
 
     #[test]
@@ -1399,7 +1440,6 @@ mod tests {
 
         subject.close();
 
-        let _ = stop_handle.stop();
         let result = conversation1.transact(UiShutdownRequest {}.tmb(0), 1000);
         assert_eq!(result, Err(ClientError::ConnectionDropped));
         let result = conversation2.send(
@@ -1410,6 +1450,7 @@ mod tests {
             .tmb(0),
         );
         assert_eq!(result, Ok(()));
+        let _ = stop_handle.stop();
     }
 
     fn make_inner() -> CmsInner {
