@@ -572,7 +572,7 @@ mod tests {
         UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
         UiUnmarshalError,
     };
-    use masq_lib::utils::find_free_port;
+    use masq_lib::utils::{find_free_port, running_test};
     use std::hash::Hash;
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -1428,6 +1428,7 @@ mod tests {
 
     #[test]
     fn handles_close_order() {
+        running_test();
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_owned_message(OwnedMessage::Close(None));
         let stop_handle = server.start();

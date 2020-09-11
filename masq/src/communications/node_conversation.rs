@@ -64,7 +64,7 @@ impl NodeConversation {
             .send(OutgoingMessageType::FireAndForgetMessage(outgoing_msg))
         {
             Ok(_) => Ok(()),
-            Err(e) => panic!("ConnectionManager is dead: {:?}", e),
+            Err(_) => Err(ClientError::ConnectionDropped),
         }
     }
 

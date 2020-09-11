@@ -60,6 +60,7 @@ mod tests {
         expected = "Bad UiNodeCrashedBroadcast: UnexpectedMessage(\"booga\", Conversation(1234))"
     )]
     pub fn must_have_real_ui_node_crashed_broadcast() {
+        running_test();
         let mut stdout = ByteArrayWriter::new();
         let mut stderr = ByteArrayWriter::new();
         let bad_msg = MessageBody {
@@ -73,6 +74,7 @@ mod tests {
 
     #[test]
     pub fn handles_child_wait_failure() {
+        running_test();
         let mut stdout = ByteArrayWriter::new();
         let mut stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
@@ -89,6 +91,7 @@ mod tests {
 
     #[test]
     pub fn handles_unknown_failure() {
+        running_test();
         let mut stdout = ByteArrayWriter::new();
         let mut stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
@@ -105,6 +108,7 @@ mod tests {
 
     #[test]
     pub fn handles_no_information_failure() {
+        running_test();
         let mut stdout = ByteArrayWriter::new();
         let mut stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
