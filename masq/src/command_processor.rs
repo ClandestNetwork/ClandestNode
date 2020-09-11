@@ -6,7 +6,6 @@ use crate::commands::commands_common::{Command, CommandError};
 use crate::communications::broadcast_handler::StreamFactory;
 use crate::schema::app;
 use clap::value_t;
-use crate::notifications::crashed_notification::CrashNotifierReal;
 
 pub trait CommandProcessorFactory {
     fn make(
@@ -27,7 +26,7 @@ impl CommandProcessorFactory for CommandProcessorFactoryReal {
     ) -> Result<Box<dyn CommandProcessor>, CommandError> {
         let matches = app().get_matches_from(args);
         let ui_port = value_t!(matches, "ui-port", u16).expect("ui-port is not properly defaulted");
-        match CommandContextReal::new(ui_port, broadcast_stream_factory, Box::new (CrashNotifierReal::new())) {
+        match CommandContextReal::new(ui_port, broadcast_stream_factory) {
             Ok(context) => Ok(Box::new(CommandProcessorReal { context })),
             Err(ContextError::ConnectionRefused(s)) => Err(CommandError::ConnectionProblem(s)),
             Err(e) => panic!("Unexpected error: {:?}", e),
@@ -95,11 +94,10 @@ mod tests {
 
         let result = subject.make(Box::new(StreamFactoryReal::new()), &args);
 
-        match result {
-            Ok(_) => panic!("Success! Was hoping for failure."),
-            Err(CommandError::ConnectionProblem(_)) => (),
-            Err(e) => panic!("Expected ConnectionProblem, got {:?}", e),
-        }
+        assert_eq!(
+            result.err().unwrap(),
+            CommandError::ConnectionProblem("Broken".to_string())
+        );
     }
 
     #[test]

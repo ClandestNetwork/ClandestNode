@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
 use crate::commands::setup_command::SetupCommand;
-use crate::notifications::crashed_notification::{CrashNotifierReal, CrashNotifier};
+use crate::notifications::crashed_notification::CrashNotifier;
 use crossbeam_channel::{unbounded, Receiver, RecvError, Sender};
 use masq_lib::messages::{UiNodeCrashedBroadcast, UiSetupBroadcast};
 use masq_lib::ui_gateway::MessageBody;
@@ -29,9 +29,7 @@ pub trait BroadcastHandler {
     fn start(self, stream_factory: Box<dyn StreamFactory>) -> Box<dyn BroadcastHandle>;
 }
 
-pub struct BroadcastHandlerReal {
-    crash_notifier: Box<dyn CrashNotifier>,
-}
+pub struct BroadcastHandlerReal {}
 
 impl BroadcastHandler for BroadcastHandlerReal {
     fn start(self, stream_factory: Box<dyn StreamFactory>) -> Box<dyn BroadcastHandle> {
@@ -39,7 +37,7 @@ impl BroadcastHandler for BroadcastHandlerReal {
         thread::spawn(move || {
             let (mut stdout, mut stderr) = stream_factory.make();
             loop {
-                Self::thread_loop_guts(&message_rx, stdout.as_mut(), stderr.as_mut(), &self.crash_notifier)
+                Self::thread_loop_guts(&message_rx, stdout.as_mut(), stderr.as_mut())
             }
         });
         Box::new(BroadcastHandleGeneric { message_tx })
@@ -48,22 +46,19 @@ impl BroadcastHandler for BroadcastHandlerReal {
 
 impl Default for BroadcastHandlerReal {
     fn default() -> Self {
-        Self::new(Box::new (CrashNotifierReal::new()))
+        Self::new()
     }
 }
 
 impl BroadcastHandlerReal {
-    pub fn new(crash_notifier: Box<dyn CrashNotifier>) -> Self {
-        Self {
-            crash_notifier,
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 
     fn handle_message_body(
         message_body_result: Result<MessageBody, RecvError>,
         stdout: &mut dyn Write,
         stderr: &mut dyn Write,
-        crash_notifier: &Box<dyn CrashNotifier>,
     ) {
         let message_body = match message_body_result {
             Ok(mb) => mb,
@@ -74,7 +69,7 @@ impl BroadcastHandlerReal {
                 SetupCommand::handle_broadcast(message_body, stdout, stderr)
             }
             o if o == UiNodeCrashedBroadcast::type_opcode() => {
-                crash_notifier.handle_broadcast(message_body, stdout, stderr)
+                CrashNotifier::handle_broadcast(message_body, stdout, stderr)
             }
             opcode => {
                 write!(
@@ -82,7 +77,7 @@ impl BroadcastHandlerReal {
                     "Discarding unrecognized broadcast with opcode '{}'\n\nmasq> ",
                     opcode
                 )
-                    .expect("write! failed");
+                .expect("write! failed");
             }
         }
     }
@@ -91,10 +86,9 @@ impl BroadcastHandlerReal {
         message_rx: &Receiver<MessageBody>,
         stdout: &mut dyn Write,
         stderr: &mut dyn Write,
-        crash_notifier: &Box<dyn CrashNotifier>,
     ) {
         select! {
-            recv(message_rx) -> message_body_result => Self::handle_message_body (message_body_result, stdout, stderr, crash_notifier),
+            recv(message_rx) -> message_body_result => Self::handle_message_body (message_body_result, stdout, stderr),
         }
     }
 }
@@ -131,26 +125,12 @@ mod tests {
     use masq_lib::messages::UiSetupBroadcast;
     use masq_lib::messages::{CrashReason, ToMessageBody, UiNodeCrashedBroadcast};
     use masq_lib::ui_gateway::MessagePath;
-    use crate::notifications::crashed_notification::CrashNotifier;
-
-    pub struct NullCrashNotifier {}
-
-    impl CrashNotifier for NullCrashNotifier {
-        fn handle_broadcast(&self, _: MessageBody, _: &mut dyn Write, _: &mut dyn Write) {
-        }
-    }
-
-    impl NullCrashNotifier {
-        pub fn boxed() -> Box<Self> {
-            Box::new (Self{})
-        }
-    }
 
     #[test]
     fn broadcast_of_setup_triggers_correct_handler() {
         let (factory, handle) = TestStreamFactory::new();
         // This thread will leak, and will only stop when the tests stop running.
-        let subject = BroadcastHandlerReal::new(NullCrashNotifier::boxed()).start(Box::new(factory));
+        let subject = BroadcastHandlerReal::new().start(Box::new(factory));
         let message = UiSetupBroadcast {
             running: true,
             values: vec![],
@@ -185,7 +165,7 @@ mod tests {
     fn broadcast_of_crashed_triggers_correct_handler() {
         let (factory, handle) = TestStreamFactory::new();
         // This thread will leak, and will only stop when the tests stop running.
-        let subject = BroadcastHandlerReal::new(NullCrashNotifier::boxed()).start(Box::new(factory));
+        let subject = BroadcastHandlerReal::new().start(Box::new(factory));
         let message = UiNodeCrashedBroadcast {
             process_id: 1234,
             crash_reason: CrashReason::Unrecognized("Unknown crash reason".to_string()),
@@ -211,7 +191,7 @@ mod tests {
     fn unexpected_broadcasts_are_ineffectual_but_dont_kill_the_handler() {
         let (factory, handle) = TestStreamFactory::new();
         // This thread will leak, and will only stop when the tests stop running.
-        let subject = BroadcastHandlerReal::new(NullCrashNotifier::boxed()).start(Box::new(factory));
+        let subject = BroadcastHandlerReal::new().start(Box::new(factory));
         let bad_message = MessageBody {
             opcode: "unrecognized".to_string(),
             path: MessagePath::FireAndForget,

@@ -715,10 +715,12 @@ pub mod standard {
         use crate::test_utils::ArgsBuilder;
         use masq_lib::multi_config::VirtualCommandLine;
         use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+        use masq_lib::utils::running_test;
 
         #[test]
         fn get_wallets_handles_consuming_private_key_and_earning_wallet_address_when_database_contains_mnemonic_seed(
         ) {
+            running_test();
             let mut holder = FakeStreamHolder::new();
             let args = ArgsBuilder::new()
                 .param(
@@ -754,6 +756,7 @@ pub mod standard {
         #[test]
         fn get_wallets_handles_consuming_private_key_with_mnemonic_seed_and_consuming_wallet_derivation_path(
         ) {
+            running_test();
             let mut holder = FakeStreamHolder::new();
             let args = ArgsBuilder::new()
                 .param(
@@ -785,6 +788,7 @@ pub mod standard {
 
         #[test]
         fn convert_ci_configs_handles_bad_syntax() {
+            running_test();
             let args = ArgsBuilder::new().param("--neighbors", "booga");
             let vcls: Vec<Box<dyn VirtualCommandLine>> =
                 vec![Box::new(CommandLineVcl::new(args.into()))];
@@ -803,6 +807,7 @@ pub mod standard {
 
         #[test]
         fn convert_ci_configs_handles_blockchain_mismatch_on_mainnet() {
+            running_test();
             let args = ArgsBuilder::new()
                 .param(
                     "--neighbors",
@@ -826,6 +831,7 @@ pub mod standard {
 
         #[test]
         fn convert_ci_configs_handles_blockchain_mismatch_off_mainnet() {
+            running_test();
             let args = ArgsBuilder::new()
                 .param(
                     "--neighbors",
@@ -849,6 +855,7 @@ pub mod standard {
 
         #[test]
         fn get_earning_wallet_from_address_handles_attempted_wallet_change() {
+            running_test();
             let args = ArgsBuilder::new().param(
                 "--earning-wallet",
                 "0x0123456789012345678901234567890123456789",
@@ -871,6 +878,7 @@ pub mod standard {
 
         #[test]
         fn get_consuming_wallet_opt_from_derivation_path_handles_bad_password() {
+            running_test();
             let persistent_config = PersistentConfigurationMock::new()
                 .consuming_wallet_derivation_path_result(Some("m/44'/60'/1'/2/3".to_string()))
                 .mnemonic_seed_result(Err(PersistentConfigError::PasswordError));
@@ -893,6 +901,7 @@ pub mod standard {
 
         #[test]
         fn get_consuming_wallet_from_private_key_handles_mismatches() {
+            running_test();
             let args = ArgsBuilder::new().param(
                 "--consuming-private-key",
                 "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF",
@@ -956,6 +965,7 @@ mod tests {
     use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::utils::running_test;
     use rustc_hex::{FromHex, ToHex};
     use std::fs::File;
     use std::io::Cursor;
@@ -972,6 +982,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_standard_happy_path() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1019,6 +1030,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_standard_missing_ip() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1052,6 +1064,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_originate_only_doesnt_need_ip() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1091,6 +1104,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_originate_only_does_need_at_least_one_neighbor() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1113,6 +1127,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_consume_only_doesnt_need_ip() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1148,6 +1163,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_consume_only_does_need_at_least_one_neighbor() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1176,6 +1192,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_zero_hop_doesnt_need_ip_or_neighbors() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1203,6 +1220,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_zero_hop_cant_tolerate_ip() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1232,6 +1250,7 @@ mod tests {
 
     #[test]
     fn make_neighborhood_config_zero_hop_cant_tolerate_neighbors() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1265,6 +1284,7 @@ mod tests {
 
     #[test]
     fn get_past_neighbors_handles_good_password_but_no_past_neighbors() {
+        running_test();
         let multi_config = make_new_test_multi_config(&app(), vec![]).unwrap();
         let persistent_config =
             make_default_persistent_configuration().past_neighbors_result(Ok(None));
@@ -1283,6 +1303,7 @@ mod tests {
 
     #[test]
     fn get_past_neighbors_handles_unavailable_password() {
+        running_test();
         let multi_config = make_new_test_multi_config(&app(), vec![]).unwrap();
         let persistent_config = make_default_persistent_configuration().check_password_result(None);
         let mut unprivileged_config = BootstrapperConfig::new();
@@ -1301,6 +1322,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Could not retrieve past neighbors: PasswordError")]
     fn get_past_neighbors_does_not_like_error_getting_past_neighbors() {
+        running_test();
         let multi_config = make_new_test_multi_config(&app(), vec![]).unwrap();
         let persistent_config = PersistentConfigurationMock::new()
             .check_password_result(Some(false))
@@ -1318,6 +1340,7 @@ mod tests {
 
     #[test]
     fn convert_ci_configs_does_not_like_neighbors_with_bad_syntax() {
+        running_test();
         let multi_config = make_new_test_multi_config(
             &app(),
             vec![Box::new(CommandLineVcl::new(
@@ -1345,6 +1368,7 @@ mod tests {
 
     #[test]
     fn can_read_parameters_from_config_file() {
+        running_test();
         let _guard = EnvironmentGuard::new();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator",
@@ -1380,6 +1404,7 @@ mod tests {
 
     #[test]
     fn can_read_dns_servers_and_consuming_private_key_from_config_file() {
+        running_test();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator",
             "can_read_wallet_parameters_from_config_file",
@@ -1450,6 +1475,7 @@ mod tests {
 
     #[test]
     fn privileged_parse_args_creates_configurations() {
+        running_test();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator",
             "privileged_parse_args_creates_configurations",
@@ -1526,6 +1552,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_creates_configurations() {
+        running_test();
         let home_dir = ensure_node_home_directory_exists(
             "node_configurator",
             "unprivileged_parse_args_creates_configurations",
@@ -1612,6 +1639,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_creates_configuration_with_defaults() {
+        running_test();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
@@ -1651,6 +1679,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_with_neighbor_in_database_but_not_command_line() {
+        running_test();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--fake-public-key", "BORSCHT")
@@ -1693,6 +1722,7 @@ mod tests {
 
     #[test]
     fn privileged_parse_args_creates_configuration_with_defaults() {
+        running_test();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
         let mut config = BootstrapperConfig::new();
         let vcls: Vec<Box<dyn VirtualCommandLine>> =
@@ -1727,6 +1757,7 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn privileged_parse_args_with_real_user_defaults_data_directory_properly() {
+        running_test();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
             .param("--real-user", "::/home/booga");
@@ -1832,6 +1863,7 @@ mod tests {
     #[test]
     fn get_wallets_with_brand_new_database_establishes_default_earning_wallet_without_requiring_password(
     ) {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new());
         let persistent_config = make_persistent_config(None, None, None, None, None, None, None);
         let mut config = BootstrapperConfig::new();
@@ -1850,6 +1882,7 @@ mod tests {
 
     #[test]
     fn consuming_wallet_private_key_plus_consuming_wallet_derivation_path() {
+        running_test();
         let consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
         let multi_config = make_multi_config(
@@ -1885,6 +1918,7 @@ mod tests {
 
     #[test]
     fn earning_wallet_address_different_from_database() {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new().param(
             "--earning-wallet",
             "0x0123456789012345678901234567890123456789",
@@ -1915,6 +1949,7 @@ mod tests {
 
     #[test]
     fn earning_wallet_address_matches_database() {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new().param(
             "--earning-wallet",
             "0xb00fa567890123456789012345678901234B00FA",
@@ -1946,6 +1981,7 @@ mod tests {
 
     #[test]
     fn consuming_wallet_private_key_plus_earning_wallet_address_plus_mnemonic_seed() {
+        running_test();
         let consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
         let multi_config = make_multi_config(
@@ -1980,6 +2016,7 @@ mod tests {
 
     #[test]
     fn consuming_private_key_matches_database() {
+        running_test();
         let consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
         let multi_config = make_multi_config(
@@ -2016,6 +2053,7 @@ mod tests {
 
     #[test]
     fn consuming_private_key_doesnt_match_database() {
+        running_test();
         let good_consuming_private_key_hex =
             "ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD";
         let mut bad_consuming_private_key = good_consuming_private_key_hex
@@ -2058,6 +2096,7 @@ mod tests {
 
     #[test]
     fn consuming_wallet_derivation_path_plus_earning_wallet_address_plus_mnemonic_seed() {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new().param("--db-password", "password"));
         let mnemonic_seed_prefix = "mnemonic_seed";
         let persistent_config = make_persistent_config(
@@ -2093,6 +2132,7 @@ mod tests {
 
     #[test]
     fn consuming_wallet_derivation_path_plus_mnemonic_seed_with_no_db_password_parameter() {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new());
         let mnemonic_seed_prefix = "mnemonic_seed";
         let persistent_config = make_persistent_config(
@@ -2124,6 +2164,7 @@ mod tests {
 
     #[test]
     fn consuming_wallet_derivation_path_plus_mnemonic_seed_with_no_db_password_value() {
+        running_test();
         let multi_config = make_multi_config(ArgsBuilder::new().opt("--db-password"));
         let mnemonic_seed_prefix = "mnemonic_seed";
         let persistent_config = make_persistent_config(
@@ -2166,6 +2207,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_with_invalid_consuming_wallet_private_key_reacts_correctly() {
+        running_test();
         let home_directory = ensure_node_home_directory_exists(
             "node_configurator",
             "parse_args_with_invalid_consuming_wallet_private_key_panics_correctly",
@@ -2194,6 +2236,7 @@ mod tests {
 
     #[test]
     fn unprivileged_parse_args_consuming_private_key_happy_path() {
+        running_test();
         let home_directory = ensure_node_home_directory_exists(
             "node_configurator",
             "parse_args_consuming_private_key_happy_path",
@@ -2244,6 +2287,7 @@ mod tests {
 
     #[test]
     fn get_db_password_shortcuts_if_its_already_gotten() {
+        running_test();
         let multi_config = make_new_test_multi_config(&app(), vec![]).unwrap();
         let mut holder = FakeStreamHolder::new();
         let mut config = BootstrapperConfig::new();
@@ -2263,6 +2307,7 @@ mod tests {
 
     #[test]
     fn get_db_password_doesnt_bother_if_database_has_no_password_yet() {
+        running_test();
         let multi_config = make_new_test_multi_config(&app(), vec![]).unwrap();
         let mut holder = FakeStreamHolder::new();
         let mut config = BootstrapperConfig::new();
@@ -2280,6 +2325,7 @@ mod tests {
 
     #[test]
     fn no_parameters_produces_configuration_for_crash_point() {
+        running_test();
         let args = make_default_cli_params();
         let mut config = BootstrapperConfig::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
@@ -2298,6 +2344,7 @@ mod tests {
 
     #[test]
     fn with_parameters_produces_configuration_for_crash_point() {
+        running_test();
         let args = make_default_cli_params().param("--crash-point", "panic");
         let mut config = BootstrapperConfig::new();
         let vcl = Box::new(CommandLineVcl::new(args.into()));
@@ -2316,6 +2363,7 @@ mod tests {
 
     #[test]
     fn privileged_generate_configuration_senses_when_user_specifies_config_file() {
+        running_test();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--config-file", "booga.toml"); // nonexistent config file: should stimulate panic because user-specified
         let args_vec: Vec<String> = args.into();
@@ -2338,6 +2386,7 @@ mod tests {
 
     #[test]
     fn unprivileged_generate_configuration_senses_when_user_specifies_config_file() {
+        running_test();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
             "unprivileged_generate_configuration_senses_when_user_specifies_config_file",
@@ -2366,6 +2415,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_multinode() {
+        running_test();
         let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
@@ -2385,6 +2435,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_network_chain_selection_for_ropsten() {
+        running_test();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
@@ -2403,6 +2454,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_defaults_network_chain_selection_to_mainnet() {
+        running_test();
         let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--ip", "1.2.3.4");
@@ -2420,6 +2472,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_accepts_ropsten_network_chain_selection() {
+        running_test();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
@@ -2437,6 +2490,7 @@ mod tests {
 
     #[test]
     fn unprivileged_configuration_gets_parameter_gas_price() {
+        running_test();
         let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
@@ -2459,6 +2513,7 @@ mod tests {
 
     #[test]
     fn unprivileged_configuration_sets_default_gas_price_when_not_provided() {
+        running_test();
         let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
@@ -2479,6 +2534,7 @@ mod tests {
 
     #[test]
     fn privileged_configuration_rejects_invalid_gas_price() {
+        running_test();
         let _clap_guard = ClapGuard::new();
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new().param("--gas-price", "unleaded");
@@ -2497,6 +2553,7 @@ mod tests {
 
     #[test]
     fn configure_database_with_data_specified_on_command_line_but_not_in_database_without_seed() {
+        running_test();
         let mut config = BootstrapperConfig::new();
         config.clandestine_port_opt = Some(1234);
         let earning_address = "0x0123456789012345678901234567890123456789";
@@ -2545,6 +2602,7 @@ mod tests {
 
     #[test]
     fn configure_database_with_data_specified_on_command_line_and_in_database_without_seed() {
+        running_test();
         let mut config = BootstrapperConfig::new();
         config.clandestine_port_opt = Some(1234);
         let earning_address = "0x0123456789012345678901234567890123456789";
@@ -2581,6 +2639,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Internal error: consuming wallet must be derived from keypair")]
     fn configure_database_with_non_keypair_consuming_wallet() {
+        running_test();
         let mut config = BootstrapperConfig::new();
         config.clandestine_port_opt = Some(1234);
         config.consuming_wallet =
@@ -2599,6 +2658,7 @@ mod tests {
 
     #[test]
     fn configure_database_with_no_data_specified() {
+        running_test();
         let mut config = BootstrapperConfig::new();
         config.clandestine_port_opt = None;
         config.consuming_wallet = None;

@@ -3,22 +3,16 @@
 use masq_lib::messages::FromMessageBody;
 use masq_lib::messages::{CrashReason, UiNodeCrashedBroadcast};
 use masq_lib::ui_gateway::MessageBody;
-use std::io::Write;
 use masq_lib::utils::exit_process;
+use std::io::Write;
 
-pub trait CrashNotifier : Send {
-    fn handle_broadcast (&self, msg: MessageBody, stdout: &mut dyn Write, stderr: &mut dyn Write);
-}
+pub struct CrashNotifier {}
 
-pub struct CrashNotifierReal {
-    process_ender: Box<dyn ProcessEnder>,
-}
-
-impl CrashNotifier for CrashNotifierReal {
-    fn handle_broadcast(&self, msg: MessageBody, stdout: &mut dyn Write, _stderr: &mut dyn Write) {
+impl CrashNotifier {
+    pub fn handle_broadcast(msg: MessageBody, stdout: &mut dyn Write, _stderr: &mut dyn Write) {
         let (response, _) = UiNodeCrashedBroadcast::fmb(msg).expect("Bad UiNodeCrashedBroadcast");
         if response.crash_reason == CrashReason::DaemonCrashed {
-            self.process_ender.end_process("The Daemon is no longer running; masq is terminating.");
+            exit_process(1, "The Daemon is no longer running; masq is terminating.");
         }
         writeln!(
             stdout,
@@ -29,14 +23,6 @@ impl CrashNotifier for CrashNotifierReal {
             .expect("writeln! failed");
         write!(stdout, "masq> ").expect("write! failed");
         stdout.flush().expect("flush failed");
-    }
-}
-
-impl CrashNotifierReal {
-    pub fn new() -> Self {
-        Self {
-            process_ender: Box::new(ProcessEnderReal {}),
-        }
     }
 
     fn interpret_reason(reason: CrashReason) -> String {
@@ -61,33 +47,13 @@ impl CrashNotifierReal {
     }
 }
 
-trait ProcessEnder: Send {
-    fn end_process (&self, msg: &str);
-}
-
-struct ProcessEnderReal {}
-
-impl ProcessEnder for ProcessEnderReal {
-    fn end_process(&self, msg: &str) {
-        // The following line is untested
-        exit_process(1, msg, false);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use masq_lib::messages::ToMessageBody;
     use masq_lib::test_utils::fake_stream_holder::ByteArrayWriter;
     use masq_lib::ui_gateway::MessagePath;
-
-    struct FakeProcessEnder {}
-
-    impl ProcessEnder for FakeProcessEnder {
-        fn end_process(&self, msg: &str) {
-            panic! ("Pretending to end process: {}", msg);
-        }
-    }
+    use masq_lib::utils::running_test;
 
     #[test]
     #[should_panic(
@@ -101,9 +67,8 @@ mod tests {
             path: MessagePath::Conversation(1234),
             payload: Ok("booga".to_string()),
         };
-        let subject = CrashNotifierReal::new();
 
-        subject.handle_broadcast(bad_msg, &mut stdout, &mut stderr)
+        CrashNotifier::handle_broadcast(bad_msg, &mut stdout, &mut stderr)
     }
 
     #[test]
@@ -115,9 +80,8 @@ mod tests {
             crash_reason: CrashReason::ChildWaitFailure("Couldn't wait".to_string()),
         }
         .tmb(0);
-        let subject = CrashNotifierReal::new();
 
-        subject.handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated:\n------\nthe Daemon couldn't wait on the child process: Couldn't wait\n------\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
@@ -132,9 +96,8 @@ mod tests {
             crash_reason: CrashReason::Unrecognized("Just...failed!\n\n".to_string()),
         }
         .tmb(0);
-        let subject = CrashNotifierReal::new();
 
-        subject.handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated:\n------\nJust...failed!\n------\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
@@ -149,17 +112,17 @@ mod tests {
             crash_reason: CrashReason::NoInformation,
         }
         .tmb(0);
-        let subject = CrashNotifierReal::new();
 
-        subject.handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated.\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
     }
 
     #[test]
-    #[should_panic (expected = "Pretending to end process: The Daemon is no longer running; masq is terminating.")]
+    #[should_panic(expected = "1: The Daemon is no longer running; masq is terminating.")]
     pub fn handles_daemon_crash() {
+        running_test();
         let mut stdout = ByteArrayWriter::new();
         let mut stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
@@ -167,9 +130,7 @@ mod tests {
             crash_reason: CrashReason::DaemonCrashed,
         }
         .tmb(0);
-        let mut subject = CrashNotifierReal::new();
-        subject.process_ender = Box::new (FakeProcessEnder{});
 
-        subject.handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
     }
 }

@@ -104,11 +104,7 @@ pub fn make_new_multi_config<'a>(
     vcls: Vec<Box<dyn VirtualCommandLine>>,
     streams: &mut StdStreams,
 ) -> Result<MultiConfig<'a>, ConfiguratorError> {
-    #[cfg(not(test))]
-    let running_test = false;
-    #[cfg(test)]
-    let running_test = true;
-    MultiConfig::try_new(schema, vcls, streams, running_test)
+    MultiConfig::try_new(schema, vcls, streams)
 }
 
 pub fn handle_ui_crash_request(

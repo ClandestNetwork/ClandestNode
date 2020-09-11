@@ -102,8 +102,8 @@ impl ClientListenerThread {
                                 Ok(_) => (),
                                 Err(_) => {
                                     eprintln!("ClientListenerThread found dead channel trying to send to ConnectionManager: {:?}", body);
-                                    break
-                                },
+                                    break;
+                                }
                             },
                             Err(_) => match self
                                 .message_body_tx
@@ -112,8 +112,8 @@ impl ClientListenerThread {
                                 Ok(_) => (),
                                 Err(_) => {
                                     eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unmarshal failure: {}", string);
-                                    break
-                                },
+                                    break;
+                                }
                             },
                         }
                     }
@@ -129,8 +129,8 @@ impl ClientListenerThread {
                         Ok(_) => (),
                         Err(_) => {
                             eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unexpected WebSockets message: {:?}", unexpected);
-                            break
-                        },
+                            break;
+                        }
                     },
                     Err(error) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Broken));
