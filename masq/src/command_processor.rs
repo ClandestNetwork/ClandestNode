@@ -94,10 +94,10 @@ mod tests {
 
         let result = subject.make(Box::new(StreamFactoryReal::new()), &args);
 
-        assert_eq!(
-            result.err().unwrap(),
-            CommandError::ConnectionProblem("Broken".to_string())
-        );
+        match result.err() {
+            Some (CommandError::ConnectionProblem(_)) => (),
+            x => panic! ("Expected Some(CommandError::ConnectionProblem(_); got {:?} instead", x),
+        }
     }
 
     #[test]
