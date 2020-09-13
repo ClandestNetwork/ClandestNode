@@ -311,7 +311,7 @@ impl ConnectionManagerThread {
                 Err(e) => {
                     if e.is_fatal() {
                         // Fatal connection error: connection is dead, need to reestablish
-                        return Self::fallback(inner);
+                        return Self::fallback(inner, NodeConversationTermination::Fatal);
                     } else {
                         // Non-fatal connection error: connection to server is still up, but we have
                         // no idea which conversation the message was meant for
@@ -320,7 +320,7 @@ impl ConnectionManagerThread {
                 }
             },
             Err(_) => {
-                return Self::fallback(inner);
+                return Self::fallback(inner, NodeConversationTermination::Fatal);
             }
         };
         inner
@@ -343,7 +343,7 @@ impl ConnectionManagerThread {
                                 inner.conversations_waiting.insert(context_id);
                             },
                             Err(_) => {
-                                inner = Self::fallback(inner);
+                                inner = Self::fallback(inner, NodeConversationTermination::Fatal);
                             },
                         }
                     };
@@ -354,7 +354,7 @@ impl ConnectionManagerThread {
                 MessagePath::FireAndForget => {
                     match inner.talker_half.sender.send_message(&mut inner.talker_half.stream, &OwnedMessage::Text(UiTrafficConverter::new_marshal(message_body))) {
                         Ok (_) => (),
-                        Err (_) => inner = Self::fallback(inner),
+                        Err (_) => inner = Self::fallback(inner, NodeConversationTermination::Fatal),
                     }
                 }
                 MessagePath::Conversation(_) => panic!("NodeConversation should have prevented sending a Conversation message with send()"),
@@ -425,30 +425,28 @@ impl ConnectionManagerThread {
 
     fn handle_close(mut inner: CmsInner) -> CmsInner {
         eprintln!("handle_close");
-        inner = Self::disappoint_all_conversations(inner, NodeConversationTermination::Graceful);
         let _ = inner
             .talker_half
             .sender
             .send_message(&mut inner.talker_half.stream, &OwnedMessage::Close(None));
         let _ = inner.talker_half.shutdown_all();
+        inner = Self::fallback(inner, NodeConversationTermination::Graceful);
         inner
     }
 
-    fn fallback(mut inner: CmsInner) -> CmsInner {
-        eprintln!("fallback called");
+    fn fallback(mut inner: CmsInner, termination: NodeConversationTermination) -> CmsInner {
+        eprintln!("fallback called: {:?}", termination);
         inner.node_port = None;
         match &inner.active_port {
             None => {
                 eprintln!("active_port is None; strange that we got this far");
-                inner =
-                    Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
+                inner = Self::disappoint_all_conversations(inner, termination);
                 return inner;
             }
             Some(active_port) if *active_port == inner.daemon_port => {
                 eprintln!("Already fell back to Daemon; setting active_port to None this time");
                 inner.active_port = None;
-                inner =
-                    Self::disappoint_all_conversations(inner, NodeConversationTermination::Fatal);
+                inner = Self::disappoint_all_conversations(inner, termination);
                 return inner;
             }
             Some(_) => {
@@ -904,7 +902,7 @@ mod tests {
         inner.conversations.insert(5, idle_conversation_tx);
         inner.conversations_waiting.insert(4);
 
-        let inner = ConnectionManagerThread::fallback(inner);
+        let inner = ConnectionManagerThread::fallback(inner, NodeConversationTermination::Fatal);
 
         let disconnect_notification = waiting_conversation_rx.try_recv().unwrap();
         assert_eq!(
@@ -934,7 +932,7 @@ mod tests {
         inner.conversations.insert(5, idle_conversation_tx);
         inner.conversations_waiting.insert(4);
 
-        let inner = ConnectionManagerThread::fallback(inner);
+        let inner = ConnectionManagerThread::fallback(inner, NodeConversationTermination::Fatal);
 
         let disconnect_notification = waiting_conversation_rx.try_recv().unwrap();
         assert_eq!(
@@ -1442,6 +1440,7 @@ mod tests {
 
         subject.close();
 
+        thread::sleep(Duration::from_millis(100)); // let the disappointment message show up
         let result = conversation1.transact(UiShutdownRequest {}.tmb(0), 1000);
         assert_eq!(result, Err(ClientError::ConnectionDropped));
         let result = conversation2.send(
@@ -1451,7 +1450,7 @@ mod tests {
             }
             .tmb(0),
         );
-        assert_eq!(result, Ok(()));
+        assert_eq!(result, Err(ClientError::ConnectionDropped));
         let _ = stop_handle.stop();
     }
 
