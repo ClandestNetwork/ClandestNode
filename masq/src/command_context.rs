@@ -154,6 +154,7 @@ mod tests {
 
     #[test]
     fn error_conversion_happy_path() {
+        running_test();
         let result: Vec<ContextError> = vec![
             ClientError::FallbackFailed("fallback reason".to_string()),
             ClientError::ConnectionDropped,
@@ -207,6 +208,7 @@ mod tests {
 
     #[test]
     fn transact_works_when_everythings_fine() {
+        running_test();
         let port = find_free_port();
         let stdin = ByteArrayReader::new(b"This is stdin.");
         let stdout = ByteArrayWriter::new();
@@ -245,6 +247,7 @@ mod tests {
 
     #[test]
     fn works_when_server_isnt_present() {
+        running_test();
         let port = find_free_port();
 
         let result = CommandContextReal::new(port, Box::new(StreamFactoryReal::new()));
@@ -258,6 +261,7 @@ mod tests {
 
     #[test]
     fn transact_works_when_server_sends_payload_error() {
+        running_test();
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_response(MessageBody {
             opcode: "setup".to_string(),
@@ -276,6 +280,7 @@ mod tests {
 
     #[test]
     fn transact_works_when_server_sends_connection_error() {
+        running_test();
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port).queue_string("disconnect");
         let stop_handle = server.start();
@@ -293,6 +298,7 @@ mod tests {
 
     #[test]
     fn send_works_when_everythings_fine() {
+        running_test();
         let port = find_free_port();
         let stdin = ByteArrayReader::new(b"This is stdin.");
         let stdout = ByteArrayWriter::new();
