@@ -117,7 +117,7 @@ impl MockWebSocketsServer {
                         log(do_log, index, "No message waiting");
                         None
                     }
-                    Err(e) => panic!("Error serving WebSocket: {:?}", e),
+                    Err(e) => Some(Err(format!("Error serving WebSocket: {:?}", e))),
                     Ok(OwnedMessage::Text(json)) => {
                         log(do_log, index, &format!("Received '{}'", json));
                         Some(match UiTrafficConverter::new_unmarshal_from_ui(&json, 0) {
