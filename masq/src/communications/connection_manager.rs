@@ -252,13 +252,16 @@ impl ConnectionManagerThread {
         }
     }
 
-    fn handle_demand(inner: CmsInner, demand_result: Result<Demand, RecvError>) -> CmsInner {
-        eprintln!("handle_demand");
+    fn handle_demand(mut inner: CmsInner, demand_result: Result<Demand, RecvError>) -> CmsInner {
+        eprintln!("handle_demand: {:?}", demand_result);
         match demand_result {
             Ok(Demand::Conversation) => Self::handle_conversation_trigger(inner),
             Ok(Demand::ActivePort) => Self::handle_active_port_request(inner),
             Ok(Demand::Close) => Self::handle_close(inner),
-            Err(_) => inner, // do nothing if there's a RecvError
+            Err(_) => {
+                inner.active_port = None;
+                inner
+            }
         }
     }
 
@@ -610,6 +613,15 @@ mod tests {
             .connect(port, Box::new(BroadcastHandleMock::new()), 1000)
             .unwrap();
         (subject, stop_handle)
+    }
+
+    #[test]
+    fn handle_demand_brings_the_party_to_a_close_if_the_channel_fails() {
+        let inner = make_inner();
+
+        let inner = ConnectionManagerThread::handle_demand(inner, Err(RecvError));
+
+        assert_eq!(inner.active_port, None);
     }
 
     #[test]
