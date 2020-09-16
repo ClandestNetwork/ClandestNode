@@ -1,11 +1,11 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::blockchain::raw_transaction::RawTransaction;
+use crate::masq_lib::constants::DEFAULT_CHAIN_NAME;
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::wallet::Wallet;
 use actix::Message;
 use futures::{future, Future};
-use masq_lib::constants::DEFAULT_CHAIN_NAME;
 use std::convert::{From, TryFrom, TryInto};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -14,14 +14,15 @@ use web3::transports::EventLoopHandle;
 use web3::types::{Address, BlockNumber, Bytes, FilterBuilder, Log, H256, U256};
 use web3::{Transport, Web3};
 
-// HOT (Ropsten) TODO: SHRD Fake phoney and false contract address!
+// SHRD (Ropsten)
 pub const ROPSTEN_TESTNET_CONTRACT_ADDRESS: Address = Address {
     0: [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
-        0x0f, 0x10, 0x11, 0x12, 0x13,
+        0x38, 0x4d, 0xec, 0x25, 0xe0, 0x3f, 0x94, 0x93, 0x17, 0x67, 0xce, 0x4c, 0x35, 0x56, 0x16,
+        0x84, 0x68, 0xba, 0x24, 0xc3,
     ],
 };
 
+// SHRD (Rinkeby)
 pub const RINKEBY_TESTNET_CONTRACT_ADDRESS: Address = Address {
     0: [
         0x02, 0xba, 0x9b, 0x52, 0x84, 0x25, 0xf9, 0xde, 0x08, 0xf9, 0x61, 0xb8, 0x8a, 0x10, 0xb0,
@@ -36,8 +37,7 @@ pub const MULTINODE_TESTNET_CONTRACT_ADDRESS: Address = Address {
     ],
 };
 
-// TODO: MASQ
-pub const HOMESTEAD_MAINNET_CONTRACT_ADDRESS: Address = Address {
+pub const MAINNET_CONTRACT_ADDRESS: Address = Address {
     0: [
         0x02, 0xba, 0x9b, 0x52, 0x84, 0x25, 0xf9, 0xde, 0x08, 0xf9, 0x61, 0xb8, 0x8a, 0x10, 0xb0,
         0x3b, 0xe8, 0xb8, 0xb9, 0x98,
@@ -46,19 +46,19 @@ pub const HOMESTEAD_MAINNET_CONTRACT_ADDRESS: Address = Address {
 
 const CONTRACTS: [Address; 5] = [
     Address { 0: [0u8; 20] },
-    HOMESTEAD_MAINNET_CONTRACT_ADDRESS,
+    MAINNET_CONTRACT_ADDRESS,
     MULTINODE_TESTNET_CONTRACT_ADDRESS,
     ROPSTEN_TESTNET_CONTRACT_ADDRESS,
     RINKEBY_TESTNET_CONTRACT_ADDRESS,
 ];
 
-pub const HOMESTEAD_MAINNET_CONTRACT_CREATION_BLOCK: u64 = 9_415_932;
-pub const ROPSTEN_TESTNET_CONTRACT_CREATION_BLOCK: u64 = 4_647_463;
+pub const MAINNET_CONTRACT_CREATION_BLOCK: u64 = 9_415_932;
+pub const ROPSTEN_TESTNET_CONTRACT_CREATION_BLOCK: u64 = 8_688_171;
 pub const RINKEBY_TESTNET_CONTRACT_CREATION_BLOCK: u64 = 5_893_771;
 
 pub const CONTRACT_CREATION_BLOCK: [u64; 5] = [
     0,
-    HOMESTEAD_MAINNET_CONTRACT_CREATION_BLOCK,
+    MAINNET_CONTRACT_CREATION_BLOCK,
     0,
     ROPSTEN_TESTNET_CONTRACT_CREATION_BLOCK,
     RINKEBY_TESTNET_CONTRACT_CREATION_BLOCK,
@@ -441,10 +441,11 @@ where
 mod tests {
     use super::*;
     use crate::sub_lib::wallet::Wallet;
-    use crate::test_utils::{make_paying_wallet, make_wallet, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{make_paying_wallet, make_wallet};
     use ethereum_types::BigEndianHash;
     use ethsign_crypto::Keccak256;
     use jsonrpc_core as rpc;
+    use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use masq_lib::utils::find_free_port;
     use serde_json::json;
     use serde_json::Value;
@@ -889,7 +890,7 @@ mod tests {
             2u64,
         );
 
-        transport.assert_request("eth_sendRawTransaction", &[String::from(r#""0xf8a801847735940082dbe894000102030405060708090a0b0c0d0e0f1011121380b844a9059cbb00000000000000000000000000000000000000000000000000626c61683132330000000000000000000000000000000000000000000000000000082f79cd90002aa07c3d0760480453d1ff8dc8cd24e9af77a09407d2560c07f1e928a113f72fc3ada0227528a11eb6ead3e1333220e061db340468386f081c9621e1f2b216be6154fb""#)]);
+        transport.assert_request("eth_sendRawTransaction", &[String::from(r#""0xf8a801847735940082dbe894384dec25e03f94931767ce4c3556168468ba24c380b844a9059cbb00000000000000000000000000000000000000000000000000626c61683132330000000000000000000000000000000000000000000000000000082f79cd900029a0b8e83e714af8bf1685b496912ee4aeff7007ba0f4c29ae50f513bc71ce6a18f4a06a923088306b4ee9cbfcdc62c9b396385f9b1c380134bf046d6c9ae47dea6578""#)]);
         transport.assert_no_more_requests();
         assert_eq!(result, Ok(H256::from_uint(&U256::from(1))));
     }

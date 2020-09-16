@@ -425,6 +425,9 @@ mod tests {
     use crate::bootstrapper::{Bootstrapper, RealUser};
     use crate::database::db_initializer::test_utils::{ConnectionWrapperMock, DbInitializerMock};
     use crate::database::db_initializer::{ConnectionWrapper, InitializationError};
+    use crate::masq_lib::crash_point::CrashPoint;
+    use crate::masq_lib::ui_gateway::NodeFromUiMessage;
+    use crate::masq_lib::ui_gateway::NodeToUiMessage;
     use crate::neighborhood::gossip::Gossip_0v1;
     use crate::stream_messages::AddStreamMsg;
     use crate::stream_messages::RemoveStreamMsg;
@@ -463,12 +466,10 @@ mod tests {
     use crate::test_utils::recorder::Recorder;
     use crate::test_utils::recorder::Recording;
     use crate::test_utils::{alias_cryptde, rate_pack};
-    use crate::test_utils::{main_cryptde, make_wallet, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{main_cryptde, make_wallet};
     use actix::System;
     use log::LevelFilter;
-    use masq_lib::crash_point::CrashPoint;
-    use masq_lib::ui_gateway::NodeFromUiMessage;
-    use masq_lib::ui_gateway::NodeToUiMessage;
+    use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::net::IpAddr;
