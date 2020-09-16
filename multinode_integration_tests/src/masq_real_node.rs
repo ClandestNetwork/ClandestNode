@@ -8,7 +8,6 @@ use crate::masq_node_client::MASQNodeClient;
 use crate::masq_node_server::MASQNodeServer;
 use bip39::{Language, Mnemonic, Seed};
 use masq_lib::test_utils::utils::{DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
-use masq_lib::test_utils::{DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
 use masq_lib::utils::localhost;
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
 use node_lib::blockchain::blockchain_interface::chain_id_from_name;
