@@ -12,10 +12,6 @@ use crate::json_discriminator_factory::JsonDiscriminatorFactory;
 use crate::listener_handler::ListenerHandler;
 use crate::listener_handler::ListenerHandlerFactory;
 use crate::listener_handler::ListenerHandlerFactoryReal;
-use crate::masq_lib::command::StdStreams;
-use crate::masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_UI_PORT};
-use crate::masq_lib::crash_point::CrashPoint;
-use crate::masq_lib::shared_schema::ConfiguratorError;
 use crate::node_configurator::node_configurator_standard::{
     NodeConfiguratorStandardPrivileged, NodeConfiguratorStandardUnprivileged,
 };
@@ -39,6 +35,10 @@ use crate::sub_lib::wallet::Wallet;
 use futures::try_ready;
 use itertools::Itertools;
 use log::LevelFilter;
+use masq_lib::command::StdStreams;
+use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_UI_PORT};
+use masq_lib::crash_point::CrashPoint;
+use masq_lib::shared_schema::ConfiguratorError;
 use std::collections::HashMap;
 use std::env::var;
 use std::fmt;
