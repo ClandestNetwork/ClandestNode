@@ -16,7 +16,7 @@ sees the exact same content.
 
 **MASQ Node** is the foundation of the MASQ Network.
 
-It is what the average user runs to earn SUB and dedicate some of their computers' resources towards the network.
+It is what the average user runs to earn MASQ and dedicate some of their computers' resources towards the network.
 People who run a MASQ Node can be rewarded with cryptocurrency for each time they serve content.
 
 MASQ Nodes work together to relay CORES packages and content on the network.
@@ -504,5 +504,5 @@ recommend using a 64-bit version to build.
 
 We do plan to release binaries that will run on 32-bit Windows, but they will likely be built on 64-bit Windows.
 
-
+Copyright (c) 2019-2020, MASQ Network
 Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
