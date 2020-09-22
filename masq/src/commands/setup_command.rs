@@ -137,6 +137,7 @@ mod tests {
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Default, Set};
     use masq_lib::messages::{UiSetupRequest, UiSetupResponse, UiSetupResponseValue};
+    use masq_lib::test_utils::utils::TEST_DEFAULT_CHAIN_NAME;
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -192,7 +193,7 @@ mod tests {
             vec![(
                 UiSetupRequest {
                     values: vec![
-                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("chain", TEST_DEFAULT_CHAIN_NAME),
                         UiSetupRequestValue::clear("log-level"),
                         UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ]

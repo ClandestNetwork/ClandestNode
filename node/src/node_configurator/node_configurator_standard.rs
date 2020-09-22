@@ -166,12 +166,12 @@ pub mod standard {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::utils::make_new_multi_config;
     use crate::sub_lib::wallet::Wallet;
-    use crate::test_utils::DEFAULT_CHAIN_ID;
     use crate::tls_discriminator_factory::TlsDiscriminatorFactory;
     use itertools::Itertools;
     use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_UI_PORT, HTTP_PORT, TLS_PORT};
     use masq_lib::multi_config::{CommandLineVcl, ConfigFileVcl, EnvironmentVcl, MultiConfig};
     use masq_lib::shared_schema::{ConfiguratorError, ParamError};
+    use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use rustc_hex::{FromHex, ToHex};
     use std::convert::TryInto;
     use std::str::FromStr;
@@ -454,7 +454,7 @@ pub mod standard {
                         .into_iter()
                         .map(
                             |s| match NodeDescriptor::from_str(dummy_cryptde.as_ref(), &s) {
-                                Ok(nd) => if &chain_name == "mainnet" {
+                                Ok(nd) => if chain_name == DEFAULT_CHAIN_NAME {
                                     if nd.mainnet {
                                         Ok(nd)
                                     }
@@ -715,6 +715,7 @@ pub mod standard {
         use crate::test_utils::ArgsBuilder;
         use masq_lib::multi_config::VirtualCommandLine;
         use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
+        use masq_lib::test_utils::utils::TEST_DEFAULT_CHAIN_NAME;
         use masq_lib::utils::running_test;
 
         #[test]
@@ -813,7 +814,7 @@ pub mod standard {
                     "--neighbors",
                     "abJ5XvhVbmVyGejkYUkmftF09pmGZGKg/PzRNnWQxFw:12.23.34.45:5678",
                 )
-                .param("--chain", "mainnet");
+                .param("--chain", DEFAULT_CHAIN_NAME);
             let vcls: Vec<Box<dyn VirtualCommandLine>> =
                 vec![Box::new(CommandLineVcl::new(args.into()))];
             let multi_config = make_new_test_multi_config(&app(), vcls).unwrap();
@@ -837,7 +838,7 @@ pub mod standard {
                     "--neighbors",
                     "abJ5XvhVbmVyGejkYUkmftF09pmGZGKg/PzRNnWQxFw@12.23.34.45:5678",
                 )
-                .param("--chain", "ropsten");
+                .param("--chain", TEST_DEFAULT_CHAIN_NAME);
             let vcls: Vec<Box<dyn VirtualCommandLine>> =
                 vec![Box::new(CommandLineVcl::new(args.into()))];
             let multi_config = make_new_test_multi_config(&app(), vcls).unwrap();
@@ -848,7 +849,10 @@ pub mod standard {
                 result,
                 ConfiguratorError::required(
                     "neighbors",
-                    "Mainnet node descriptor uses '@', but chain configured for 'ropsten'"
+                    &format!(
+                        "Mainnet node descriptor uses '@', but chain configured for '{}'",
+                        TEST_DEFAULT_CHAIN_NAME
+                    )
                 )
             )
         }
@@ -952,11 +956,9 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::Wallet;
+    use crate::test_utils::make_default_persistent_configuration;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::{
-        assert_string_contains, main_cryptde, ArgsBuilder, TEST_DEFAULT_CHAIN_NAME,
-    };
-    use crate::test_utils::{make_default_persistent_configuration, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{assert_string_contains, main_cryptde, ArgsBuilder};
     use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_GAS_PRICE, DEFAULT_UI_PORT};
     use masq_lib::multi_config::{
         CommandLineVcl, ConfigFileVcl, MultiConfig, NameValueVclArg, VclArg, VirtualCommandLine,
@@ -964,7 +966,9 @@ mod tests {
     use masq_lib::shared_schema::{ConfiguratorError, ParamError};
     use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::test_utils::utils::{
+        ensure_node_home_directory_exists, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME,
+    };
     use masq_lib::utils::running_test;
     use rustc_hex::{FromHex, ToHex};
     use std::fs::File;
@@ -2439,7 +2443,7 @@ mod tests {
         let subject = NodeConfiguratorStandardPrivileged::new();
         let args = ArgsBuilder::new()
             .param("--ip", "1.2.3.4")
-            .param("--chain", "ropsten");
+            .param("--chain", TEST_DEFAULT_CHAIN_NAME);
         let args_vec: Vec<String> = args.into();
 
         let config = subject
@@ -2448,7 +2452,7 @@ mod tests {
 
         assert_eq!(
             config.blockchain_bridge_config.chain_id,
-            chain_id_from_name("ropsten")
+            chain_id_from_name(TEST_DEFAULT_CHAIN_NAME)
         );
     }
 
