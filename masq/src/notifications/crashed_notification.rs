@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Bad UiNodeCrashedBroadcast: UnexpectedMessage(\"booga\", Conversation(1234))"
+        expected = "Bad UiNodeCrashedBroadcast:\nMessageBody { opcode: \"booga\", path: Conversation(1234), payload: Ok(\"booga\") }"
     )]
     pub fn must_have_real_ui_node_crashed_broadcast() {
         running_test();
