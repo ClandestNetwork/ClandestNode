@@ -10,7 +10,8 @@ pub struct CrashNotifier {}
 
 impl CrashNotifier {
     pub fn handle_broadcast(msg: MessageBody, stdout: &mut dyn Write, _stderr: &mut dyn Write) {
-        let (response, _) = UiNodeCrashedBroadcast::fmb(msg).expect(&format!("Bad UiNodeCrashedBroadcast:\n{:?}", msg));
+        let (response, _) = UiNodeCrashedBroadcast::fmb(msg)
+            .expect(&format!("Bad UiNodeCrashedBroadcast:\n{:?}", msg));
         if response.crash_reason == CrashReason::DaemonCrashed {
             exit_process(1, "The Daemon is no longer running; masq is terminating.");
         }
