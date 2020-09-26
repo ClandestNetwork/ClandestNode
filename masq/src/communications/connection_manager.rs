@@ -650,19 +650,19 @@ mod tests {
 
         let conversation1_handle = thread::spawn(move || {
             let response1 = conversation1
-                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .transact(UiShutdownRequest {}.tmb(0), 1001)
                 .unwrap();
             let response2 = conversation1
-                .transact(UiStartOrder {}.tmb(0), 1000)
+                .transact(UiStartOrder {}.tmb(0), 1002)
                 .unwrap();
             (response1, response2)
         });
         let conversation2_handle = thread::spawn(move || {
             let response1 = conversation2
-                .transact(UiShutdownRequest {}.tmb(0), 1000)
+                .transact(UiShutdownRequest {}.tmb(0), 1003)
                 .unwrap();
             let response2 = conversation2
-                .transact(UiStartOrder {}.tmb(0), 1000)
+                .transact(UiStartOrder {}.tmb(0), 1004)
                 .unwrap();
             (response1, response2)
         });
