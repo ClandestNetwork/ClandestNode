@@ -6,6 +6,5 @@ export RUST_BACKTRACE=full
 export RUSTFLAGS="-D warnings"
 pushd "$CI_DIR/.."
 #cargo test --release -- --nocapture --skip _integration --test-threads=1
-cargo test can_follow_redirect -- --nocapture --skip _integration --test-threads=1
-cargo test handles_interleaved_conversations -- --nocapture --skip _integration --test-threads=1
+cargo test -- --nocapture --skip _integration --test-threads=1
 popd

@@ -616,6 +616,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handle_demand_brings_the_party_to_a_close_if_the_channel_fails() {
         let inner = make_inner();
 
@@ -692,6 +693,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_sending_fire_and_forget_messages() {
         let server = MockWebSocketsServer::new(find_free_port());
         let (subject, stop_handle) = make_subject(server);
@@ -722,6 +724,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn conversations_waiting_is_set_correctly_for_normal_operation() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port)
@@ -836,6 +839,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn when_fallback_fails_daemon_crash_broadcast_is_sent() {
         let mut inner = make_inner();
         let broadcast_handle_send_params_arc = Arc::new(Mutex::new(vec![]));
@@ -854,6 +858,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_listener_fallback_from_node() {
         let daemon_port = find_free_port();
         let expected_incoming_message = UiSetupResponse {
@@ -902,6 +907,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn doesnt_fall_back_from_daemon() {
         let unoccupied_port = find_free_port();
         let (waiting_conversation_tx, waiting_conversation_rx) = unbounded();
@@ -932,6 +938,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn doesnt_fall_back_from_disconnected() {
         let unoccupied_port = find_free_port();
         let (waiting_conversation_tx, waiting_conversation_rx) = unbounded();
@@ -962,6 +969,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handle_redirect_order_handles_rejection_from_node() {
         let node_port = find_free_port(); // won't put anything on this port
         let (redirect_response_tx, redirect_response_rx) = unbounded();
@@ -978,6 +986,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handle_redirect_order_disappoints_waiting_conversations_with_resend_or_graceful() {
         let node_port = find_free_port();
         let server = MockWebSocketsServer::new(node_port);
@@ -1021,6 +1030,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_listener_fallback_from_daemon() {
         let daemon_port = find_free_port();
         let (conversation_tx, conversation_rx) = unbounded();
@@ -1042,6 +1052,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_fatal_reception_failure() {
         let daemon_port = find_free_port();
         let expected_incoming_message = UiSetupResponse {
@@ -1093,6 +1104,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_nonfatal_reception_failure() {
         let daemon_port = find_free_port();
         let node_port = find_free_port();
@@ -1117,6 +1129,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_broadcast() {
         let incoming_message = UiSetupBroadcast {
             running: false,
@@ -1211,6 +1224,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_response_to_nonexistent_conversation() {
         let incoming_message = UiSetupResponse {
             running: false,
@@ -1233,6 +1247,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_response_to_dead_conversation() {
         let incoming_message = UiSetupResponse {
             running: false,
@@ -1255,6 +1270,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_failed_conversation_requester() {
         let mut inner = make_inner();
         let (conversation_return_tx, _) = unbounded();
@@ -1268,6 +1284,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_fire_and_forget_outgoing_message() {
         let port = find_free_port();
         let server = MockWebSocketsServer::new(port);
@@ -1304,6 +1321,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_outgoing_conversation_messages_to_dead_server() {
         let daemon_port = find_free_port();
         eprintln!("daemon_port: {}", daemon_port);
@@ -1364,6 +1382,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_outgoing_conversation_message_from_nonexistent_conversation() {
         let conversations = vec![(1, unbounded().0), (2, unbounded().0)]
             .into_iter()
@@ -1384,6 +1403,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_outgoing_fire_and_forget_messages_to_dead_server() {
         let daemon_port = find_free_port();
         let daemon_server = MockWebSocketsServer::new(daemon_port);
@@ -1437,6 +1457,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn handles_close_order() {
         running_test();
         let port = find_free_port();
