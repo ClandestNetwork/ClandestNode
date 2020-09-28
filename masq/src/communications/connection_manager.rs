@@ -296,8 +296,10 @@ impl ConnectionManagerThread {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
                     MessagePath::Conversation(context_id) => {
-                        if let Some(sender) = inner.conversations.get(&context_id) {
-                            match sender.send(Ok(message_body)) {
+                        if let Some(manager_to_conversation_tx) =
+                            inner.conversations.get(&context_id)
+                        {
+                            match manager_to_conversation_tx.send(Ok(message_body)) {
                                 Ok(_) => {
                                     inner.conversations_waiting.remove(&context_id);
                                 }

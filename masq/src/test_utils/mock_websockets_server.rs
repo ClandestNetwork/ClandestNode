@@ -37,7 +37,7 @@ pub struct MockWebSocketsServerStopHandle {
 impl MockWebSocketsServer {
     pub fn new(port: u16) -> Self {
         Self {
-            log: false,
+            log: true,
             port,
             protocol: NODE_UI_PROTOCOL.to_string(),
             responses_arc: Arc::new(Mutex::new(vec![])),
