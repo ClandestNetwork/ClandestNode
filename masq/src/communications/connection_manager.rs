@@ -569,7 +569,7 @@ mod tests {
         MockWebSocketsServer, MockWebSocketsServerStopHandle,
     };
     use crossbeam_channel::TryRecvError;
-    use masq_lib::messages::{CrashReason, FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast};
+    use masq_lib::messages::{CrashReason, FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast, UiCrashRequest};
     use masq_lib::messages::{
         UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupBroadcast, UiSetupRequest,
         UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
@@ -673,7 +673,7 @@ mod tests {
             conversation1_handle.join().unwrap();
         let (conversation2_response1, conversation2_response2) =
             conversation2_handle.join().unwrap();
-        assert_eq!(conversation1_response1, UiShutdownRequest {}.tmb(1));
+        assert_eq!(conversation1_response1, UiShutdownResponse {}.tmb(1));
         assert_eq!(
             conversation1_response2,
             UiStartResponse {
@@ -682,7 +682,7 @@ mod tests {
             }
             .tmb(1)
         );
-        assert_eq!(conversation2_response1, UiShutdownRequest {}.tmb(2));
+        assert_eq!(conversation2_response1, UiShutdownResponse {}.tmb(2));
         assert_eq!(
             conversation2_response2,
             UiStartResponse {
