@@ -102,7 +102,20 @@ impl MockWebSocketsServer {
             log(do_log, index, "Waiting for handshake");
             let mut client = upgrade.accept().unwrap();
             client.set_nonblocking(true).unwrap();
-            looping_tx.send(()).unwrap();
+            match looping_tx.send(()) {
+                Ok(_) => (),
+                Err(e) => {
+                    log(
+                        do_log,
+                        index,
+                        &format!(
+                            "MockWebSocketsServerStopHandle died before loop could start: {:?}",
+                            e
+                        ),
+                    );
+                    return;
+                }
+            }
             log(do_log, index, "Entering background loop");
             loop {
                 log(do_log, index, "Checking for message from client");

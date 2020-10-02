@@ -569,9 +569,7 @@ mod tests {
         MockWebSocketsServer, MockWebSocketsServerStopHandle,
     };
     use crossbeam_channel::TryRecvError;
-    use masq_lib::messages::{
-        CrashReason, FromMessageBody, ToMessageBody, UiCrashRequest, UiNodeCrashedBroadcast,
-    };
+    use masq_lib::messages::{CrashReason, FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast};
     use masq_lib::messages::{
         UiFinancialsRequest, UiFinancialsResponse, UiRedirect, UiSetupBroadcast, UiSetupRequest,
         UiSetupResponse, UiShutdownRequest, UiShutdownResponse, UiStartOrder, UiStartResponse,
