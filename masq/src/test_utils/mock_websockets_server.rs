@@ -4,8 +4,10 @@ use lazy_static::lazy_static;
 use masq_lib::messages::NODE_UI_PROTOCOL;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
-use masq_lib::utils::localhost;
+use masq_lib::utils::{find_free_port, localhost};
 use std::net::SocketAddr;
+#[cfg(target_os = "windows")]
+use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
@@ -36,6 +38,11 @@ pub struct MockWebSocketsServerStopHandle {
 
 impl MockWebSocketsServer {
     pub fn new(port: u16) -> Self {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows requires this because of a bug in the websocket library
+            let _ = UdpSocket::bind(SocketAddr::new(localhost(), find_free_port()));
+        }
         Self {
             log: true,
             port,
