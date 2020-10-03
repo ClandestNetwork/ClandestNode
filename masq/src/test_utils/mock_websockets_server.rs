@@ -90,6 +90,8 @@ impl MockWebSocketsServer {
             let mut requests = inner_requests_arc.lock().unwrap();
             ready_tx.send(()).unwrap();
             log(do_log, index, "Waiting for upgrade");
+            // FIXME: This apparently can take wildly-inappropriate amounts of time to complete
+            // under Windows on Actions. (Sometimes more than 6hr.) Why?
             let upgrade = server.accept().unwrap();
             if upgrade
                 .protocols()
@@ -144,7 +146,11 @@ impl MockWebSocketsServer {
                     }
                 };
                 if let Some(incoming) = incoming_opt {
-                    log(do_log, index, "Recording incoming message");
+                    log(
+                        do_log,
+                        index,
+                        &format!("Recording incoming message: {:?}", incoming),
+                    );
                     requests.push(incoming.clone());
                     if let Ok(message_body) = incoming {
                         match message_body.path {
@@ -173,7 +179,14 @@ impl MockWebSocketsServer {
                                         client.send_message(&OwnedMessage::Text(outgoing)).unwrap()
                                     }
                                 }
-                                om => client.send_message(&om).unwrap(),
+                                om => {
+                                    log(
+                                        do_log,
+                                        index,
+                                        &format!("Responding with preset OwnedMessage: {:?}", om),
+                                    );
+                                    client.send_message(&om).unwrap()
+                                }
                             },
                             MessagePath::FireAndForget => {
                                 log(
