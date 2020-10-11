@@ -86,7 +86,6 @@ impl ConnectionManager {
         broadcast_handle: Box<dyn BroadcastHandle>,
         timeout_millis: u64,
     ) -> Result<(), ClientListenerError> {
-        eprintln!("connect called");
         let (demand_tx, demand_rx) = unbounded();
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         let talker_half = make_client_listener(port, listener_to_manager_tx, timeout_millis)?;
@@ -152,7 +151,6 @@ fn make_client_listener(
     listener_to_manager_tx: Sender<Result<MessageBody, ClientListenerError>>,
     timeout_millis: u64,
 ) -> Result<Writer<TcpStream>, ClientListenerError> {
-    eprintln!("make_client_listener called");
     let url = format!("ws://{}:{}", localhost(), port);
     let builder = ClientBuilder::new(url.as_str()).expect("Bad URL");
     let result = builder.add_protocol(NODE_UI_PROTOCOL);
@@ -228,9 +226,7 @@ impl ConnectionManagerThread {
 
     fn spawn_thread(mut inner: CmsInner) -> JoinHandle<()> {
         thread::spawn(move || loop {
-            eprintln!("Calling thread_loop_guts");
             if inner.active_port == None {
-                eprintln!("thread_loop_guts detects daemon crash: sending broadcast");
                 let msg_body = UiNodeCrashedBroadcast {
                     process_id: 0,
                     crash_reason: CrashReason::DaemonCrashed,
@@ -253,7 +249,6 @@ impl ConnectionManagerThread {
     }
 
     fn handle_demand(mut inner: CmsInner, demand_result: Result<Demand, RecvError>) -> CmsInner {
-        eprintln!("handle_demand: {:?}", demand_result);
         match demand_result {
             Ok(Demand::Conversation) => Self::handle_conversation_trigger(inner),
             Ok(Demand::ActivePort) => Self::handle_active_port_request(inner),
@@ -266,7 +261,6 @@ impl ConnectionManagerThread {
     }
 
     fn handle_conversation_trigger(mut inner: CmsInner) -> CmsInner {
-        eprintln!("handle_conversation_trigger");
         let (manager_to_conversation_tx, manager_to_conversation_rx) = unbounded();
         let context_id = inner.next_context_id;
         inner.next_context_id += 1;
@@ -291,7 +285,6 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<Result<MessageBody, ClientListenerError>, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_incoming_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Ok(msg_result) => match msg_result {
                 Ok(message_body) => match message_body.path {
@@ -335,7 +328,6 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         msg_result_result: Result<OutgoingMessageType, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_outgoing_message_body: {:?}", msg_result_result);
         match msg_result_result {
             Err(e) => unimplemented! ("handle_outgoing_message_body error: {:?}", e),
             Ok(OutgoingMessageType::ConversationMessage (message_body)) => match message_body.path {
@@ -376,7 +368,6 @@ impl ConnectionManagerThread {
         mut inner: CmsInner,
         redirect_order_result: Result<RedirectOrder, RecvError>,
     ) -> CmsInner {
-        eprintln!("handle_redirect_order called");
         let redirect_order = match redirect_order_result {
             Ok(ro) => ro,
             Err(_) => return inner, // Sender died; ignore
@@ -420,7 +411,6 @@ impl ConnectionManagerThread {
     }
 
     fn handle_active_port_request(inner: CmsInner) -> CmsInner {
-        eprintln!("handle_active_port_request");
         inner
             .active_port_response_tx
             .send(inner.active_port)
@@ -429,7 +419,6 @@ impl ConnectionManagerThread {
     }
 
     fn handle_close(mut inner: CmsInner) -> CmsInner {
-        eprintln!("handle_close");
         let _ = inner
             .talker_half
             .sender
@@ -440,37 +429,27 @@ impl ConnectionManagerThread {
     }
 
     fn fallback(mut inner: CmsInner, termination: NodeConversationTermination) -> CmsInner {
-        eprintln!("fallback called: {:?}", termination);
         inner.node_port = None;
         match &inner.active_port {
             None => {
-                eprintln!("active_port is None; strange that we got this far");
                 inner = Self::disappoint_all_conversations(inner, termination);
                 return inner;
             }
             Some(active_port) if *active_port == inner.daemon_port => {
-                eprintln!("Already fell back to Daemon; setting active_port to None this time");
                 inner.active_port = None;
                 inner = Self::disappoint_all_conversations(inner, termination);
                 return inner;
             }
-            Some(_) => {
-                eprintln!("Falling back from Node to Daemon");
-                inner.active_port = Some(inner.daemon_port)
-            }
+            Some(_) => inner.active_port = Some(inner.daemon_port),
         }
         let (listener_to_manager_tx, listener_to_manager_rx) = unbounded();
         inner.listener_to_manager_rx = listener_to_manager_rx;
-        eprintln!("Restarting ClientListenerThread");
         match make_client_listener(
             inner.active_port.expect("Active port disappeared!"),
             listener_to_manager_tx,
             FALLBACK_TIMEOUT_MILLIS,
         ) {
-            Ok(talker_half) => {
-                eprintln!("ClientListenerThread restarted");
-                inner.talker_half = talker_half
-            }
+            Ok(talker_half) => inner.talker_half = talker_half,
             Err(e) => {
                 eprintln!("ClientListenerThread could not be restarted: {:?}", e);
                 unimplemented!("Test-drive me")
@@ -1324,13 +1303,10 @@ mod tests {
     #[test]
     fn handles_outgoing_conversation_messages_to_dead_server() {
         let daemon_port = find_free_port();
-        eprintln!("daemon_port: {}", daemon_port);
         let daemon_server = MockWebSocketsServer::new(daemon_port)
             .queue_string("disconnect")
             .write_logs();
-        eprintln!("daemon_server created");
         let daemon_stop_handle = daemon_server.start();
-        eprintln!("daemon_server started");
         let (conversation1_tx, conversation1_rx) = unbounded();
         let (conversation2_tx, conversation2_rx) = unbounded();
         let (conversation3_tx, conversation3_rx) = unbounded();
@@ -1355,7 +1331,6 @@ mod tests {
             thread::sleep(Duration::from_millis(500));
         }
 
-        eprintln!("inner constructed");
         inner = ConnectionManagerThread::handle_outgoing_message_body(
             inner,
             Ok(OutgoingMessageType::ConversationMessage(
@@ -1363,21 +1338,16 @@ mod tests {
             )),
         );
 
-        eprintln!("asserting conversation_1");
         assert_eq!(conversation1_rx.try_recv(), Err(TryRecvError::Empty)); // Wasn't waiting
-        eprintln!("asserting conversation_2");
         assert_eq!(
             conversation2_rx.try_recv(),
             Ok(Err(NodeConversationTermination::Fatal))
         ); // sender
-        eprintln!("asserting conversation_3");
         assert_eq!(
             conversation3_rx.try_recv(),
             Ok(Err(NodeConversationTermination::Fatal))
         ); // innocent bystander
-        eprintln!("asserting conversations_waiting");
         assert_eq!(inner.conversations_waiting.is_empty(), true);
-        eprintln!("Stopping daemon");
         let _ = daemon_stop_handle.stop();
     }
 

@@ -40,13 +40,8 @@ pub struct MockWebSocketsServerStopHandle {
 
 impl MockWebSocketsServer {
     pub fn new(port: u16) -> Self {
-        #[cfg(target_os = "windows")]
-        {
-            // Windows requires this because of a bug in the websocket library
-            let _ = UdpSocket::bind(SocketAddr::new(localhost(), find_free_port()));
-        }
         Self {
-            log: true,
+            log: false,
             port,
             protocol: NODE_UI_PROTOCOL.to_string(),
             responses_arc: Arc::new(Mutex::new(vec![])),

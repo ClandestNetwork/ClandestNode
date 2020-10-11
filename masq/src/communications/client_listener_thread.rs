@@ -101,7 +101,6 @@ impl ClientListenerThread {
                             Ok(body) => match self.message_body_tx.send(Ok(body.clone())) {
                                 Ok(_) => (),
                                 Err(_) => {
-                                    eprintln!("ClientListenerThread found dead channel trying to send to ConnectionManager: {:?}", body);
                                     break;
                                 }
                             },
@@ -111,7 +110,6 @@ impl ClientListenerThread {
                             {
                                 Ok(_) => (),
                                 Err(_) => {
-                                    eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unmarshal failure: {}", string);
                                     break;
                                 }
                             },
@@ -119,22 +117,19 @@ impl ClientListenerThread {
                     }
                     Ok(OwnedMessage::Close(_)) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Closed));
-                        eprintln!("ClientListenerThread received a Close message: stopping");
                         break;
                     }
-                    Ok(unexpected) => match self
+                    Ok(_unexpected) => match self
                         .message_body_tx
                         .send(Err(ClientListenerError::UnexpectedPacket))
                     {
                         Ok(_) => (),
                         Err(_) => {
-                            eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of unexpected WebSockets message: {:?}", unexpected);
                             break;
                         }
                     },
-                    Err(error) => {
+                    Err(_error) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Broken));
-                        eprintln!("ClientListenerThread found dead channel trying to inform ConnectionManager of receive error: {:?}", error);
                         break;
                     }
                 }
