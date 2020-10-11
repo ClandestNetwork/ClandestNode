@@ -4,12 +4,8 @@ use lazy_static::lazy_static;
 use masq_lib::messages::NODE_UI_PROTOCOL;
 use masq_lib::ui_gateway::{MessageBody, MessagePath};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
-#[cfg(target_os = "windows")]
-use masq_lib::utils::find_free_port;
 use masq_lib::utils::localhost;
 use std::net::SocketAddr;
-#[cfg(target_os = "windows")]
-use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
