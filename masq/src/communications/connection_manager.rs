@@ -719,7 +719,7 @@ mod tests {
         conversation.send(message1.clone().tmb(0)).unwrap();
         conversation.send(message2.clone().tmb(0)).unwrap();
 
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(1000));
         let mut outgoing_messages = stop_handle.stop();
         assert_eq!(
             UiUnmarshalError::fmb(outgoing_messages.remove(0).unwrap()).unwrap(),
