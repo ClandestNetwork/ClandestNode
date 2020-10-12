@@ -86,7 +86,7 @@ impl ActorSystemFactoryReal {
     ) {
         let db_initializer = DbInitializerReal::new();
         // make all the actors
-        let (dispatcher_subs, pool_bind_sub) = actor_factory.make_and_start_dispatcher();
+        let (dispatcher_subs, pool_bind_sub) = actor_factory.make_and_start_dispatcher(&config);
         let proxy_server_subs = actor_factory.make_and_start_proxy_server(
             main_cryptde,
             alias_cryptde,
@@ -182,7 +182,10 @@ impl ActorSystemFactoryReal {
 }
 
 pub trait ActorFactory: Send {
-    fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>);
+    fn make_and_start_dispatcher(
+        &self,
+        config: &BootstrapperConfig,
+    ) -> (DispatcherSubs, Recipient<PoolBindMessage>);
     fn make_and_start_proxy_server(
         &self,
         main_cryptde: &'static dyn CryptDE,
@@ -219,8 +222,12 @@ pub trait ActorFactory: Send {
 pub struct ActorFactoryReal {}
 
 impl ActorFactory for ActorFactoryReal {
-    fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
-        let addr: Addr<Dispatcher> = Arbiter::start(|_| Dispatcher::new());
+    fn make_and_start_dispatcher(
+        &self,
+        config: &BootstrapperConfig,
+    ) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
+        let crash_point = config.crash_point;
+        let addr: Addr<Dispatcher> = Arbiter::start(move |_| Dispatcher::new(crash_point));
         (
             Dispatcher::make_subs_from(&addr),
             addr.recipient::<PoolBindMessage>(),
@@ -463,10 +470,11 @@ mod tests {
     use crate::test_utils::recorder::Recorder;
     use crate::test_utils::recorder::Recording;
     use crate::test_utils::{alias_cryptde, rate_pack};
-    use crate::test_utils::{main_cryptde, make_wallet, DEFAULT_CHAIN_ID};
+    use crate::test_utils::{main_cryptde, make_wallet};
     use actix::System;
     use log::LevelFilter;
     use masq_lib::crash_point::CrashPoint;
+    use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use masq_lib::ui_gateway::NodeFromUiMessage;
     use masq_lib::ui_gateway::NodeToUiMessage;
     use std::cell::RefCell;
@@ -506,13 +514,17 @@ mod tests {
     }
 
     impl<'a> ActorFactory for ActorFactoryMock<'a> {
-        fn make_and_start_dispatcher(&self) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
+        fn make_and_start_dispatcher(
+            &self,
+            _config: &BootstrapperConfig,
+        ) -> (DispatcherSubs, Recipient<PoolBindMessage>) {
             let addr: Addr<Recorder> = ActorFactoryMock::start_recorder(&self.dispatcher);
             let dispatcher_subs = DispatcherSubs {
                 ibcd_sub: recipient!(addr, InboundClientData),
                 bind: recipient!(addr, BindMessage),
                 from_dispatcher_client: recipient!(addr, TransmitDataMsg),
                 stream_shutdown_sub: recipient!(addr, StreamShutdownMsg),
+                ui_sub: recipient!(addr, NodeFromUiMessage),
             };
             (dispatcher_subs, addr.recipient::<PoolBindMessage>())
         }
@@ -646,8 +658,8 @@ mod tests {
                 bind: recipient!(addr, BindMessage),
                 ui_message_sub: recipient!(addr, UiCarrierMessage),
                 from_ui_message_sub: recipient!(addr, FromUiMessage),
-                new_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
-                new_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
+                node_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
+                node_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
             }
         }
 
@@ -699,6 +711,7 @@ mod tests {
                 retrieve_transactions: addr.clone().recipient::<RetrieveTransactions>(),
                 set_gas_price_sub: addr.clone().recipient::<SetGasPriceMsg>(),
                 set_consuming_db_password_sub: addr.clone().recipient::<SetDbPasswordMsg>(),
+                ui_sub: addr.clone().recipient::<NodeFromUiMessage>(),
             }
         }
     }
