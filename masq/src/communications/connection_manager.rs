@@ -452,7 +452,7 @@ impl ConnectionManagerThread {
             Ok(talker_half) => inner.talker_half = talker_half,
             Err(e) => {
                 eprintln!("ClientListenerThread could not be restarted: {:?}", e);
-                unimplemented!("Test-drive me")
+                unimplemented!("Test-drive me")***
             }
         };
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);

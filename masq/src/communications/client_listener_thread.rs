@@ -100,18 +100,14 @@ impl ClientListenerThread {
                         match UiTrafficConverter::new_unmarshal(&string) {
                             Ok(body) => match self.message_body_tx.send(Ok(body.clone())) {
                                 Ok(_) => (),
-                                Err(_) => {
-                                    break;
-                                }
+                                Err(_) => break,
                             },
                             Err(_) => match self
                                 .message_body_tx
                                 .send(Err(ClientListenerError::UnexpectedPacket))
                             {
                                 Ok(_) => (),
-                                Err(_) => {
-                                    break;
-                                }
+                                Err(_) => break,
                             },
                         }
                     }
@@ -124,9 +120,7 @@ impl ClientListenerThread {
                         .send(Err(ClientListenerError::UnexpectedPacket))
                     {
                         Ok(_) => (),
-                        Err(_) => {
-                            break;
-                        }
+                        Err(_) => break,
                     },
                     Err(_error) => {
                         let _ = self.message_body_tx.send(Err(ClientListenerError::Broken));
