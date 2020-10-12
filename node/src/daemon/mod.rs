@@ -124,16 +124,6 @@ impl Handler<NodeFromUiMessage> for Daemon {
     type Result = ();
 
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
-        trace!(&self.logger, "Trace message");
-        debug!(&self.logger, "Debug message");
-        info!(&self.logger, "Informational message");
-        warning!(&self.logger, "Warning message");
-        error!(&self.logger, "Error message");
-        warning!(&self.logger, "Warning message");
-        info!(&self.logger, "Informational message");
-        debug!(&self.logger, "Debug message");
-        trace!(&self.logger, "Trace message");
-
         debug!(
             &self.logger,
             "Handing NodeFromUiMessage from client {}: {}", msg.client_id, msg.body.opcode

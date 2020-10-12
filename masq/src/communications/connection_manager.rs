@@ -450,10 +450,7 @@ impl ConnectionManagerThread {
             FALLBACK_TIMEOUT_MILLIS,
         ) {
             Ok(talker_half) => inner.talker_half = talker_half,
-            Err(e) => {
-                eprintln!("ClientListenerThread could not be restarted: {:?}", e);
-                unimplemented!("Test-drive me")
-            }
+            Err(e) => panic!("ClientListenerThread could not be restarted: {:?}", e),
         };
         inner = Self::disappoint_waiting_conversations(inner, NodeConversationTermination::Fatal);
         inner

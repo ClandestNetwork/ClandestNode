@@ -90,8 +90,6 @@ impl MockWebSocketsServer {
             let mut requests = inner_requests_arc.lock().unwrap();
             ready_tx.send(()).unwrap();
             log(do_log, index, "Waiting for upgrade");
-            // FIXME: This apparently can take wildly-inappropriate amounts of time to complete
-            // under Windows on Actions. (Sometimes more than 6hr.) Why?
             let upgrade = server.accept().unwrap();
             if upgrade
                 .protocols()
