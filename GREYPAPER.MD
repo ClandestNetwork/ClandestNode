@@ -9,11 +9,11 @@
 | Preamble – The Greypaper | [Navigate](#preamble) |
 | Introduction | [Navigate](#introduction) |
 | Solution – Rule of Three | [Navigate](#solution) |
-| Clandestine Routing | [In progress](#clandestine) |
-| Docker Style CLI | [In progress](#docker-cli) |
 | Founding Principles | [Navigate](#founding-principles) |
-| Key Project Goals Currently | [Navigate](#key-goals) |
-| Next Steps | [Navigate](#next-steps) |
+| Key Goals Currently | [Navigate](#key-goals) |
+| Docker Style CLI | [In progress](#docker-cli) |
+| Graphic User Interface (GUI) | [In progress](#gui) |
+| Clandestine Routing | [In progress](#clandestine) |
 | Tokenomics | [Navigate](#tokenomics)  |
 | Don the MASQ & Get Involved | [Support Us](#support-us) |
 | SUPPORT OUR CAUSE | [Donate](#donate) |
@@ -81,25 +81,34 @@ MASQ intends to keep user privacy as an utmost priority, as without true privacy
 Similarly, members of the Committee will remain pseudo-anonymous until such time that the network will be completely immutable, and there is little to no external threat to them. Some of the Committee are willing to be openly identified.
  
 <a id="key-goals"></a>
-# KEY PROJECT GOALS CURRENTLY
+# PROJECT MILESTONES
 
 <a id="docker-cli"></a>
-### Docker-Style CLI Interface
-We have discontinued development and maintainance on the dated GUI, which was not only inefficient, but didn't reflect the features of Node entirely. From here our development is focused on the skeleton behind any GUI, and is now based on a Command Line interface, which will be adapted to be used on the main platforms.
+### Docker-Style CLI Interface - in progress, nearing completion
+We have discontinued development and maintenance on the dated GUI, which was not only inefficient, but didn't reflect the features of Node entirely. From here our development is focused on the skeleton behind any GUI, and is now based on a Command Line interface, which will be adapted to be used on the main platforms.
 
 Our goal is to have a configuration file be set up and referenced by the software Daemon, and then Node can be initialized by the user with a few simple commands on a Command Prompt in Windows, Linux or Mac
 
-After more of our UI-gateway design is developed and implemented, further UI components and GUIs can be designed and built on top for more user-friendly adoption and full-fledged visual features
+After more of our UI-Gateway design is developed and implemented, further UI components and GUIs can be designed and built on top for more user-friendly adoption and full-fledged visual features.
 
-### Clandestine Routing
+As of August 2020, most of the UI-Gateway interface has been implemented and allows UIs to communicate directly with the running Node instance (masqd).
 
-### Neighborhood Modes
+<a id="gui"></a>
+### Graphic User Interface (GUI) - in progress
+Through our amazing Community, we have formed a group who is developing a streamlined GUI that will operate my communicating through the new MASQ Node UI-Gateway over Websocket broadcasts and messaging.
 
-### Terminal Intelligence
+The GUI will first be a browser-based solution for Alpha and Beta type testing with community, and then be developed into further iterations of GUIs. These may be based on other platforms or languages for greater user experience and streamlined features.
 
-### Auto Port-Forwarding
+### Additional Key Milestones
 
-# NEXT STEPS
+* Auto Port-Forwarding
+
+* Clandestine Routing
+
+* Neighborhood Modes
+
+* Terminal Intelligence
+
 
 ## MASQ Project GitHub is Open Source
 The MASQ [GitHub] is an Open Source fork of Substratum (the code base was created and developed by Substratum LLC, a registered US company based in Tennessee) – under the GPLv3 license. All the forked source code used from the latest repo of Substratum is cited as such and credit given properly.
@@ -112,8 +121,6 @@ Starting repositories include forks of:
 # Tokenomics
 
 >Our true goal is simply development!
-
-After much research, discussion, and advice from various parties the Committee decided on to launch the token strategy moving forward with MASQ Node.
 
 The MASQ ERC20 token will be a pure utility token. Its primary purpose is to provide a monetization component within the Node software to allow micro-transactions between nodes providing services to each-other within the network. These services are measured and values are individually set by the user of each Node, creating a 'free and open market' within the network itself for users to provide their bandwidth and Node routing services.
 
@@ -128,40 +135,40 @@ MASQ is using a clone of an OpenZeppelin ERC20 token smart contract adapted by S
 Our smart contract in Solidity can be view publicly on our [verified contract address](https://etherscan.io/address/0x02ba9B528425f9de08F961B88A10b03Be8B8B998) on etherscan.io
 
 ## Token Supply 
-Token supply estimates are based on minted supply of 472 Million tokens, adjusted by airdrop exclusions, additional Developement wallet and Committee wallets.
-
-Final Total Supply **estimates** are 55-60% of the original minted supply
+Final Total Supply is 236,424,274.7575735
+This is 50% of the original minted supply from the deployed Smart Contract
 
 ## Development Wallet
-A development wallet of 40 million tokens is earmarked to provide further project support during growth, testing and community engagement
+A development wallet of 40 million tokens is allocated, to be distributed at the discretion of the Committee following approval. Distribution is primarily for network-scaling, liquidity providers and business development as long as the market supports it. All distributions will be well communicated before any releases of this allocation.
 
 ## Committee Wallets
-Permanent committee members will receive a one-off 1.25 million tokens each
+A Committee wallet has 9 million tokens allocated for members
+*(currently there are 6 permanent members)*
 
-(at time of writing we have 7 permanent members, so if this changes we will announce immediately)
-
-## Airdrop Distribution (completed at 2:27am Feb 22, 2020)
+## Airdrop Distribution (completed on Feb 22, 2020)
 All non-exchange wallets **holding 500 or more SUB tokens** were airdropped MASQ tokens on a 1:1 ratio
 
 Major exchange wallets and previous project founders/network wallets were excluded from airdrop. 
-
-Remaining tokens after airdrop, development wallet and committee wallets will be sent to the zero-ethereum address
-
-**date for this has not been set yet**
 
 Using blockchain analysis tools, the MASQ committee reviewed monthly historical snapshots of holders from Dec 2019, Jan 2020 and Feb 2020. There were not significant changes to token-holder balances in this time.
 
 Final snapshot was taken at 3:50pm 6th Feb 2020 PST, which coincides with the Committee announcement of the plans to airdrop the custom MASQ token. This was to avoid both manipulation and speculative trading of other tokens.
 
+## Tokens Supply Adjustment (completed on May 11, 2020)
+Unallocated tokens (235,575,725.2424265) have been sent to the zero-ethereum address - this occured on 11th May 2020 and the Transaction Hash can be viewed [here](https://etherscan.io/tx/0x9401af799b5aca513081e3541b6a15f6d2de84bd44c982ba1e7feea050f6bf5f) on etherscan.io
+
+## Suspense - remaining tokens
+There are 9.7 million tokens that were estimated for previous token holders on the COSS exchange. This was before their platform underwent a corporate changeover and discussions stalled in terms of partnership to support holders. Options are still being explored, but these tokens will be repurposed once no appropriate arrangement can be reached between management.
+
 
 <a id="support-us"></a>
-# DON THE MASQ AND GET INVOLVED
+# GET INVOLVED
 
 >Do you have a passion for Freedom? Freedom of Information for the world?
 >Do you have knowledge of Rust, or similar programming and would like to volunteer some of your time?
->Have you simply wanted to try a superior alternative to VPN or Tor?
+>Have you simply wanted and try to test a superior alternative to VPN or Tor?
 
-**Join our Community and Get in Touch with us!**
+**Join our Community and Contact us!**
 
 Get in Touch
  - [Telegram]

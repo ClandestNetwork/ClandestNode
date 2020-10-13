@@ -94,10 +94,12 @@ mod tests {
 
         let result = subject.make(Box::new(StreamFactoryReal::new()), &args);
 
-        match result {
-            Ok(_) => panic!("Success! Was hoping for failure."),
-            Err(CommandError::ConnectionProblem(_)) => (),
-            Err(e) => panic!("Expected ConnectionProblem, got {:?}", e),
+        match result.err() {
+            Some(CommandError::ConnectionProblem(_)) => (),
+            x => panic!(
+                "Expected Some(CommandError::ConnectionProblem(_); got {:?} instead",
+                x
+            ),
         }
     }
 

@@ -31,6 +31,7 @@ use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
+use std::path::PathBuf;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -82,6 +83,7 @@ pub trait Launcher {
         &self,
         params: HashMap<String, String>,
         crashed_recipient: Recipient<CrashNotification>,
+        node_logfile: &PathBuf,
     ) -> Result<Option<LaunchSuccess>, String>;
 }
 
@@ -125,16 +127,6 @@ impl Handler<NodeFromUiMessage> for Daemon {
     type Result = ();
 
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
-        trace!(&self.logger, "Trace message");
-        debug!(&self.logger, "Debug message");
-        info!(&self.logger, "Informational message");
-        warning!(&self.logger, "Warning message");
-        error!(&self.logger, "Error message");
-        warning!(&self.logger, "Warning message");
-        info!(&self.logger, "Informational message");
-        debug!(&self.logger, "Debug message");
-        trace!(&self.logger, "Trace message");
-
         debug!(
             &self.logger,
             "Handing NodeFromUiMessage from client {}: {}", msg.client_id, msg.body.opcode
@@ -204,6 +196,7 @@ impl Daemon {
     }
 
     fn handle_start_order(&mut self, client_id: u64, context_id: u64) {
+        let node_logfile = PathBuf::from ("bigglesworth");
         match self.port_if_node_is_running() {
             Some(_) => self.respond_to_ui(
                 client_id,
@@ -223,6 +216,7 @@ impl Daemon {
                     .map(|(k, v)| (k.to_string(), v.value.to_string()))
                     .collect(),
                 self.crash_notification_sub.clone().expect("Daemon unbound"),
+                &node_logfile,
             ) {
                 Ok(Some(success)) => {
                     self.node_process_id = Some(success.new_process_id);
@@ -451,7 +445,7 @@ mod tests {
     };
     use masq_lib::shared_schema::ConfiguratorError;
     use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
+    use masq_lib::test_utils::utils::{ensure_node_home_directory_exists, TEST_DEFAULT_CHAIN_NAME};
     use masq_lib::ui_gateway::MessageTarget::AllExcept;
     use masq_lib::ui_gateway::{MessagePath, MessageTarget};
     use std::cell::RefCell;
@@ -460,7 +454,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     struct LauncherMock {
-        launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
+        launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>, PathBuf)>>>,
         launch_results: RefCell<Vec<Result<Option<LaunchSuccess>, String>>>,
     }
 
@@ -469,11 +463,12 @@ mod tests {
             &self,
             params: HashMap<String, String>,
             crashed_recipient: Recipient<CrashNotification>,
+            node_logfile: &PathBuf,
         ) -> Result<Option<LaunchSuccess>, String> {
             self.launch_params
                 .lock()
                 .unwrap()
-                .push((params, crashed_recipient));
+                .push((params, crashed_recipient, node_logfile.clone()));
             self.launch_results.borrow_mut().remove(0)
         }
     }
@@ -488,7 +483,7 @@ mod tests {
 
         fn launch_params(
             mut self,
-            params: &Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
+            params: &Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>, PathBuf)>>>,
         ) -> Self {
             self.launch_params = params.clone();
             self
@@ -756,7 +751,7 @@ mod tests {
                             "data-directory",
                             format!("{:?}", home_dir).as_str(),
                         ),
-                        UiSetupRequestValue::new("chain", "ropsten"),
+                        UiSetupRequestValue::new("chain", TEST_DEFAULT_CHAIN_NAME),
                         UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                     ],
                 }
@@ -783,7 +778,7 @@ mod tests {
         assert_eq!(
             actual_pairs.contains(&(
                 "chain".to_string(),
-                UiSetupResponseValue::new("chain", "ropsten", Set)
+                UiSetupResponseValue::new("chain", TEST_DEFAULT_CHAIN_NAME, Set)
             )),
             true
         );
@@ -812,7 +807,7 @@ mod tests {
             body: UiSetupRequest {
                 values: vec![
                     UiSetupRequestValue::new("data-directory", data_dir.to_str().unwrap()),
-                    UiSetupRequestValue::new("chain", "ropsten"),
+                    UiSetupRequestValue::new("chain", TEST_DEFAULT_CHAIN_NAME),
                     UiSetupRequestValue::new("neighborhood-mode", "zero-hop"),
                 ],
             }
@@ -830,19 +825,20 @@ mod tests {
                 .get_record::<NodeToUiMessage>(idx)
                 .clone()
         };
-        let check_payload =
-            |running: bool, values: Vec<UiSetupResponseValue>, errors: Vec<(String, String)>| {
-                assert_eq!(running, false);
-                let actual_pairs: HashSet<(String, String)> = values
-                    .into_iter()
-                    .map(|value| (value.name, value.value))
-                    .collect();
-                assert_eq!(
-                    actual_pairs.contains(&("chain".to_string(), "ropsten".to_string())),
-                    true
-                );
-                assert_eq!(errors, vec![]);
-            };
+        let check_payload = |running: bool,
+                             values: Vec<UiSetupResponseValue>,
+                             errors: Vec<(String, String)>| {
+            assert_eq!(running, false);
+            let actual_pairs: HashSet<(String, String)> = values
+                .into_iter()
+                .map(|value| (value.name, value.value))
+                .collect();
+            assert_eq!(
+                actual_pairs.contains(&("chain".to_string(), TEST_DEFAULT_CHAIN_NAME.to_string())),
+                true
+            );
+            assert_eq!(errors, vec![]);
+        };
         let record = get_record(0);
         assert_eq!(record.target, ClientId(1234));
         let (payload, context_id): (UiSetupResponse, u64) =
@@ -1335,9 +1331,11 @@ mod tests {
         assert_eq!(
             launch_params
                 .iter()
-                .map(|x| &x.0)
-                .collect::<Vec<&HashMap<String, String>>>(),
-            vec![&(vec![].into_iter().collect::<HashMap<String, String>>())]
+                .map(|x| (&x.0, &x.2))
+                .collect::<Vec<(&HashMap<String, String>, &PathBuf)>>(),
+            vec![
+                (&vec![].into_iter().collect::<HashMap<String, String>>(), &PathBuf::from ("booga"))
+            ]
         );
         let crashed_msg_to_daemon = CrashNotification {
             process_id: 54321,

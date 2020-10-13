@@ -1,7 +1,8 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai). All rights reserved.
 
-use crate::daemon::launch_verifier::LaunchVerification::{CleanFailure, DirtyFailure, InterventionRequired, Launched, NoDescriptor};
-use crate::server_initializer::LoggerInitializerWrapperReal;
+use crate::daemon::launch_verifier::LaunchVerification::{
+    CleanFailure, DirtyFailure, InterventionRequired, Launched, NoDescriptor,
+};
 use crate::sub_lib::logger::Logger;
 use masq_lib::messages::NODE_UI_PROTOCOL;
 use regex::Regex;
@@ -75,27 +76,30 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn get_node_descriptor(&self, logfile: &PathBuf) -> Result<String, DescriptorError> {
+eprintln! ("Opening logfile: {:?}", logfile);
         let file = match File::open(logfile) {
             Ok(file) => file,
             Err(e) => return Err(DescriptorError::LogfileOpenFailed(format!("{:?}", e))),
         };
         let mut reader = BufReader::new(file);
-        let mut line_buffer = "".to_string();
         let mut node_descriptor: Option<String> = None;
-        let regex = Regex::new(r"MASQ Node local descriptor: (.+[@:][\d\.]*:[\d,]*)")
+        let regex = Regex::new(r"MASQ Node local descriptor: (.+[@:][\d:.]*:[\d,]*)")
             .expect("Bad regex syntax");
         while node_descriptor.is_none() {
+            let mut line_buffer = "".to_string();
             match reader.read_line(&mut line_buffer) {
                 Err(_) => break, // Maybe a separate error value here?
                 Ok(0) => break,
                 Ok(_) => (),
             }
+eprintln! ("Read logfile line: '{}'", line_buffer);
             match regex.captures(&line_buffer) {
                 None => (),
                 Some(captures) => match captures.get(1) {
                     None => (),
                     Some(m) => {
                         let descriptor = m.as_str().to_string();
+eprintln! ("Extracted descriptor: '{}'", descriptor);
                         node_descriptor = Some(descriptor);
                     }
                 },
@@ -173,7 +177,7 @@ pub enum LaunchVerification {
 }
 
 pub trait LaunchVerifier {
-    fn verify_launch(&self, process_id: u32, ui_port: u16) -> LaunchVerification;
+    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf,  ui_port: u16) -> LaunchVerification;
 }
 
 pub struct LaunchVerifierReal {
@@ -189,16 +193,16 @@ impl Default for LaunchVerifierReal {
 }
 
 impl LaunchVerifier for LaunchVerifierReal {
-    fn verify_launch(&self, process_id: u32, ui_port: u16) -> LaunchVerification {
+    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf, ui_port: u16) -> LaunchVerification {
         if self.await_ui_connection(ui_port) {
             match self
                 .verifier_tools
-                .get_node_descriptor(&LoggerInitializerWrapperReal::get_logfile_name())
+                .get_node_descriptor(node_logfile)
             {
                 Err(_) => {
                     self.verifier_tools.kill_process(process_id);
                     NoDescriptor
-                },
+                }
                 Ok(node_discriminator) => Launched(node_discriminator),
             }
         } else if self.verifier_tools.process_is_running(process_id) {
@@ -251,9 +255,10 @@ impl LaunchVerifierReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::daemon::launch_verifier::LaunchVerification::{CleanFailure, InterventionRequired, Launched, NoDescriptor};
+    use crate::daemon::launch_verifier::LaunchVerification::{
+        CleanFailure, InterventionRequired, Launched, NoDescriptor,
+    };
     use crate::daemon::mocks::VerifierToolsMock;
-    use crate::server_initializer::LoggerInitializerWrapperReal;
     use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
     use masq_lib::utils::{find_free_port, localhost};
     use std::fs::File;
@@ -280,7 +285,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
 
         assert_eq!(
             result,
@@ -296,7 +301,7 @@ mod tests {
         let get_node_descriptor_params = get_node_descriptor_params_arc.lock().unwrap();
         assert_eq!(
             *get_node_descriptor_params,
-            vec![LoggerInitializerWrapperReal::get_logfile_name()],
+            vec![PathBuf::from ("blah")],
         )
     }
 
@@ -316,7 +321,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
 
         assert_eq!(result, CleanFailure);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -349,7 +354,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
 
         assert_eq!(result, DirtyFailure);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -384,7 +389,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
 
         assert_eq!(result, InterventionRequired);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -410,21 +415,15 @@ mod tests {
         let tools = VerifierToolsMock::new()
             .can_connect_to_ui_gateway_result(true)
             .get_node_descriptor_result(Err(DescriptorError::DescriptorNotFound))
-            .kill_process_params (&kill_process_params_arc);
+            .kill_process_params(&kill_process_params_arc);
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
 
-        assert_eq!(
-            result,
-            NoDescriptor,
-        );
+        assert_eq!(result, NoDescriptor,);
         let kill_process_params = kill_process_params_arc.lock().unwrap();
-        assert_eq! (
-            *kill_process_params,
-            vec![1234]
-        );
+        assert_eq!(*kill_process_params, vec![1234]);
     }
 
     #[test]
@@ -527,17 +526,14 @@ Irrelevant second line
 
         let result = subject.get_node_descriptor(&logfile_path).unwrap();
 
-        assert_eq!(
-            result,
-            "fWHSlDuj6P76DrXZMD1mU+Q5o612Pip94aYpWTUTyxs@:"
-        );
+        assert_eq!(result, "fWHSlDuj6P76DrXZMD1mU+Q5o612Pip94aYpWTUTyxs@:");
     }
 
     #[test]
-    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_node_descriptor() {
+    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv4_node_descriptor() {
         let home_dir = ensure_node_home_directory_exists(
             "verifier_tools",
-            "get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_node_descriptor",
+            "get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv4_node_descriptor",
         );
         let mut logfile_path = home_dir.clone();
         logfile_path.push("fake_logfile.txt");
@@ -558,6 +554,34 @@ Irrelevant second line
         assert_eq!(
             result,
             "fWHSlDuj6P76DrXZMD1mU+Q5o612Pip94aYpWTUTyxs:111.222.222.111:1234,2345"
+        );
+    }
+
+    #[test]
+    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv6_node_descriptor() {
+        let home_dir = ensure_node_home_directory_exists(
+            "verifier_tools",
+            "get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv6_node_descriptor",
+        );
+        let mut logfile_path = home_dir.clone();
+        logfile_path.push("fake_logfile.txt");
+        {
+            let mut file = File::create(&logfile_path).unwrap();
+            file.write_all(
+                b"Irrelevant first line
+Irrelevant second line
+2020-09-02T06:35:27.724 Thd1: INFO: Bootstrapper: MASQ Node local descriptor: fWHSlDuj6P76DrXZMD1mU+Q5o612Pip94aYpWTUTyxs:0123:4567:89AB:CDEF:FEDC:BA98:7654:3210:1234,2345
+2020-09-02T06:35:27.727 Thd69: DEBUG: ProxyClient: Handling BindMessage
+"
+            ).unwrap();
+        }
+        let subject = VerifierToolsReal::new();
+
+        let result = subject.get_node_descriptor(&logfile_path).unwrap();
+
+        assert_eq!(
+            result,
+            "fWHSlDuj6P76DrXZMD1mU+Q5o612Pip94aYpWTUTyxs:0123:4567:89AB:CDEF:FEDC:BA98:7654:3210:1234,2345"
         );
     }
 

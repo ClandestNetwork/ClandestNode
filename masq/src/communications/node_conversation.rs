@@ -61,9 +61,20 @@ impl NodeConversation {
         }
         match self
             .conversations_to_manager_tx
-            .send(OutgoingMessageType::FireAndForgetMessage(outgoing_msg))
-        {
-            Ok(_) => Ok(()),
+            .send(OutgoingMessageType::FireAndForgetMessage(
+                outgoing_msg.clone(),
+                self.context_id(),
+            )) {
+            Ok(_) => match self.manager_to_conversation_rx.recv() {
+                Ok(Ok(_)) => panic!("Fire-and-forget messages should not receive responses"),
+                Ok(Err(NodeConversationTermination::Graceful)) => {
+                    Err(ClientError::ConnectionDropped)
+                }
+                Ok(Err(NodeConversationTermination::Resend)) => self.send(outgoing_msg),
+                Ok(Err(NodeConversationTermination::Fatal)) => Err(ClientError::ConnectionDropped),
+                Ok(Err(NodeConversationTermination::FiredAndForgotten)) => Ok(()),
+                Err(e) => panic!("ConnectionManager is dead: {:?}", e),
+            },
             Err(e) => panic!("ConnectionManager is dead: {:?}", e),
         }
     }

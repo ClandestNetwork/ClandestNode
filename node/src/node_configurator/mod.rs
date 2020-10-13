@@ -290,15 +290,7 @@ pub fn prepare_initialization_mode<'a>(
     );
     let persistent_config_box = initialize_database(&directory, chain_id_from_name(&chain_name));
     if mnemonic_seed_exists(persistent_config_box.as_ref()) {
-        #[cfg(test)]
-        let running_test = true;
-        #[cfg(not(test))]
-        let running_test = false;
-        exit_process(
-            1,
-            "Cannot re-initialize Node: already initialized",
-            running_test,
-        )
+        exit_process(1, "Cannot re-initialize Node: already initialized")
     }
     Ok((multi_config, persistent_config_box))
 }
@@ -711,15 +703,17 @@ mod tests {
     use crate::sub_lib::utils::make_new_test_multi_config;
     use crate::sub_lib::wallet::{Wallet, DEFAULT_EARNING_DERIVATION_PATH};
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::{ArgsBuilder, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
+    use crate::test_utils::ArgsBuilder;
     use bip39::{Mnemonic, MnemonicType, Seed};
     use masq_lib::constants::DEFAULT_CHAIN_NAME;
     use masq_lib::multi_config::MultiConfig;
     use masq_lib::shared_schema::db_password_arg;
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
     use masq_lib::test_utils::fake_stream_holder::{ByteArrayWriter, FakeStreamHolder};
-    use masq_lib::test_utils::utils::ensure_node_home_directory_exists;
-    use masq_lib::utils::{find_free_port, localhost};
+    use masq_lib::test_utils::utils::{
+        ensure_node_home_directory_exists, DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME,
+    };
+    use masq_lib::utils::{find_free_port, running_test};
     use std::io::Cursor;
     use std::net::{SocketAddr, TcpListener};
     use std::sync::{Arc, Mutex};
@@ -1466,6 +1460,7 @@ mod tests {
 
     #[test]
     fn make_wallet_creation_config_non_defaults_with_earning_derivation_path() {
+        running_test();
         let earning_path = "m/44'/60'/3'/2/1";
         let subject = TameWalletCreationConfigMaker::new();
         let args = ArgsBuilder::new()
@@ -1511,6 +1506,7 @@ mod tests {
 
     #[test]
     fn make_wallet_creation_config_non_defaults_with_earning_address() {
+        running_test();
         let subject = TameWalletCreationConfigMaker::new();
         let args = ArgsBuilder::new()
             .param("--consuming-wallet", "m/44'/60'/1'/2/3")
@@ -1554,6 +1550,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Wallet encryption password is required!")]
     fn make_wallet_creation_config_panics_after_three_password_mismatches() {
+        running_test();
         let subject = TameWalletCreationConfigMaker::new();
         let streams = &mut StdStreams {
             stdin: &mut Cursor::new(&b"one\n\ntwo\n\nthree\n\n"[..]),

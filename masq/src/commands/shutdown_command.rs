@@ -64,24 +64,36 @@ impl Command for ShutdownCommand {
             }
             Err(impossible) => panic!("Should never happen: {:?}", impossible),
         }
-        let active_port = context.active_port();
-        if self
-            .shutdown_awaiter
-            .wait(active_port, self.attempt_interval, self.attempt_limit)
-        {
-            writeln!(
-                context.stdout(),
-                "MASQNode was instructed to shut down and has stopped answering"
-            )
-            .expect("writeln! failed");
-            Ok(())
-        } else {
-            writeln!(
-                context.stderr(),
-                "MASQNode ignored the instruction to shut down and is still running"
-            )
-            .expect("writeln! failed");
-            Err(Other("Shutdown failed".to_string()))
+        match context.active_port() {
+            None => {
+                writeln!(
+                    context.stdout(),
+                    "MASQNode was instructed to shut down and has stopped answering; but the Daemon seems to be down as well"
+                )
+                .expect("writeln! failed");
+                Ok(())
+            }
+            Some(active_port) => {
+                if self.shutdown_awaiter.wait(
+                    active_port,
+                    self.attempt_interval,
+                    self.attempt_limit,
+                ) {
+                    writeln!(
+                        context.stdout(),
+                        "MASQNode was instructed to shut down and has stopped answering"
+                    )
+                    .expect("writeln! failed");
+                    Ok(())
+                } else {
+                    writeln!(
+                        context.stderr(),
+                        "MASQNode ignored the instruction to shut down and is still running"
+                    )
+                    .expect("writeln! failed");
+                    Err(Other("Shutdown failed".to_string()))
+                }
+            }
         }
     }
 }
@@ -290,7 +302,7 @@ mod tests {
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
             .transact_result(Ok(msg.clone()))
-            .active_port_result(port);
+            .active_port_result(Some(port));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let wait_params_arc = Arc::new(Mutex::new(vec![]));
@@ -320,6 +332,42 @@ mod tests {
     }
 
     #[test]
+    fn shutdown_command_happy_path_daemon_crash() {
+        let transact_params_arc = Arc::new(Mutex::new(vec![]));
+        let msg = UiShutdownResponse {}.tmb(0);
+        let mut context = CommandContextMock::new()
+            .transact_params(&transact_params_arc)
+            .transact_result(Ok(msg.clone()))
+            .active_port_result(None);
+        let stdout_arc = context.stdout_arc();
+        let stderr_arc = context.stderr_arc();
+        let wait_params_arc = Arc::new(Mutex::new(vec![]));
+        let shutdown_awaiter = ShutdownAwaiterMock::new()
+            .wait_params(&wait_params_arc)
+            .wait_result(true);
+        let mut subject = ShutdownCommand::new();
+        subject.shutdown_awaiter = Box::new(shutdown_awaiter);
+        subject.attempt_interval = 10;
+        subject.attempt_limit = 3;
+
+        let result = subject.execute(&mut context);
+
+        assert_eq!(result, Ok(()));
+        let transact_params = transact_params_arc.lock().unwrap();
+        assert_eq!(
+            *transact_params,
+            vec![(UiShutdownRequest {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+        );
+        assert_eq!(
+            stdout_arc.lock().unwrap().get_string(),
+            "MASQNode was instructed to shut down and has stopped answering; but the Daemon seems to be down as well\n"
+        );
+        assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
+        let wait_params = wait_params_arc.lock().unwrap();
+        assert_eq!(*wait_params, vec![]);
+    }
+
+    #[test]
     fn shutdown_command_sad_path() {
         let transact_params_arc = Arc::new(Mutex::new(vec![]));
         let msg = UiShutdownResponse {}.tmb(0);
@@ -327,7 +375,7 @@ mod tests {
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
             .transact_result(Ok(msg.clone()))
-            .active_port_result(port);
+            .active_port_result(Some(port));
         let stdout_arc = context.stdout_arc();
         let stderr_arc = context.stderr_arc();
         let wait_params_arc = Arc::new(Mutex::new(vec![]));

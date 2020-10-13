@@ -8,16 +8,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub struct LaunchVerifierMock {
-    verify_launch_params: Arc<Mutex<Vec<(u32, u16)>>>,
+    verify_launch_params: Arc<Mutex<Vec<(u32, PathBuf, u16)>>>,
     verify_launch_results: RefCell<Vec<LaunchVerification>>,
 }
 
 impl LaunchVerifier for LaunchVerifierMock {
-    fn verify_launch(&self, process_id: u32, ui_port: u16) -> LaunchVerification {
+    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf, ui_port: u16) -> LaunchVerification {
         self.verify_launch_params
             .lock()
             .unwrap()
-            .push((process_id, ui_port));
+            .push((process_id, node_logfile.clone(), ui_port));
         self.verify_launch_results.borrow_mut().remove(0)
     }
 }
@@ -30,7 +30,7 @@ impl LaunchVerifierMock {
         }
     }
 
-    pub fn verify_launch_params(mut self, params: &Arc<Mutex<Vec<(u32, u16)>>>) -> Self {
+    pub fn verify_launch_params(mut self, params: &Arc<Mutex<Vec<(u32, PathBuf, u16)>>>) -> Self {
         self.verify_launch_params = params.clone();
         self
     }

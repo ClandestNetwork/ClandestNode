@@ -300,7 +300,7 @@ mod tests {
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use crate::test_utils::recorder::{make_recorder, peer_actors_builder};
     use crate::test_utils::{
-        make_default_persistent_configuration, make_paying_wallet, make_wallet, DEFAULT_CHAIN_ID,
+        make_default_persistent_configuration, make_paying_wallet, make_wallet,
     };
     use actix::Addr;
     use actix::System;
@@ -311,6 +311,7 @@ mod tests {
     use futures::future::Future;
     use masq_lib::crash_point::CrashPoint;
     use masq_lib::messages::ToMessageBody;
+    use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use rustc_hex::FromHex;
     use std::cell::RefCell;
     use std::num::NonZeroU32;

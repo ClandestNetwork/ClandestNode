@@ -148,6 +148,7 @@ impl Launcher for LauncherReal {
         &self,
         mut params: HashMap<String, String>,
         crashed_recipient: Recipient<CrashNotification>,
+        node_logfile: &PathBuf,
     ) -> Result<Option<LaunchSuccess>, String> {
         let redirect_ui_port = find_free_port();
         params.insert("ui-port".to_string(), format!("{}", redirect_ui_port));
@@ -158,7 +159,7 @@ impl Launcher for LauncherReal {
             .collect_vec();
         match self.execer.exec(params_vec, crashed_recipient) {
             Ok(new_process_id) => {
-                match self.verifier.verify_launch(new_process_id, redirect_ui_port) {
+                match self.verifier.verify_launch(new_process_id, node_logfile, redirect_ui_port) {
                     Launched(node_descriptor) => Ok(Some(LaunchSuccess {
                         new_process_id,
                         node_descriptor,
@@ -442,7 +443,7 @@ mod tests {
         );
 
         let result = subject
-            .launch(params.clone(), crashed_recipient)
+            .launch(params.clone(), crashed_recipient, &PathBuf::from("blah"))
             .unwrap()
             .unwrap();
 
@@ -462,7 +463,7 @@ mod tests {
             ]]
         );
         let verify_launch_params = verify_launch_params_arc.lock().unwrap();
-        assert_eq!(*verify_launch_params, vec![(1234, result.redirect_ui_port)]);
+        assert_eq!(*verify_launch_params, vec![(1234, PathBuf::from("blah"), result.redirect_ui_port)]);
         let msg = CrashNotification {
             process_id: 12345,
             exit_code: Some(4),
@@ -499,7 +500,7 @@ mod tests {
         );
 
         let result = subject
-            .launch(params.clone(), crashed_recipient)
+            .launch(params.clone(), crashed_recipient, &PathBuf::from("blah"))
             .err()
             .unwrap();
 
@@ -517,7 +518,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient)
+            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
             .err()
             .unwrap();
 
@@ -538,7 +539,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient)
+            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
             .err()
             .unwrap();
 
@@ -561,7 +562,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient)
+            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
             .err()
             .unwrap();
 
@@ -579,7 +580,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient)
+            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
             .err()
             .unwrap();
 
