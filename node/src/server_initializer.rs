@@ -199,7 +199,10 @@ impl LoggerInitializerWrapper for LoggerInitializerWrapperReal {
             }
         ));
         privilege_dropper.chown(&logfile_name, real_user);
-eprintln!("------\nEstablishing logfile name: {:?}\n-------", logfile_name);
+        eprintln!(
+            "------\nEstablishing logfile name: {:?}\n-------",
+            logfile_name
+        );
         *(Self::logfile_name_guard()) = logfile_name;
         std::panic::set_hook(Box::new(|panic_info| {
             panic_hook(AltPanicInfo::from(panic_info))
@@ -210,13 +213,13 @@ eprintln!("------\nEstablishing logfile name: {:?}\n-------", logfile_name);
 impl LoggerInitializerWrapperReal {
     pub fn get_logfile_name() -> PathBuf {
         let path: &Path = &(*(Self::logfile_name_guard()).clone());
-eprintln! ("------\nGetting logfile name: {:?}\n------", path);
+        eprintln!("------\nGetting logfile name: {:?}\n------", path);
         path.to_path_buf()
     }
 
     #[cfg(test)]
     pub fn set_logfile_name(logfile_name: PathBuf) {
-eprintln! ("------\nSetting logfile name: {:?}\n------", logfile_name);
+        eprintln!("------\nSetting logfile name: {:?}\n------", logfile_name);
         *(Self::logfile_name_guard()) = logfile_name;
     }
 

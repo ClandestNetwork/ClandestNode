@@ -13,7 +13,12 @@ pub struct LaunchVerifierMock {
 }
 
 impl LaunchVerifier for LaunchVerifierMock {
-    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf, ui_port: u16) -> LaunchVerification {
+    fn verify_launch(
+        &self,
+        process_id: u32,
+        node_logfile: &PathBuf,
+        ui_port: u16,
+    ) -> LaunchVerification {
         self.verify_launch_params
             .lock()
             .unwrap()

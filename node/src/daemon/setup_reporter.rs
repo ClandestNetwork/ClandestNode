@@ -33,9 +33,11 @@ const CONSOLE_DIAGNOSTICS: bool = false;
 
 pub type SetupCluster = HashMap<String, UiSetupResponseValue>;
 
+#[cfg(test)]
 pub fn setup_cluster_from(input: Vec<(&str, &str, UiSetupResponseValueStatus)>) -> SetupCluster {
-    input.into_iter()
-        .map (|(k, v, s)| (k.to_string(), UiSetupResponseValue::new (k, v, s)))
+    input
+        .into_iter()
+        .map(|(k, v, s)| (k.to_string(), UiSetupResponseValue::new(k, v, s)))
         .collect::<SetupCluster>()
 }
 
@@ -1357,12 +1359,13 @@ mod tests {
         .into_iter()
         .map(|name| UiSetupRequestValue::clear(name))
         .collect_vec();
-        let existing_setup = setup_cluster_from (vec![
+        let existing_setup = setup_cluster_from(vec![
             ("blockchain-service-url", "https://booga.com", Set),
             ("clandestine-port", "4321", Set),
             (
                 "consuming-private-key",
-                "7766554433221100776655443322110077665544332211007766554433221100", Set,
+                "7766554433221100776655443322110077665544332211007766554433221100",
+                Set,
             ),
             ("crash-point", "Message", Set),
             ("data-directory", "booga", Set),
@@ -1370,14 +1373,16 @@ mod tests {
             ("dns-servers", "4.4.4.4", Set),
             (
                 "earning-wallet",
-                "0x9876543210987654321098765432109876543210", Set,
+                "0x9876543210987654321098765432109876543210",
+                Set,
             ),
             ("gas-price", "5", Set),
             ("ip", "1.2.3.4", Set),
             ("neighborhood-mode", "consume-only", Set),
             (
                 "neighbors",
-                "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:9.10.11.12:9101", Set,
+                "MTIzNDU2Nzg5MTEyMzQ1Njc4OTIxMjM0NTY3ODkzMTI:9.10.11.12:9101",
+                Set,
             ),
             #[cfg(not(target_os = "windows"))]
             ("real-user", "6666:6666:agoob", Set),

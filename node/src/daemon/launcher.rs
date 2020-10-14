@@ -463,7 +463,10 @@ mod tests {
             ]]
         );
         let verify_launch_params = verify_launch_params_arc.lock().unwrap();
-        assert_eq!(*verify_launch_params, vec![(1234, PathBuf::from("blah"), result.redirect_ui_port)]);
+        assert_eq!(
+            *verify_launch_params,
+            vec![(1234, PathBuf::from("blah"), result.redirect_ui_port)]
+        );
         let msg = CrashNotification {
             process_id: 12345,
             exit_code: Some(4),

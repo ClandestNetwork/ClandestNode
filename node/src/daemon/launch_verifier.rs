@@ -76,7 +76,7 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn get_node_descriptor(&self, logfile: &PathBuf) -> Result<String, DescriptorError> {
-eprintln! ("Opening logfile: {:?}", logfile);
+        eprintln!("Opening logfile: {:?}", logfile);
         let file = match File::open(logfile) {
             Ok(file) => file,
             Err(e) => return Err(DescriptorError::LogfileOpenFailed(format!("{:?}", e))),
@@ -92,14 +92,14 @@ eprintln! ("Opening logfile: {:?}", logfile);
                 Ok(0) => break,
                 Ok(_) => (),
             }
-eprintln! ("Read logfile line: '{}'", line_buffer);
+            eprintln!("Read logfile line: '{}'", line_buffer);
             match regex.captures(&line_buffer) {
                 None => (),
                 Some(captures) => match captures.get(1) {
                     None => (),
                     Some(m) => {
                         let descriptor = m.as_str().to_string();
-eprintln! ("Extracted descriptor: '{}'", descriptor);
+                        eprintln!("Extracted descriptor: '{}'", descriptor);
                         node_descriptor = Some(descriptor);
                     }
                 },
@@ -177,7 +177,12 @@ pub enum LaunchVerification {
 }
 
 pub trait LaunchVerifier {
-    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf,  ui_port: u16) -> LaunchVerification;
+    fn verify_launch(
+        &self,
+        process_id: u32,
+        node_logfile: &PathBuf,
+        ui_port: u16,
+    ) -> LaunchVerification;
 }
 
 pub struct LaunchVerifierReal {
@@ -193,12 +198,14 @@ impl Default for LaunchVerifierReal {
 }
 
 impl LaunchVerifier for LaunchVerifierReal {
-    fn verify_launch(&self, process_id: u32, node_logfile: &PathBuf, ui_port: u16) -> LaunchVerification {
+    fn verify_launch(
+        &self,
+        process_id: u32,
+        node_logfile: &PathBuf,
+        ui_port: u16,
+    ) -> LaunchVerification {
         if self.await_ui_connection(ui_port) {
-            match self
-                .verifier_tools
-                .get_node_descriptor(node_logfile)
-            {
+            match self.verifier_tools.get_node_descriptor(node_logfile) {
                 Err(_) => {
                     self.verifier_tools.kill_process(process_id);
                     NoDescriptor
@@ -285,7 +292,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from("blah"), 4321);
 
         assert_eq!(
             result,
@@ -299,10 +306,7 @@ mod tests {
             vec![RESPONSE_CHECK_INTERVAL_MS, RESPONSE_CHECK_INTERVAL_MS,]
         );
         let get_node_descriptor_params = get_node_descriptor_params_arc.lock().unwrap();
-        assert_eq!(
-            *get_node_descriptor_params,
-            vec![PathBuf::from ("blah")],
-        )
+        assert_eq!(*get_node_descriptor_params, vec![PathBuf::from("blah")],)
     }
 
     #[test]
@@ -321,7 +325,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from("blah"), 4321);
 
         assert_eq!(result, CleanFailure);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -354,7 +358,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from("blah"), 4321);
 
         assert_eq!(result, DirtyFailure);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -389,7 +393,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from("blah"), 4321);
 
         assert_eq!(result, InterventionRequired);
         let delay_params = delay_params_arc.lock().unwrap();
@@ -419,7 +423,7 @@ mod tests {
         let mut subject = LaunchVerifierReal::new();
         subject.verifier_tools = Box::new(tools);
 
-        let result = subject.verify_launch(1234, &PathBuf::from ("blah"), 4321);
+        let result = subject.verify_launch(1234, &PathBuf::from("blah"), 4321);
 
         assert_eq!(result, NoDescriptor,);
         let kill_process_params = kill_process_params_arc.lock().unwrap();
@@ -530,7 +534,8 @@ Irrelevant second line
     }
 
     #[test]
-    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv4_node_descriptor() {
+    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv4_node_descriptor()
+    {
         let home_dir = ensure_node_home_directory_exists(
             "verifier_tools",
             "get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv4_node_descriptor",
@@ -558,7 +563,8 @@ Irrelevant second line
     }
 
     #[test]
-    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv6_node_descriptor() {
+    fn get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv6_node_descriptor()
+    {
         let home_dir = ensure_node_home_directory_exists(
             "verifier_tools",
             "get_node_descriptor_works_if_log_file_is_present_and_contains_multihop_ipv6_node_descriptor",

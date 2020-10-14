@@ -32,6 +32,7 @@ use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeTo
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::path::PathBuf;
+use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -196,7 +197,6 @@ impl Daemon {
     }
 
     fn handle_start_order(&mut self, client_id: u64, context_id: u64) {
-        let node_logfile = PathBuf::from ("bigglesworth");
         match self.port_if_node_is_running() {
             Some(_) => self.respond_to_ui(
                 client_id,
@@ -216,7 +216,7 @@ impl Daemon {
                     .map(|(k, v)| (k.to_string(), v.value.to_string()))
                     .collect(),
                 self.crash_notification_sub.clone().expect("Daemon unbound"),
-                &node_logfile,
+                &self.make_node_logfile_path(),
             ) {
                 Ok(Some(success)) => {
                     self.node_process_id = Some(success.new_process_id);
@@ -242,6 +242,17 @@ impl Daemon {
                 ),
             },
         }
+    }
+
+    fn make_node_logfile_path(&self) -> PathBuf {
+        let result = match self.params.get("data-directory") {
+            None => RealDirsWrapper{}.data_dir().expect("data_dir() failed").join ("MASQNode_rCURRENT.log"),
+            Some(data_dir_uisrv) => {
+                PathBuf::from(&data_dir_uisrv.value).join("MASQNode_rCURRENT.log")
+            }
+        };
+eprintln! ("------\nCalculated Node logfile path: '{:?}'\n------", result);
+        result
     }
 
     fn handle_unexpected_message(&mut self, client_id: u64, body: MessageBody) {
@@ -432,8 +443,9 @@ mod tests {
     use super::*;
     use crate::daemon::crash_notification::CrashNotification;
     use crate::daemon::mocks::VerifierToolsMock;
-    use crate::daemon::setup_reporter::SetupCluster;
+    use crate::daemon::setup_reporter::{setup_cluster_from, SetupCluster};
     use crate::daemon::LaunchSuccess;
+    use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Required, Set};
@@ -454,7 +466,15 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     struct LauncherMock {
-        launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>, PathBuf)>>>,
+        launch_params: Arc<
+            Mutex<
+                Vec<(
+                    HashMap<String, String>,
+                    Recipient<CrashNotification>,
+                    PathBuf,
+                )>,
+            >,
+        >,
         launch_results: RefCell<Vec<Result<Option<LaunchSuccess>, String>>>,
     }
 
@@ -465,10 +485,11 @@ mod tests {
             crashed_recipient: Recipient<CrashNotification>,
             node_logfile: &PathBuf,
         ) -> Result<Option<LaunchSuccess>, String> {
-            self.launch_params
-                .lock()
-                .unwrap()
-                .push((params, crashed_recipient, node_logfile.clone()));
+            self.launch_params.lock().unwrap().push((
+                params,
+                crashed_recipient,
+                node_logfile.clone(),
+            ));
             self.launch_results.borrow_mut().remove(0)
         }
     }
@@ -483,7 +504,15 @@ mod tests {
 
         fn launch_params(
             mut self,
-            params: &Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>, PathBuf)>>>,
+            params: &Arc<
+                Mutex<
+                    Vec<(
+                        HashMap<String, String>,
+                        Recipient<CrashNotification>,
+                        PathBuf,
+                    )>,
+                >,
+            >,
         ) -> Self {
             self.launch_params = params.clone();
             self
@@ -1322,6 +1351,7 @@ mod tests {
         subject.ui_gateway_sub = Some(gateway_recipient.clone());
         subject.crash_notification_sub = Some(crash_notification_recipient);
         subject.verifier_tools = Box::new(verifier_tools);
+        subject.params = setup_cluster_from(vec![("data-directory", "bigglesworth", Set)]);
 
         subject.handle_start_order(1234, 2345);
 
@@ -1333,9 +1363,12 @@ mod tests {
                 .iter()
                 .map(|x| (&x.0, &x.2))
                 .collect::<Vec<(&HashMap<String, String>, &PathBuf)>>(),
-            vec![
-                (&vec![].into_iter().collect::<HashMap<String, String>>(), &PathBuf::from ("booga"))
-            ]
+            vec![(
+                &vec![("data-directory".to_string(), "bigglesworth".to_string())]
+                    .into_iter()
+                    .collect::<HashMap<String, String>>(),
+                &PathBuf::from("bigglesworth").join("MASQNode_rCURRENT.log")
+            )]
         );
         let crashed_msg_to_daemon = CrashNotification {
             process_id: 54321,
@@ -1364,6 +1397,16 @@ mod tests {
         let daemon_recording = daemon_recording_arc.lock().unwrap();
         let actual_msg = daemon_recording.get_record::<CrashNotification>(0);
         assert_eq!(actual_msg, &crashed_msg_to_daemon);
+    }
+
+    #[test]
+    fn calculates_correct_logfile_path_when_data_dir_not_specified() {
+        let subject = Daemon::new(Box::new(LauncherMock::new()));
+
+        let result = subject.make_node_logfile_path();
+
+        let expected_data_dir = RealDirsWrapper {}.data_dir().unwrap();
+        assert_eq!(result, expected_data_dir.join("MASQNode_rCURRENT.log"));
     }
 
     #[test]
