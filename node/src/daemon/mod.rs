@@ -12,6 +12,7 @@ mod mocks;
 use crate::daemon::crash_notification::CrashNotification;
 use crate::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 use crate::daemon::setup_reporter::{SetupCluster, SetupReporter, SetupReporterReal};
+use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
@@ -19,6 +20,7 @@ use actix::{Actor, Context, Handler, Message};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use masq_lib::constants::CURRENT_LOGFILE_NAME;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast, UiRedirect, UiSetupBroadcast,
@@ -32,7 +34,6 @@ use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeTo
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::path::PathBuf;
-use crate::node_configurator::{RealDirsWrapper, DirsWrapper};
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -245,14 +246,13 @@ impl Daemon {
     }
 
     fn make_node_logfile_path(&self) -> PathBuf {
-        let result = match self.params.get("data-directory") {
-            None => RealDirsWrapper{}.data_dir().expect("data_dir() failed").join ("MASQNode_rCURRENT.log"),
-            Some(data_dir_uisrv) => {
-                PathBuf::from(&data_dir_uisrv.value).join("MASQNode_rCURRENT.log")
-            }
-        };
-eprintln! ("------\nCalculated Node logfile path: '{:?}'\n------", result);
-        result
+        match self.params.get("data-directory") {
+            None => RealDirsWrapper {}
+                .data_dir()
+                .expect("data_dir() failed")
+                .join(CURRENT_LOGFILE_NAME),
+            Some(data_dir_uisrv) => PathBuf::from(&data_dir_uisrv.value).join(CURRENT_LOGFILE_NAME),
+        }
     }
 
     fn handle_unexpected_message(&mut self, client_id: u64, body: MessageBody) {
@@ -1367,7 +1367,7 @@ mod tests {
                 &vec![("data-directory".to_string(), "bigglesworth".to_string())]
                     .into_iter()
                     .collect::<HashMap<String, String>>(),
-                &PathBuf::from("bigglesworth").join("MASQNode_rCURRENT.log")
+                &PathBuf::from("bigglesworth").join(CURRENT_LOGFILE_NAME)
             )]
         );
         let crashed_msg_to_daemon = CrashNotification {
@@ -1406,7 +1406,7 @@ mod tests {
         let result = subject.make_node_logfile_path();
 
         let expected_data_dir = RealDirsWrapper {}.data_dir().unwrap();
-        assert_eq!(result, expected_data_dir.join("MASQNode_rCURRENT.log"));
+        assert_eq!(result, expected_data_dir.join(CURRENT_LOGFILE_NAME));
     }
 
     #[test]

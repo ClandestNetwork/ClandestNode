@@ -8,6 +8,7 @@ use crate::communications::connection_manager::{ConnectionManager, REDIRECT_TIME
 use crate::communications::node_conversation::ClientError;
 use masq_lib::messages::{TIMEOUT_ERROR, UNMARSHAL_ERROR};
 use masq_lib::ui_gateway::MessageBody;
+use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Read, Write};
 
@@ -48,7 +49,6 @@ impl From<ClientError> for ContextError {
 pub trait CommandContext {
     fn active_port(&self) -> Option<u16>;
     fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
-    fn send(&mut self, message: MessageBody) -> Result<(), ContextError>;
     fn transact(
         &mut self,
         message: MessageBody,
@@ -65,6 +65,12 @@ pub struct CommandContextReal {
     pub stdin: Box<dyn Read>,
     pub stdout: Box<dyn Write>,
     pub stderr: Box<dyn Write>,
+}
+
+impl Debug for CommandContextReal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CommandContextReal")
+    }
 }
 
 impl CommandContext for CommandContextReal {
@@ -155,46 +161,6 @@ mod tests {
     #[test]
     fn error_conversion_happy_path() {
         running_test();
-        let result: Vec<ContextError> = vec![
-            ClientError::FallbackFailed("fallback reason".to_string()),
-            ClientError::ConnectionDropped,
-            ClientError::NoServer(1234, "blah".to_string()),
-            ClientError::Timeout(1234),
-            ClientError::Deserialization(UnmarshalError::Critical(
-                TrafficConversionError::MissingFieldError("blah".to_string()),
-            )),
-            ClientError::PacketType("blah".to_string()),
-        ]
-        .into_iter()
-        .map(|e| e.into())
-        .collect();
-
-        assert_eq!(
-            result,
-            vec![
-                ContextError::ConnectionDropped("fallback reason".to_string()),
-                ContextError::ConnectionDropped("".to_string()),
-                ContextError::ConnectionDropped(
-                    "No server listening on port 1234 where it's supposed to be".to_string()
-                ),
-                ContextError::PayloadError(
-                    TIMEOUT_ERROR,
-                    "No response from Node or Daemon after 1234ms".to_string()
-                ),
-                ContextError::PayloadError(
-                    UNMARSHAL_ERROR,
-                    "Node or Daemon sent corrupted packet".to_string()
-                ),
-                ContextError::PayloadError(
-                    UNMARSHAL_ERROR,
-                    "Node or Daemon sent unrecognized 'blah' packet".to_string()
-                ),
-            ]
-        );
-    }
-
-    #[test]
-    fn error_conversion_happy_path() {
         let result: Vec<ContextError> = vec![
             ClientError::FallbackFailed("fallback reason".to_string()),
             ClientError::ConnectionDropped,
@@ -347,28 +313,26 @@ mod tests {
         let stderr_arc = stderr.inner_arc();
         let server = MockWebSocketsServer::new(port);
         let stop_handle = server.start();
-        let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
+        let stream_factory = Box::new(StreamFactoryReal::new());
+        let subject_result = CommandContextReal::new(port, stream_factory);
+        let mut subject = subject_result.unwrap();
         subject.stdin = Box::new(stdin);
         subject.stdout = Box::new(stdout);
         subject.stderr = Box::new(stderr);
+        let msg = UiCrashRequest {
+            actor: "Dispatcher".to_string(),
+            panic_message: "Message".to_string(),
+        }
+        .tmb(0);
 
-        let response = subject
-            .send(
-                UiCrashRequest {
-                    actor: "Dispatcher".to_string(),
-                    panic_message: "Message".to_string(),
-                }
-                .tmb(0),
-            )
-            .unwrap();
+        let result = subject.send(msg);
 
+        assert_eq!(result, Ok(()));
         let mut input = String::new();
         subject.stdin().read_to_string(&mut input).unwrap();
         write!(subject.stdout(), "This is stdout.").unwrap();
         write!(subject.stderr(), "This is stderr.").unwrap();
 
-        assert_eq!(response, ());
         assert_eq!(input, "This is stdin.".to_string());
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
@@ -379,49 +343,5 @@ mod tests {
             "This is stderr.".to_string()
         );
         stop_handle.stop();
-    }
-
-    #[test]
-    fn send_works_when_everythings_fine() {
-        let port = find_free_port();
-        let stdin = ByteArrayReader::new(b"This is stdin.");
-        let stdout = ByteArrayWriter::new();
-        let stdout_arc = stdout.inner_arc();
-        let stderr = ByteArrayWriter::new();
-        let stderr_arc = stderr.inner_arc();
-        let server = MockWebSocketsServer::new(port);
-        let stop_handle = server.start();
-        let mut subject =
-            CommandContextReal::new(port, Box::new(StreamFactoryReal::new())).unwrap();
-        subject.stdin = Box::new(stdin);
-        subject.stdout = Box::new(stdout);
-        subject.stderr = Box::new(stderr);
-
-        let response = subject
-            .send(
-                UiCrashRequest {
-                    actor: "Dispatcher".to_string(),
-                    panic_message: "Message".to_string(),
-                }
-                .tmb(0),
-            )
-            .unwrap();
-
-        let mut input = String::new();
-        subject.stdin().read_to_string(&mut input).unwrap();
-        write!(subject.stdout(), "This is stdout.").unwrap();
-        write!(subject.stderr(), "This is stderr.").unwrap();
-
-        stop_handle.stop();
-        assert_eq!(response, ());
-        assert_eq!(input, "This is stdin.".to_string());
-        assert_eq!(
-            stdout_arc.lock().unwrap().get_string(),
-            "This is stdout.".to_string()
-        );
-        assert_eq!(
-            stderr_arc.lock().unwrap().get_string(),
-            "This is stderr.".to_string()
-        );
     }
 }

@@ -76,7 +76,6 @@ impl VerifierTools for VerifierToolsReal {
     }
 
     fn get_node_descriptor(&self, logfile: &PathBuf) -> Result<String, DescriptorError> {
-        eprintln!("Opening logfile: {:?}", logfile);
         let file = match File::open(logfile) {
             Ok(file) => file,
             Err(e) => return Err(DescriptorError::LogfileOpenFailed(format!("{:?}", e))),
@@ -92,14 +91,12 @@ impl VerifierTools for VerifierToolsReal {
                 Ok(0) => break,
                 Ok(_) => (),
             }
-            eprintln!("Read logfile line: '{}'", line_buffer);
             match regex.captures(&line_buffer) {
                 None => (),
                 Some(captures) => match captures.get(1) {
                     None => (),
                     Some(m) => {
                         let descriptor = m.as_str().to_string();
-                        eprintln!("Extracted descriptor: '{}'", descriptor);
                         node_descriptor = Some(descriptor);
                     }
                 },

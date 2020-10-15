@@ -54,7 +54,7 @@ impl MASQNode {
 
     pub fn path_to_logfile() -> Box<Path> {
         Self::data_dir()
-            .join("MASQNode_rCURRENT.log")
+            .join(CURRENT_LOGFILE_NAME)
             .into_boxed_path()
     }
 
