@@ -369,8 +369,6 @@ conversation_message!(UiStartOrder, "start");
 pub struct UiStartResponse {
     #[serde(rename = "newProcessId")]
     pub new_process_id: u32,
-    #[serde(rename = "nodeDescriptor")]
-    pub node_descriptor: String,
     #[serde(rename = "redirectUiPort")]
     pub redirect_ui_port: u16,
 }
@@ -418,6 +416,17 @@ fire_and_forget_message!(UiUnmarshalError, "unmarshalError");
 ///////////////////////////////////////////////////////////////////
 // These messages are sent to or by the Node only
 ///////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UiDescriptorRequest {}
+conversation_message!(UiDescriptorRequest, "descriptor");
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UiDescriptorResponse {
+    #[serde(rename = "nodeDescriptor")]
+    pub node_descriptor: String,
+}
+conversation_message!(UiDescriptorResponse, "descriptor");
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct UiPayableAccount {

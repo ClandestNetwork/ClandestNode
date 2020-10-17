@@ -26,8 +26,9 @@ impl Command for StartCommand {
             Ok(response) => {
                 writeln!(
                     context.stdout(),
-                    "MASQNode successfully started as {}",
-                    response.node_descriptor,
+                    "MASQNode successfully started in process {} on port {}",
+                    response.new_process_id,
+                    response.redirect_ui_port,
                 )
                 .expect("write! failed");
                 Ok(())
@@ -60,7 +61,6 @@ mod tests {
         let mut context = CommandContextMock::new()
             .transact_params(&transact_params_arc)
             .transact_result(Ok(UiStartResponse {
-                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@2.3.4.5".to_string(),
                 new_process_id: 1234,
                 redirect_ui_port: 4321,
             }
@@ -80,7 +80,7 @@ mod tests {
         );
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
-            "MASQNode successfully started as ABCDEFGHIJKLMNOPQRSTUVWXYZ012345@2.3.4.5\n"
+            "MASQNode successfully started in process 1234 on port 4321\n"
         );
         assert_eq!(stderr_arc.lock().unwrap().get_string(), String::new());
     }

@@ -2,7 +2,7 @@
 
 use crate::daemon::crash_notification::CrashNotification;
 use crate::daemon::launch_verifier::LaunchVerification::{
-    CleanFailure, DirtyFailure, InterventionRequired, Launched, NoDescriptor,
+    CleanFailure, DirtyFailure, InterventionRequired, Launched,
 };
 use crate::daemon::launch_verifier::{LaunchVerifier, LaunchVerifierReal};
 use crate::daemon::{LaunchSuccess, Launcher};
@@ -148,7 +148,6 @@ impl Launcher for LauncherReal {
         &self,
         mut params: HashMap<String, String>,
         crashed_recipient: Recipient<CrashNotification>,
-        node_logfile: &PathBuf,
     ) -> Result<Option<LaunchSuccess>, String> {
         let redirect_ui_port = find_free_port();
         params.insert("ui-port".to_string(), format!("{}", redirect_ui_port));
@@ -159,16 +158,11 @@ impl Launcher for LauncherReal {
             .collect_vec();
         match self.execer.exec(params_vec, crashed_recipient) {
             Ok(new_process_id) => {
-                match self.verifier.verify_launch(new_process_id, node_logfile, redirect_ui_port) {
-                    Launched(node_descriptor) => Ok(Some(LaunchSuccess {
-                        new_process_id,
-                        node_descriptor,
-                        redirect_ui_port
-                    })),
+                match self.verifier.verify_launch(new_process_id, redirect_ui_port) {
+                    Launched => Ok(Some(LaunchSuccess { new_process_id, redirect_ui_port })),
                     CleanFailure => Err(format! ("Node started in process {}, but died immediately.", new_process_id)),
                     DirtyFailure => Err(format! ("Node started in process {}, but was unresponsive and was successfully killed.", new_process_id)),
                     InterventionRequired => Err(format! ("Node started in process {}, but was unresponsive and could not be killed. Manual intervention is required.", new_process_id)),
-                    NoDescriptor => Err(format! ("Node started in process {} and was responsive, but did not produce a Node descriptor.", new_process_id)),
                 }
             }
             Err(s) => Err(s),
@@ -189,7 +183,7 @@ impl LauncherReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::daemon::launch_verifier::LaunchVerification::{Launched, NoDescriptor};
+    use crate::daemon::launch_verifier::LaunchVerification::Launched;
     use crate::daemon::mocks::LaunchVerifierMock;
     use crate::test_utils::recorder::make_recorder;
     use actix::Actor;
@@ -428,9 +422,7 @@ mod tests {
         let verify_launch_params_arc = Arc::new(Mutex::new(vec![]));
         let verifier = LaunchVerifierMock::new()
             .verify_launch_params(&verify_launch_params_arc)
-            .verify_launch_result(Launched(
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
-            ));
+            .verify_launch_result(Launched);
         let mut subject = LauncherReal::new(unbounded().0);
         subject.execer = Box::new(execer);
         subject.verifier = Box::new(verifier);
@@ -443,7 +435,7 @@ mod tests {
         );
 
         let result = subject
-            .launch(params.clone(), crashed_recipient, &PathBuf::from("blah"))
+            .launch(params.clone(), crashed_recipient)
             .unwrap()
             .unwrap();
 
@@ -463,10 +455,7 @@ mod tests {
             ]]
         );
         let verify_launch_params = verify_launch_params_arc.lock().unwrap();
-        assert_eq!(
-            *verify_launch_params,
-            vec![(1234, PathBuf::from("blah"), result.redirect_ui_port)]
-        );
+        assert_eq!(*verify_launch_params, vec![(1234, result.redirect_ui_port)]);
         let msg = CrashNotification {
             process_id: 12345,
             exit_code: Some(4),
@@ -503,7 +492,7 @@ mod tests {
         );
 
         let result = subject
-            .launch(params.clone(), crashed_recipient, &PathBuf::from("blah"))
+            .launch(params.clone(), crashed_recipient)
             .err()
             .unwrap();
 
@@ -521,7 +510,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
+            .launch(HashMap::new(), crashed_recipient)
             .err()
             .unwrap();
 
@@ -542,7 +531,7 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
+            .launch(HashMap::new(), crashed_recipient)
             .err()
             .unwrap();
 
@@ -565,28 +554,10 @@ mod tests {
         subject.verifier = Box::new(verifier);
 
         let result = subject
-            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
+            .launch(HashMap::new(), crashed_recipient)
             .err()
             .unwrap();
 
         assert_eq! (result, format! ("Node started in process 1234, but was unresponsive and could not be killed. Manual intervention is required."))
-    }
-
-    #[test]
-    fn launch_calls_execer_and_verifier_and_returns_no_descriptor() {
-        let (ui_gateway, _, _) = make_recorder();
-        let crashed_recipient = ui_gateway.start().recipient();
-        let execer = ExecerMock::new().exec_result(Ok(1234));
-        let verifier = LaunchVerifierMock::new().verify_launch_result(NoDescriptor);
-        let mut subject = LauncherReal::new(unbounded().0);
-        subject.execer = Box::new(execer);
-        subject.verifier = Box::new(verifier);
-
-        let result = subject
-            .launch(HashMap::new(), crashed_recipient, &PathBuf::from("blah"))
-            .err()
-            .unwrap();
-
-        assert_eq! (result, format! ("Node started in process 1234 and was responsive, but did not produce a Node descriptor."))
     }
 }

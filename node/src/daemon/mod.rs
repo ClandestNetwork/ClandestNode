@@ -12,7 +12,6 @@ mod mocks;
 use crate::daemon::crash_notification::CrashNotification;
 use crate::daemon::launch_verifier::{VerifierTools, VerifierToolsReal};
 use crate::daemon::setup_reporter::{SetupCluster, SetupReporter, SetupReporterReal};
-use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use actix::Recipient;
@@ -20,7 +19,6 @@ use actix::{Actor, Context, Handler, Message};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use masq_lib::constants::CURRENT_LOGFILE_NAME;
 use masq_lib::messages::UiSetupResponseValueStatus::{Configured, Set};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiNodeCrashedBroadcast, UiRedirect, UiSetupBroadcast,
@@ -33,7 +31,6 @@ use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
-use std::path::PathBuf;
 
 pub struct Recipients {
     ui_gateway_from_sub: Recipient<NodeFromUiMessage>,
@@ -76,7 +73,6 @@ impl ChannelFactoryReal {
 #[derive(PartialEq, Debug)]
 pub struct LaunchSuccess {
     pub new_process_id: u32,
-    pub node_descriptor: String,
     pub redirect_ui_port: u16,
 }
 
@@ -85,7 +81,6 @@ pub trait Launcher {
         &self,
         params: HashMap<String, String>,
         crashed_recipient: Recipient<CrashNotification>,
-        node_logfile: &PathBuf,
     ) -> Result<Option<LaunchSuccess>, String>;
 }
 
@@ -217,7 +212,6 @@ impl Daemon {
                     .map(|(k, v)| (k.to_string(), v.value.to_string()))
                     .collect(),
                 self.crash_notification_sub.clone().expect("Daemon unbound"),
-                &self.make_node_logfile_path(),
             ) {
                 Ok(Some(success)) => {
                     self.node_process_id = Some(success.new_process_id);
@@ -226,7 +220,6 @@ impl Daemon {
                         client_id,
                         UiStartResponse {
                             new_process_id: success.new_process_id,
-                            node_descriptor: success.node_descriptor,
                             redirect_ui_port: success.redirect_ui_port,
                         }
                         .tmb(context_id),
@@ -242,16 +235,6 @@ impl Daemon {
                     },
                 ),
             },
-        }
-    }
-
-    fn make_node_logfile_path(&self) -> PathBuf {
-        match self.params.get("data-directory") {
-            None => RealDirsWrapper {}
-                .data_dir()
-                .expect("data_dir() failed")
-                .join(CURRENT_LOGFILE_NAME),
-            Some(data_dir_uisrv) => PathBuf::from(&data_dir_uisrv.value).join(CURRENT_LOGFILE_NAME),
         }
     }
 
@@ -445,7 +428,6 @@ mod tests {
     use crate::daemon::mocks::VerifierToolsMock;
     use crate::daemon::setup_reporter::{setup_cluster_from, SetupCluster};
     use crate::daemon::LaunchSuccess;
-    use crate::node_configurator::{DirsWrapper, RealDirsWrapper};
     use crate::test_utils::recorder::{make_recorder, Recorder};
     use actix::System;
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Required, Set};
@@ -466,15 +448,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     struct LauncherMock {
-        launch_params: Arc<
-            Mutex<
-                Vec<(
-                    HashMap<String, String>,
-                    Recipient<CrashNotification>,
-                    PathBuf,
-                )>,
-            >,
-        >,
+        launch_params: Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
         launch_results: RefCell<Vec<Result<Option<LaunchSuccess>, String>>>,
     }
 
@@ -483,13 +457,11 @@ mod tests {
             &self,
             params: HashMap<String, String>,
             crashed_recipient: Recipient<CrashNotification>,
-            node_logfile: &PathBuf,
         ) -> Result<Option<LaunchSuccess>, String> {
-            self.launch_params.lock().unwrap().push((
-                params,
-                crashed_recipient,
-                node_logfile.clone(),
-            ));
+            self.launch_params
+                .lock()
+                .unwrap()
+                .push((params, crashed_recipient));
             self.launch_results.borrow_mut().remove(0)
         }
     }
@@ -504,15 +476,7 @@ mod tests {
 
         fn launch_params(
             mut self,
-            params: &Arc<
-                Mutex<
-                    Vec<(
-                        HashMap<String, String>,
-                        Recipient<CrashNotification>,
-                        PathBuf,
-                    )>,
-                >,
-            >,
+            params: &Arc<Mutex<Vec<(HashMap<String, String>, Recipient<CrashNotification>)>>>,
         ) -> Self {
             self.launch_params = params.clone();
             self
@@ -1084,7 +1048,6 @@ mod tests {
             .launch_params(&launch_params_arc)
             .launch_result(Ok(Some(LaunchSuccess {
                 new_process_id: 2345,
-                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 5432,
             })));
         let verifier_tools = VerifierToolsMock::new();
@@ -1133,7 +1096,6 @@ mod tests {
             payload,
             UiStartResponse {
                 new_process_id: 2345,
-                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 5432
             }
         );
@@ -1180,7 +1142,6 @@ mod tests {
         let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
         let launcher = LauncherMock::new().launch_result(Ok(Some(LaunchSuccess {
             new_process_id: 2345,
-            node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
             redirect_ui_port: 5432,
         })));
         let verifier_tools = VerifierToolsMock::new()
@@ -1343,7 +1304,6 @@ mod tests {
             .launch_params(&launch_params_arc)
             .launch_result(Ok(Some(LaunchSuccess {
                 new_process_id: 54321,
-                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 7777,
             })));
         let verifier_tools = VerifierToolsMock::new();
@@ -1361,14 +1321,13 @@ mod tests {
         assert_eq!(
             launch_params
                 .iter()
-                .map(|x| (&x.0, &x.2))
-                .collect::<Vec<(&HashMap<String, String>, &PathBuf)>>(),
-            vec![(
-                &vec![("data-directory".to_string(), "bigglesworth".to_string())]
+                .map(|x| &x.0)
+                .collect::<Vec<&HashMap<String, String>>>(),
+            vec![
+                (&vec![("data-directory".to_string(), "bigglesworth".to_string())]
                     .into_iter()
-                    .collect::<HashMap<String, String>>(),
-                &PathBuf::from("bigglesworth").join(CURRENT_LOGFILE_NAME)
-            )]
+                    .collect::<HashMap<String, String>>())
+            ]
         );
         let crashed_msg_to_daemon = CrashNotification {
             process_id: 54321,
@@ -1387,7 +1346,6 @@ mod tests {
             target: MessageTarget::ClientId(1234),
             body: UiStartResponse {
                 new_process_id: 54321,
-                node_descriptor: "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345@1.2.3.4".to_string(),
                 redirect_ui_port: 7777,
             }
             .tmb(2345),
@@ -1397,16 +1355,6 @@ mod tests {
         let daemon_recording = daemon_recording_arc.lock().unwrap();
         let actual_msg = daemon_recording.get_record::<CrashNotification>(0);
         assert_eq!(actual_msg, &crashed_msg_to_daemon);
-    }
-
-    #[test]
-    fn calculates_correct_logfile_path_when_data_dir_not_specified() {
-        let subject = Daemon::new(Box::new(LauncherMock::new()));
-
-        let result = subject.make_node_logfile_path();
-
-        let expected_data_dir = RealDirsWrapper {}.data_dir().unwrap();
-        assert_eq!(result, expected_data_dir.join(CURRENT_LOGFILE_NAME));
     }
 
     #[test]
