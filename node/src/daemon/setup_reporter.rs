@@ -489,10 +489,7 @@ trait ValueRetriever {
 }
 
 fn is_required_for_blockchain(params: &SetupCluster) -> bool {
-    match params.get("neighborhood-mode") {
-        Some(nhm) if &nhm.value == "zero-hop" => false,
-        _ => true,
-    }
+    !matches! (params.get("neighborhood-mode"), Some(nhm) if &nhm.value == "zero-hop")
 }
 
 struct BlockchainServiceUrl {}

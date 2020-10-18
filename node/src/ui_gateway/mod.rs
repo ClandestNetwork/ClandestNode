@@ -28,8 +28,7 @@ use actix::Addr;
 use actix::Context;
 use actix::Handler;
 use actix::Recipient;
-use masq_lib::messages::{ToMessageBody, UiDescriptorRequest, UiDescriptorResponse};
-use masq_lib::ui_gateway::{MessagePath, MessageTarget, NodeFromUiMessage, NodeToUiMessage};
+use masq_lib::ui_gateway::{NodeFromUiMessage, NodeToUiMessage};
 
 pub const CRASH_KEY: &str = "UIGATEWAY";
 
@@ -76,28 +75,6 @@ impl UiGateway {
             node_from_ui_message_sub: recipient!(addr, NodeFromUiMessage),
             node_to_ui_message_sub: recipient!(addr, NodeToUiMessage),
         }
-    }
-
-    fn handle_node_from_ui_message(&mut self, msg: &NodeFromUiMessage) -> bool {
-        if msg.body.opcode == UiDescriptorRequest::type_opcode() {
-            if let MessagePath::Conversation(context_id) = msg.body.path {
-                let response_inner = UiDescriptorResponse {
-                    node_descriptor: self.node_descriptor.clone(),
-                };
-                let response_msg = NodeToUiMessage {
-                    target: MessageTarget::ClientId(msg.client_id),
-                    body: response_inner.tmb(context_id),
-                };
-                self.websocket_supervisor
-                    .as_ref()
-                    .expect("UiGateway not bound")
-                    .send_msg(response_msg);
-                return true;
-            } else {
-                return false;
-            }
-        }
-        false
     }
 }
 
@@ -203,15 +180,13 @@ impl Handler<NodeFromUiMessage> for UiGateway {
     type Result = ();
 
     fn handle(&mut self, msg: NodeFromUiMessage, _ctx: &mut Self::Context) -> Self::Result {
-        if !self.handle_node_from_ui_message(&msg) {
-            let len = self.incoming_message_recipients.len();
-            (0..len).for_each(|idx| {
-                let recipient = &self.incoming_message_recipients[idx];
-                recipient.try_send(msg.clone()).unwrap_or_else(|_| {
-                    panic!("UiGateway's NodeFromUiMessage recipient #{} has died.", idx)
-                })
+        let len = self.incoming_message_recipients.len();
+        (0..len).for_each(|idx| {
+            let recipient = &self.incoming_message_recipients[idx];
+            recipient.try_send(msg.clone()).unwrap_or_else(|_| {
+                panic!("UiGateway's NodeFromUiMessage recipient #{} has died.", idx)
             })
-        }
+        })
     }
 }
 
@@ -336,7 +311,6 @@ mod tests {
     use crate::test_utils::wait_for;
     use crate::ui_gateway::websocket_supervisor_mock::WebSocketSupervisorMock;
     use actix::System;
-    use masq_lib::messages::{ToMessageBody, UiDescriptorResponse};
     use masq_lib::ui_gateway::MessagePath::FireAndForget;
     use masq_lib::ui_gateway::{MessageBody, MessageTarget};
     use masq_lib::utils::find_free_port;
@@ -722,71 +696,6 @@ mod tests {
                     .unwrap()
             )
         )
-    }
-
-    #[test]
-    fn descriptor_request_results_in_descriptor_response() {
-        let (ui_gateway_recorder, _, _) = make_recorder();
-        let send_msg_params_arc = Arc::new(Mutex::new(vec![]));
-
-        let system = System::new("descriptor_request_results_in_descriptor_response");
-        let mut subject = UiGateway::new(&UiGatewayConfig {
-            ui_port: find_free_port(),
-            node_descriptor: String::from("Node descriptor"),
-        });
-        subject.websocket_supervisor = Some(Box::new(
-            WebSocketSupervisorMock::new().send_msg_parameters(&send_msg_params_arc),
-        ));
-        let ui_gateway_recorder_addr = ui_gateway_recorder.start();
-        subject.subs = Some(UiGatewayOutSubs {
-            ui_message_sub: ui_gateway_recorder_addr.recipient::<UiCarrierMessage>(),
-            ..Default::default()
-        });
-        let subject_addr = subject.start();
-        let subject_subs = UiGateway::make_subs_from(&subject_addr);
-
-        subject_subs
-            .node_from_ui_message_sub
-            .try_send(NodeFromUiMessage {
-                client_id: 1234,
-                body: UiDescriptorRequest {}.tmb(4321),
-            })
-            .unwrap();
-
-        System::current().stop();
-        system.run();
-
-        wait_for(None, None, || send_msg_params_arc.lock().unwrap().len() > 0);
-        let send_msg_params = send_msg_params_arc.lock().unwrap();
-        assert_eq!(
-            *send_msg_params,
-            vec![NodeToUiMessage {
-                target: MessageTarget::ClientId(1234),
-                body: UiDescriptorResponse {
-                    node_descriptor: "Node descriptor".to_string()
-                }
-                .tmb(4321)
-            }]
-        );
-    }
-
-    #[test]
-    fn handle_node_from_ui_message_silently_rejects_malformed_message() {
-        let mut subject = UiGateway::new(&UiGatewayConfig {
-            ui_port: find_free_port(),
-            node_descriptor: String::from("Node descriptor"),
-        });
-
-        let result = subject.handle_node_from_ui_message(&NodeFromUiMessage {
-            client_id: 0,
-            body: MessageBody {
-                opcode: "descriptor".to_string(),
-                path: MessagePath::FireAndForget, // wrong
-                payload: Ok("irrelevant".to_string()),
-            },
-        });
-
-        assert_eq!(result, false);
     }
 
     #[test]
