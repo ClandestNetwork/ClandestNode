@@ -159,10 +159,6 @@ impl Dispatcher {
     }
 
     fn handle_descriptor_request(&mut self, client_id: u64, context_id: u64) {
-        eprintln!(
-            "Received descriptor request with client_id {} and context_id {}",
-            client_id, context_id
-        );
         let response_inner = UiDescriptorResponse {
             node_descriptor: self.node_descriptor.clone(),
         };
@@ -170,11 +166,8 @@ impl Dispatcher {
             target: MessageTarget::ClientId(client_id),
             body: response_inner.tmb(context_id),
         };
-        eprintln!("Sending response: {:?}", response_msg);
-        self.subs
-            .as_ref()
-            .expect("Dispatcher not bound")
-            .ui_gateway_sub
+        let subs = self.subs.as_ref().expect("Dispatcher is unbound");
+        subs.ui_gateway_sub
             .try_send(response_msg)
             .expect("UiGateway is dead");
     }
@@ -461,25 +454,23 @@ mod tests {
 
     #[test]
     fn descriptor_request_results_in_descriptor_response() {
-        let (ui_gateway_recorder, _, ui_gateway_recording_arc) = make_recorder();
         let system = System::new("test");
         let subject = Dispatcher::new(CrashPoint::None, "Node descriptor".to_string());
+        let addr = subject.start();
+        let (ui_gateway_recorder, _, ui_gateway_recording_arc) = make_recorder();
         let peer_actors = peer_actors_builder()
             .ui_gateway(ui_gateway_recorder)
             .build();
-        let subject_addr = subject.start();
-        subject_addr.try_send(BindMessage { peer_actors }).unwrap();
+        addr.try_send(BindMessage { peer_actors }).unwrap();
+        let msg = NodeFromUiMessage {
+            client_id: 1234,
+            body: UiDescriptorRequest {}.tmb(4321),
+        };
 
-        subject_addr
-            .try_send(NodeFromUiMessage {
-                client_id: 1234,
-                body: UiDescriptorRequest {}.tmb(4321),
-            })
-            .unwrap();
+        addr.try_send(msg).unwrap();
 
-        System::current().stop();
+        System::current().stop_with_code(0);
         system.run();
-
         let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
         assert_eq!(
             ui_gateway_recording.get_record::<NodeToUiMessage>(0),

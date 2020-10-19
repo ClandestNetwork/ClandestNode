@@ -104,6 +104,7 @@ impl ActorSystemFactoryReal {
                 .neighborhood_config
                 .mode
                 .rate_pack()
+                .clone()
                 .exit_service_rate,
             exit_byte_rate: config.neighborhood_config.mode.rate_pack().exit_byte_rate,
         });
@@ -114,11 +115,13 @@ impl ActorSystemFactoryReal {
                 .neighborhood_config
                 .mode
                 .rate_pack()
+                .clone()
                 .routing_service_rate,
             per_routing_byte: config
                 .neighborhood_config
                 .mode
                 .rate_pack()
+                .clone()
                 .routing_byte_rate,
             is_decentralized: config.neighborhood_config.mode.is_decentralized(),
         });
@@ -997,7 +1000,7 @@ mod tests {
             clandestine_discriminator_factories: Vec::new(),
             ui_gateway_config: UiGatewayConfig {
                 ui_port: 5335,
-                node_descriptor: String::from(""),
+                node_descriptor: String::from("uninitialized"),
             },
             blockchain_bridge_config: BlockchainBridgeConfig {
                 blockchain_service_url: None,
