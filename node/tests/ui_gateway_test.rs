@@ -4,7 +4,7 @@ pub mod utils;
 
 use futures::future::*;
 use masq_lib::constants::DEFAULT_UI_PORT;
-use masq_lib::messages::{UiFinancialsRequest, UiFinancialsResponse, NODE_UI_PROTOCOL};
+use masq_lib::messages::{UiFinancialsRequest, UiFinancialsResponse, NODE_UI_PROTOCOL, UiShutdownRequest, ToMessageBody};
 use masq_lib::ui_gateway::MessagePath::Conversation;
 use masq_lib::ui_gateway::{MessageBody, MessageTarget, NodeToUiMessage};
 use masq_lib::ui_traffic_converter::UiTrafficConverter;
@@ -21,19 +21,15 @@ use websocket::ClientBuilder;
 use websocket::OwnedMessage;
 
 #[test]
-fn ui_gateway_message_integration() {
+fn dispatcher_message_integration() {
     fdlimit::raise_fd_limit();
     let mut node = utils::MASQNode::start_standard(None);
     node.wait_for_log("UIGateway bound", Some(5000));
-    let converter = UiTrafficConverterOldReal::new();
-    let msg = converter
-        .marshal(UiMessage::GetNodeDescriptor)
-        .expect("Couldn't marshal GetNodeDescriptor message");
-
+    let msg = UiTrafficConverter::new_marshal (UiDescriptorRequest{}.tmb(1));
     let descriptor_client =
         ClientBuilder::new(format!("ws://{}:{}", localhost(), DEFAULT_UI_PORT).as_str())
             .expect("Couldn't create first ClientBuilder")
-            .add_protocol("MASQNode-UI")
+            .add_protocol("MASQNode-UIv2")
             .async_connect_insecure()
             .and_then(|(s, _)| s.send(OwnedMessage::Text(msg)))
             .and_then(|s| s.into_future().map_err(|e| e.0))
@@ -43,15 +39,12 @@ fn ui_gateway_message_integration() {
             })
             .timeout(Duration::from_millis(1000))
             .map_err(|e| panic!("failed to get response by timeout {:?}", e));
-
-    let shutdown_msg = converter
-        .marshal(UiMessage::ShutdownMessage)
-        .expect("Couldn't marshal ShutdownMessage");
+    let shutdown_msg = UiTrafficConverter::new_marshal (UiShutdownRequest{}.tmb(2));
 
     let shutdown_client =
         ClientBuilder::new(format!("ws://{}:{}", localhost(), DEFAULT_UI_PORT).as_str())
             .expect("Couldn't create second ClientBuilder")
-            .add_protocol("MASQNode-UI")
+            .add_protocol("MASQNode-UIv2")
             .async_connect_insecure()
             .and_then(|(s, _)| s.send(OwnedMessage::Text(shutdown_msg)));
 

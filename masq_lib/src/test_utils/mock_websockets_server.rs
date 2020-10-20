@@ -1,10 +1,6 @@
 // Copyright (c) 2019-2020, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use lazy_static::lazy_static;
-use masq_lib::messages::NODE_UI_PROTOCOL;
-use masq_lib::ui_gateway::{MessageBody, MessagePath};
-use masq_lib::ui_traffic_converter::UiTrafficConverter;
-use masq_lib::utils::localhost;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -13,6 +9,10 @@ use std::time::Duration;
 use websocket::result::WebSocketError;
 use websocket::sync::Server;
 use websocket::OwnedMessage;
+use crate::ui_gateway::{MessageBody, MessagePath};
+use crate::ui_traffic_converter::UiTrafficConverter;
+use crate::utils::localhost;
+use crate::messages::NODE_UI_PROTOCOL;
 
 lazy_static! {
     static ref MWSS_INDEX: Mutex<u64> = Mutex::new(0);
@@ -292,6 +292,10 @@ mod tests {
     use masq_lib::messages::{UiSetupResponseValue, NODE_UI_PROTOCOL};
     use masq_lib::test_utils::ui_connection::UiConnection;
     use masq_lib::utils::find_free_port;
+    use crate::messages::{UiUnmarshalError, UiSetupResponseValue, UiSetupResponse, ToMessageBody, NODE_UI_PROTOCOL, FromMessageBody};
+    use crate::utils::find_free_port;
+    use crate::messages::UiSetupResponseValueStatus::Set;
+    use crate::test_utils::ui_connection::UiConnection;
 
     #[test]
     #[ignore]

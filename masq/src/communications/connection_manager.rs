@@ -541,7 +541,7 @@ mod tests {
     use crate::communications::broadcast_handler::{BroadcastHandler, StreamFactoryReal};
     use crate::communications::node_conversation::ClientError;
     use crate::test_utils::client_utils::make_client;
-    use crate::test_utils::mock_websockets_server::{
+    use masq_lib::test_utils::mock_websockets_server::{
         MockWebSocketsServer, MockWebSocketsServerStopHandle,
     };
     use crossbeam_channel::TryRecvError;

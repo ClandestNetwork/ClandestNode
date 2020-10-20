@@ -140,7 +140,7 @@ mod tests {
         ConnectionDropped, ConnectionRefused, PayloadError,
     };
     use crate::communications::broadcast_handler::StreamFactoryReal;
-    use crate::test_utils::mock_websockets_server::MockWebSocketsServer;
+    use masq_lib::test_utils::mock_websockets_server::MockWebSocketsServer;
     use masq_lib::messages::{
         FromMessageBody, UiCrashRequest, UiSetupRequest, TIMEOUT_ERROR, UNMARSHAL_ERROR,
     };
