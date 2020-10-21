@@ -87,10 +87,7 @@ impl NeighborhoodMode {
     }
 
     pub fn accepts_connections(&self) -> bool {
-        match self {
-            NeighborhoodMode::Standard(_, _, _) => true,
-            _ => false,
-        }
+        matches!(self, NeighborhoodMode::Standard(_, _, _))
     }
 
     pub fn routes_data(&self) -> bool {
@@ -102,31 +99,19 @@ impl NeighborhoodMode {
     }
 
     pub fn is_standard(&self) -> bool {
-        match self {
-            NeighborhoodMode::Standard(_, _, _) => true,
-            _ => false,
-        }
+        matches!(self, NeighborhoodMode::Standard(_, _, _))
     }
 
     pub fn is_originate_only(&self) -> bool {
-        match self {
-            NeighborhoodMode::OriginateOnly(_, _) => true,
-            _ => false,
-        }
+        matches!(self, NeighborhoodMode::OriginateOnly(_, _))
     }
 
     pub fn is_consume_only(&self) -> bool {
-        match self {
-            NeighborhoodMode::ConsumeOnly(_) => true,
-            _ => false,
-        }
+        matches!(self, NeighborhoodMode::ConsumeOnly(_))
     }
 
     pub fn is_zero_hop(&self) -> bool {
-        match self {
-            NeighborhoodMode::ZeroHop => true,
-            _ => false,
-        }
+        matches!(self, NeighborhoodMode::ZeroHop)
     }
 }
 
@@ -266,7 +251,6 @@ pub struct NeighborhoodSubs {
     pub remove_neighbor: Recipient<RemoveNeighborMessage>,
     pub stream_shutdown_sub: Recipient<StreamShutdownMsg>,
     pub set_consuming_wallet_sub: Recipient<SetConsumingWalletMessage>,
-    pub from_ui_gateway: Recipient<NeighborhoodDotGraphRequest>,
     pub from_ui_message_sub: Recipient<NodeFromUiMessage>,
 }
 
@@ -454,7 +438,6 @@ mod tests {
             remove_neighbor: recipient!(recorder, RemoveNeighborMessage),
             stream_shutdown_sub: recipient!(recorder, StreamShutdownMsg),
             set_consuming_wallet_sub: recipient!(recorder, SetConsumingWalletMessage),
-            from_ui_gateway: recipient!(recorder, NeighborhoodDotGraphRequest),
             from_ui_message_sub: recipient!(recorder, NodeFromUiMessage),
         };
 

@@ -257,11 +257,7 @@ pub fn encrypt_return_route_id(return_route_id: u32, cryptde: &dyn CryptDE) -> C
 }
 
 pub fn make_garbage_data(bytes: usize) -> Vec<u8> {
-    let mut data = Vec::with_capacity(bytes);
-    for _ in 0..bytes {
-        data.push(0);
-    }
-    data
+    vec![0; bytes]
 }
 
 pub fn make_request_payload(bytes: usize, cryptde: &dyn CryptDE) -> ClientRequestPayload_0v1 {
@@ -350,15 +346,39 @@ where
 {
     let real_interval_ms = interval_ms.unwrap_or(250);
     let real_limit_ms = limit_ms.unwrap_or(1000);
-    let time_limit = Instant::now() + Duration::from_millis(real_limit_ms);
-    while !f() {
+    let _ = await_value (Some ((real_interval_ms, real_limit_ms)), || if f() {
+        Ok(true)
+    }
+    else {
+        Err("false".to_string())
+    });
+}
+
+pub fn await_value<F, T, E>(interval_and_limit_ms: Option<(u64, u64)>, mut f: F) -> T
+where
+    E: Debug,
+    F: FnMut() -> Result<T, E>,
+{
+    let (interval_ms, limit_ms) = interval_and_limit_ms.unwrap_or((250, 1000));
+    let interval_dur = Duration::from_millis (interval_ms);
+    let deadline = Instant::now() + Duration::from_millis(limit_ms);
+    let mut delay = 0;
+    let mut log = "".to_string();
+    loop {
         assert_eq!(
-            Instant::now() < time_limit,
+            Instant::now() < deadline,
             true,
-            "Timeout: waited for more than {}ms",
-            real_limit_ms
+            "Timeout: waited for more than {}ms:\n{}",
+            limit_ms, log
         );
-        thread::sleep(Duration::from_millis(real_interval_ms));
+        match f() {
+            Ok(t) => return t,
+            Err(e) => {
+                log.extend (format!("  +{}: {:?}\n", delay, e).chars());
+                delay += interval_ms;
+                thread::sleep(interval_dur);
+            }
+        }
     }
 }
 

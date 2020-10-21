@@ -19,14 +19,13 @@ pub struct UiGatewayConfig {
     pub ui_port: u16,
     pub node_descriptor: String, // TODO: This really shouldn't be here; it exists only to answer
                                  // the GetNodeDescriptor message, which A) is part of MASQNode-UI,
-                                 // and B) shouldn't be answered by the UiGateway anyway.
+                                 // and B) shouldn't be answered by the UiGateway anyway. Move it
+                                 // to the Dispatcher part of the BootstrapperConfig.
 }
 
 #[derive(Clone)]
 pub struct UiGatewaySubs {
     pub bind: Recipient<BindMessage>,
-    pub ui_message_sub: Recipient<UiCarrierMessage>,
-    pub from_ui_message_sub: Recipient<FromUiMessage>,
     pub node_from_ui_message_sub: Recipient<NodeFromUiMessage>,
     pub node_to_ui_message_sub: Recipient<NodeToUiMessage>,
 }
@@ -62,7 +61,7 @@ pub enum UiMessage {
 mod tests {
     use super::*;
     use crate::sub_lib::peer_actors::BindMessage;
-    use crate::sub_lib::ui_gateway::{FromUiMessage, UiCarrierMessage, UiGatewaySubs};
+    use crate::sub_lib::ui_gateway::{UiGatewaySubs};
     use crate::test_utils::recorder::Recorder;
     use actix::Actor;
 
@@ -72,8 +71,6 @@ mod tests {
 
         let subject = UiGatewaySubs {
             bind: recipient!(recorder, BindMessage),
-            ui_message_sub: recipient!(recorder, UiCarrierMessage),
-            from_ui_message_sub: recipient!(recorder, FromUiMessage),
             node_from_ui_message_sub: recipient!(recorder, NodeFromUiMessage),
             node_to_ui_message_sub: recipient!(recorder, NodeToUiMessage),
         };
