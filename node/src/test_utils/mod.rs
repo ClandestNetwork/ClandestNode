@@ -346,11 +346,12 @@ where
 {
     let real_interval_ms = interval_ms.unwrap_or(250);
     let real_limit_ms = limit_ms.unwrap_or(1000);
-    let _ = await_value (Some ((real_interval_ms, real_limit_ms)), || if f() {
-        Ok(true)
-    }
-    else {
-        Err("false".to_string())
+    let _ = await_value(Some((real_interval_ms, real_limit_ms)), || {
+        if f() {
+            Ok(true)
+        } else {
+            Err("false".to_string())
+        }
     });
 }
 
@@ -360,7 +361,7 @@ where
     F: FnMut() -> Result<T, E>,
 {
     let (interval_ms, limit_ms) = interval_and_limit_ms.unwrap_or((250, 1000));
-    let interval_dur = Duration::from_millis (interval_ms);
+    let interval_dur = Duration::from_millis(interval_ms);
     let deadline = Instant::now() + Duration::from_millis(limit_ms);
     let mut delay = 0;
     let mut log = "".to_string();
@@ -369,12 +370,13 @@ where
             Instant::now() < deadline,
             true,
             "Timeout: waited for more than {}ms:\n{}",
-            limit_ms, log
+            limit_ms,
+            log
         );
         match f() {
             Ok(t) => return t,
             Err(e) => {
-                log.extend (format!("  +{}: {:?}\n", delay, e).chars());
+                log.extend(format!("  +{}: {:?}\n", delay, e).chars());
                 delay += interval_ms;
                 thread::sleep(interval_dur);
             }

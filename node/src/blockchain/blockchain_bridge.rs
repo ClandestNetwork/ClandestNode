@@ -6,8 +6,8 @@ use crate::blockchain::blockchain_interface::{
 };
 use crate::bootstrapper::BootstrapperConfig;
 use crate::persistent_configuration::PersistentConfiguration;
+use crate::sub_lib::blockchain_bridge::BlockchainBridgeSubs;
 use crate::sub_lib::blockchain_bridge::ReportAccountsPayable;
-use crate::sub_lib::blockchain_bridge::{BlockchainBridgeSubs};
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::peer_actors::BindMessage;
 use crate::sub_lib::set_consuming_wallet_message::SetConsumingWalletMessage;
@@ -181,13 +181,13 @@ mod tests {
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
-    use crate::test_utils::recorder::{peer_actors_builder};
+    use crate::test_utils::recorder::peer_actors_builder;
     use crate::test_utils::{
         make_default_persistent_configuration, make_paying_wallet, make_wallet,
     };
     use actix::Addr;
     use actix::System;
-    use ethsign::{SecretKey};
+    use ethsign::SecretKey;
     use ethsign_crypto::Keccak256;
     use futures::future::Future;
     use masq_lib::crash_point::CrashPoint;

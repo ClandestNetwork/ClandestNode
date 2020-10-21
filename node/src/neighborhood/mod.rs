@@ -1236,6 +1236,7 @@ mod tests {
     use crate::sub_lib::versioned_data::VersionedData;
     use crate::test_utils::logging::init_test_logging;
     use crate::test_utils::logging::TestLogHandler;
+    use crate::test_utils::make_meaningless_route;
     use crate::test_utils::neighborhood_test_utils::{
         db_from_node, make_global_cryptde_node_record, make_node_record, make_node_record_f,
         neighborhood_from_nodes,
@@ -1248,7 +1249,6 @@ mod tests {
     use crate::test_utils::recorder::Recording;
     use crate::test_utils::vec_to_set;
     use crate::test_utils::{assert_contains, make_wallet};
-    use crate::test_utils::{make_meaningless_route};
     use crate::test_utils::{main_cryptde, make_paying_wallet};
     use actix::dev::{MessageResponse, ResponseChannel};
     use actix::Message;

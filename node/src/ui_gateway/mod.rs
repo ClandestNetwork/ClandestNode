@@ -8,8 +8,8 @@ pub mod websocket_supervisor_mock;
 use crate::daemon::DaemonBindMessage;
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::peer_actors::BindMessage;
+use crate::sub_lib::ui_gateway::UiGatewayConfig;
 use crate::sub_lib::ui_gateway::UiGatewaySubs;
-use crate::sub_lib::ui_gateway::{UiGatewayConfig};
 use crate::sub_lib::utils::NODE_MAILBOX_CAPACITY;
 use crate::ui_gateway::websocket_supervisor::WebSocketSupervisor;
 use crate::ui_gateway::websocket_supervisor::WebSocketSupervisorReal;
@@ -79,13 +79,11 @@ impl Handler<DaemonBindMessage> for UiGateway {
     fn handle(&mut self, msg: DaemonBindMessage, ctx: &mut Self::Context) -> Self::Result {
         ctx.set_mailbox_capacity(NODE_MAILBOX_CAPACITY);
         self.incoming_message_recipients = msg.from_ui_message_recipients;
-        self.websocket_supervisor = match WebSocketSupervisorReal::new(
-            self.port,
-            msg.from_ui_message_recipient,
-        ) {
-            Ok(wss) => Some(Box::new(wss)),
-            Err(e) => panic!("Couldn't start WebSocketSupervisor: {:?}", e),
-        };
+        self.websocket_supervisor =
+            match WebSocketSupervisorReal::new(self.port, msg.from_ui_message_recipient) {
+                Ok(wss) => Some(Box::new(wss)),
+                Err(e) => panic!("Couldn't start WebSocketSupervisor: {:?}", e),
+            };
         debug!(self.logger, "UIGateway bound");
     }
 }
@@ -118,8 +116,8 @@ impl Handler<NodeFromUiMessage> for UiGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::recorder::make_recorder;
     use crate::test_utils::recorder::peer_actors_builder;
-    use crate::test_utils::recorder::{make_recorder};
     use crate::ui_gateway::websocket_supervisor_mock::WebSocketSupervisorMock;
     use actix::System;
     use masq_lib::ui_gateway::MessagePath::FireAndForget;

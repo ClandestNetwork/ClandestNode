@@ -4,10 +4,10 @@ use crate::messages::{FromMessageBody, ToMessageBody, UiMessageError};
 use crate::ui_gateway::MessageTarget::ClientId;
 use crate::ui_traffic_converter::UiTrafficConverter;
 use crate::utils::localhost;
+use std::io::Write;
 use std::net::TcpStream;
 use websocket::sync::Client;
 use websocket::{ClientBuilder, OwnedMessage};
-use std::io::Write;
 
 pub struct UiConnection {
     context_id: u64,
@@ -16,15 +16,14 @@ pub struct UiConnection {
 
 impl UiConnection {
     pub fn make(port: u16, protocol: &str) -> Result<UiConnection, String> {
-        let client_builder = match ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()) {
-            Ok(cb) => cb,
-            Err(e) => return Err (format!("{:?}", e)),
-        };
-        let client = match client_builder
-            .add_protocol(protocol)
-            .connect_insecure() {
+        let client_builder =
+            match ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()) {
+                Ok(cb) => cb,
+                Err(e) => return Err(format!("{:?}", e)),
+            };
+        let client = match client_builder.add_protocol(protocol).connect_insecure() {
             Ok(c) => c,
-            Err(e) => return Err (format!("{:?}", e)),
+            Err(e) => return Err(format!("{:?}", e)),
         };
         Ok(UiConnection {
             client,
@@ -33,7 +32,7 @@ impl UiConnection {
     }
 
     pub fn new(port: u16, protocol: &str) -> UiConnection {
-        Self::make (port, protocol).unwrap()
+        Self::make(port, protocol).unwrap()
     }
 
     pub fn send<T: ToMessageBody>(&mut self, payload: T) {
@@ -94,7 +93,7 @@ impl UiConnection {
         self.receive::<R>()
     }
 
-    pub fn shutdown (self) {
+    pub fn shutdown(self) {
         self.client.shutdown().unwrap()
     }
 }

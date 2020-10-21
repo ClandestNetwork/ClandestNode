@@ -440,24 +440,22 @@ mod tests {
     use crate::neighborhood::gossip::Gossip_0v1;
     use crate::stream_messages::AddStreamMsg;
     use crate::stream_messages::RemoveStreamMsg;
+    use crate::sub_lib::accountant::AccountantConfig;
     use crate::sub_lib::accountant::ReportRoutingServiceConsumedMessage;
     use crate::sub_lib::accountant::ReportRoutingServiceProvidedMessage;
-    use crate::sub_lib::accountant::{AccountantConfig};
     use crate::sub_lib::accountant::{
         ReportExitServiceConsumedMessage, ReportExitServiceProvidedMessage,
     };
-    use crate::sub_lib::blockchain_bridge::{
-        BlockchainBridgeConfig, ReportAccountsPayable,
-    };
+    use crate::sub_lib::blockchain_bridge::{BlockchainBridgeConfig, ReportAccountsPayable};
     use crate::sub_lib::cryptde::PlainData;
     use crate::sub_lib::dispatcher::{InboundClientData, StreamShutdownMsg};
     use crate::sub_lib::hopper::IncipientCoresPackage;
     use crate::sub_lib::hopper::{ExpiredCoresPackage, NoLookupIncipientCoresPackage};
+    use crate::sub_lib::neighborhood::RouteQueryMessage;
     use crate::sub_lib::neighborhood::{
         DispatcherNodeQueryMessage, GossipFailure_0v1, NodeRecordMetadataMessage,
     };
     use crate::sub_lib::neighborhood::{NeighborhoodConfig, NodeQueryMessage};
-    use crate::sub_lib::neighborhood::{RouteQueryMessage};
     use crate::sub_lib::neighborhood::{NeighborhoodMode, RemoveNeighborMessage};
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::peer_actors::StartMessage;

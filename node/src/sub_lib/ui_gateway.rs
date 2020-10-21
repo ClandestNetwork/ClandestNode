@@ -31,7 +31,7 @@ impl Debug for UiGatewaySubs {
 mod tests {
     use super::*;
     use crate::sub_lib::peer_actors::BindMessage;
-    use crate::sub_lib::ui_gateway::{UiGatewaySubs};
+    use crate::sub_lib::ui_gateway::UiGatewaySubs;
     use crate::test_utils::recorder::Recorder;
     use actix::Actor;
 
