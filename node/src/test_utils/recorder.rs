@@ -40,7 +40,6 @@ use crate::sub_lib::set_consuming_wallet_message::SetConsumingWalletMessage;
 use crate::sub_lib::stream_handler_pool::DispatcherNodeQueryResponse;
 use crate::sub_lib::stream_handler_pool::TransmitDataMsg;
 use crate::sub_lib::ui_gateway::UiGatewaySubs;
-use crate::sub_lib::ui_gateway::{FromUiMessage, UiCarrierMessage};
 use crate::test_utils::to_millis;
 use actix::Actor;
 use actix::Addr;
@@ -104,7 +103,6 @@ recorder_message_handler!(ExpiredCoresPackage<DnsResolveFailure_0v1>);
 recorder_message_handler!(ExpiredCoresPackage<Gossip_0v1>);
 recorder_message_handler!(ExpiredCoresPackage<GossipFailure_0v1>);
 recorder_message_handler!(ExpiredCoresPackage<MessageType>);
-recorder_message_handler!(FromUiMessage);
 recorder_message_handler!(GetFinancialStatisticsMessage);
 recorder_message_handler!(InboundClientData);
 recorder_message_handler!(InboundServerData);
@@ -129,7 +127,6 @@ recorder_message_handler!(SetGasPriceMsg);
 recorder_message_handler!(StartMessage);
 recorder_message_handler!(StreamShutdownMsg);
 recorder_message_handler!(TransmitDataMsg);
-recorder_message_handler!(UiCarrierMessage);
 
 impl Handler<NodeQueryMessage> for Recorder {
     type Result = MessageResult<NodeQueryMessage>;

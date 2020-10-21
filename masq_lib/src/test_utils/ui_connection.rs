@@ -7,6 +7,7 @@ use crate::utils::localhost;
 use std::net::TcpStream;
 use websocket::sync::Client;
 use websocket::{ClientBuilder, OwnedMessage};
+use std::io::Write;
 
 pub struct UiConnection {
     context_id: u64,
@@ -14,16 +15,25 @@ pub struct UiConnection {
 }
 
 impl UiConnection {
-    pub fn new(port: u16, protocol: &str) -> UiConnection {
-        let client = ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str())
-            .unwrap()
+    pub fn make(port: u16, protocol: &str) -> Result<UiConnection, String> {
+        let client_builder = match ClientBuilder::new(format!("ws://{}:{}", localhost(), port).as_str()) {
+            Ok(cb) => cb,
+            Err(e) => return Err (format!("{:?}", e)),
+        };
+        let client = match client_builder
             .add_protocol(protocol)
-            .connect_insecure()
-            .unwrap();
-        UiConnection {
+            .connect_insecure() {
+            Ok(c) => c,
+            Err(e) => return Err (format!("{:?}", e)),
+        };
+        Ok(UiConnection {
             client,
             context_id: 0,
-        }
+        })
+    }
+
+    pub fn new(port: u16, protocol: &str) -> UiConnection {
+        Self::make (port, protocol).unwrap()
     }
 
     pub fn send<T: ToMessageBody>(&mut self, payload: T) {
@@ -39,9 +49,15 @@ impl UiConnection {
     }
 
     pub fn send_string(&mut self, string: String) {
-        self.client
-            .send_message(&OwnedMessage::Text(string))
-            .unwrap();
+        self.send_message(&OwnedMessage::Text(string))
+    }
+
+    pub fn send_message(&mut self, message: &OwnedMessage) {
+        self.client.send_message(message).unwrap();
+    }
+
+    pub fn writer(&mut self) -> &mut dyn Write {
+        self.client.writer_mut()
     }
 
     pub fn receive<T: FromMessageBody>(&mut self) -> Result<T, (u64, String)> {
@@ -76,5 +92,9 @@ impl UiConnection {
     ) -> Result<R, (u64, String)> {
         self.send_with_context_id(payload, context_id);
         self.receive::<R>()
+    }
+
+    pub fn shutdown (self) {
+        self.client.shutdown().unwrap()
     }
 }
