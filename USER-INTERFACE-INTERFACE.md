@@ -500,6 +500,7 @@ information is presently in its Setup space.
 ```
 "payload": {
     "newProcessId": <integer>,
+    "nodeDescriptor": <string>,
     "redirectUiPort": <integer greater than 1024>,
 }
 ```
