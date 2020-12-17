@@ -16,14 +16,12 @@ case "$OSTYPE" in
     Darwin | darwin*)
         echo "macOS"
         [[ $GITHUB_ACTIONS -eq true ]] && sudo launchctl limit maxfiles 524288 524288 && ulimit -Sn 524288 && sudo launchctl limit maxfiles
-#        sudo --preserve-env ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
-        ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
+        sudo --preserve-env ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
         ;;
     linux-gnu)
         echo "Linux"
         [[ $GITHUB_ACTIONS -eq true ]] && sudo --preserve-env ci/free-port-53.sh
-#        sudo --preserve-env ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
-        ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
+        sudo --preserve-env ci/run_integration_tests.sh "$TOOLCHAIN_HOME"
         ;;
     *)
         exit 1
