@@ -19,15 +19,15 @@
 | References | [References](#references) |
 
 <a id="preamble"></a>
-## PREAMBLE THE GREYPAPER
+## PREAMBLE - THE GREYPAPER
 
-Readers may be thinking “Why is this document is called a ‘Greypaper’, and not a Whitepaper?"
+Readers may be thinking “Why is this document called a ‘Greypaper’, and not a Whitepaper?"
 
-The MASQ committee’s combined years of experience in business, technology, cryptocurrency and project management yielded an interesting idea - one of the MASQ committee decided that there had to be an alternative to the mainstream idea of releasing a Whitepaper.
+Through discussion over the team's combined years of experience in business, technology, cryptocurrency and project management, an interesting idea was proposed - one of the MASQ team decided that there had to be an alternative to the mainstream idea of releasing a Whitepaper.
 
 Whitepapers are exactly what they sound like – written in black and white and often outlining definitive goals and deadlines.
 
-This Greypaper will be a living and evolving document that can be updated on a needs-basis with accurate information. All the while providing enough starting information for readers to appreciate the general vision and purpose of the project.
+This Greypaper will be a living and evolving document that can be updated on a needs-basis with accurate information. All the while providing enough starting information for readers to appreciate the overall vision and purpose of the project.
 
 Through this, MASQ aspires to not only be transparent in their goals and intentions, but also to avoid hype, disappointment and misinformation.
  
@@ -51,7 +51,7 @@ By doing so, it will allow content available on the World Wide Web to be accessi
 - increasing user accessibility to 'freedom based' applications, such as cryptocurrency, open source development platforms etc
 - promoting privacy of personal information
 
-**MASQ Network’s vision is that its software attracts over 1 million users across millions of devices and create an ecosystem of applications that leverages the decentralized mesh network.**
+**MASQ Network’s vision is that its software attracts over 1 million users across millions of devices and creates an ecosystem of applications that leverages the decentralized mesh network.**
 
 
 > “A whole world behind the MASQ”
@@ -73,12 +73,12 @@ Read more about these methods in detail on the [Encryption Wiki Page]
 # FOUNDING PRINCIPLES
  
 ## Decentralized Governance
-The MASQ Committee intends to have a core group of individuals forming a committee. At an agreed point, the Committee will dissolve, allowing the Open Source project to be fully decentralized.
+The MASQ team intends to have a core group of individuals forming a committee. At an agreed point, the Committee will dissolve, allowing the Open Source project to be fully decentralized.
 
 There will be no CEO, and practical methods will be applied to ensure no one person controls the entire project.
 
 ## Community Spirit
-The MASQ Committee have all been born of other projects and communities - they understand that without the true spirit of ‘By the Community, for the Community” the network and thus the project will cease to exist. From these humble roots, the Committee want to actively grow the Community and realize the full potential that the project can bring to the modern world of internet communication.
+The MASQ team have all been born of other projects and communities - they understand that without the true spirit of ‘By the Community, for the Community” the network and thus the project will cease to exist. From these humble roots, the team want to actively grow the Community and realize the full potential that the project can bring to the modern world of internet communication.
 
 ## Privacy
 MASQ intends to keep user privacy as an utmost priority, as without true privacy of the network participants, the network cannot grow to its full potential across the world to restricted countries, where access to such a solution could come with severe penalty from Government and watchdog agencies.
@@ -102,15 +102,15 @@ The interfacing itself is handled across WebSockets broadcasts, handled by UIs a
 
 <a id="gui"></a>
 ### Graphic User Interface (GUI) - in progress
-Through our amazing Community, we have formed a group who is developing a streamlined GUI that will operate my communicating through the new MASQNode-UIv2-Gateway over Websocket broadcasts and messaging.
+Through the power of the amazing MASQ Community, a group was formed who is developing a streamlined GUI that will operate by communicating through the new MASQNode-UIv2-Gateway over Websocket broadcasts and messaging.
 
-The GUI will first be a browser-based solution for Alpha and Beta type testing with community, and then be developed into further iterations of GUIs. These may be based on other platforms or languages for greater user experience and streamlined features. This has been 
+The GUI will first be a browser-based solution for Alpha and Beta type testing with community, and then be developed into further iterations of GUIs. These may be based on other platforms or languages for greater user experience and streamlined features. This has been released on GitHub as an open source code repo. 
 
 In parallel to the browser version, an Electron-based native app GUI will be developed as well which can be run on the 3 main platforms.
 
 ### Additional Key Milestones
 
-* Auto Port-Forwarding
+* Auto Port-Forwarding - *next in development priority*
 
 * Clandestine Routing
 
@@ -127,8 +127,6 @@ Starting repositories include forks of:
 
 <a id="tokenomics"></a>
 # Tokenomics
-
->Our true goal is simply development!
 
 The MASQ ERC20 token will be a pure utility token. Its primary purpose is to provide a monetization component within the Node software to allow micro-transactions between nodes providing services to each-other within the network. These services are measured and values are individually set by the user of each Node, creating a 'free and open market' within the network itself for users to provide their bandwidth and Node routing services.
 
@@ -185,9 +183,9 @@ Upon minting, non-circulating tokens will be distributed from the deployer walle
 
 - 1,900,000 released per month thereafter, for total of 4 months
 
-\* *(which is divided by committee)*
+\* *(note these tokens are made available to provide v2 token liquidity to Linkswap, and staking reward programs)*
 
-\** *(note these tokens are made available to provide v2 token liquidity to Linkswap, and staking reward programs)*
+\** *(which is divided by committee)*
 
 
 
@@ -213,8 +211,8 @@ As all of our Committee are volunteers donating our time and efforts, we will re
 
 ETH address for any donations from our wonderful community:
 
-[0x27d9A2AC83b493f88ce9B4532EDcf74e95B9788d](https://etherdonation.com/d?to=0x27d9A2AC83b493f88ce9B4532EDcf74e95B9788d&amount=0.02)
-
+masq.eth - ENS
+[Donate ETH directly](https://etherdonation.com/d?to=0x27d9A2AC83b493f88ce9B4532EDcf74e95B9788d&amount=0.02)
 BTC - ```bc1qnsm0eqt9z9228n7hqc6a0g9dns84vsg3whnmsh```
  
 <a id="references"></a>
