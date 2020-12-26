@@ -211,8 +211,10 @@ As all of our Committee are volunteers donating our time and efforts, we will re
 
 ETH address for any donations from our wonderful community:
 
-masq.eth - ENS
+[masq.eth](https://masq.eth) - ENS
+
 [Donate ETH directly](https://etherdonation.com/d?to=0x27d9A2AC83b493f88ce9B4532EDcf74e95B9788d&amount=0.02)
+
 BTC - ```bc1qnsm0eqt9z9228n7hqc6a0g9dns84vsg3whnmsh```
  
 <a id="references"></a>
