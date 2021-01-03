@@ -7,6 +7,7 @@ use crate::commands::commands_common::Command;
 use crate::commands::crash_command::CrashCommand;
 use crate::commands::descriptor_command::DescriptorCommand;
 use crate::commands::generate_wallets_command::GenerateWalletsCommand;
+use crate::commands::recover_wallets_command::RecoverWalletsCommand;
 use crate::commands::setup_command::SetupCommand;
 use crate::commands::shutdown_command::ShutdownCommand;
 use crate::commands::start_command::StartCommand;
@@ -41,6 +42,10 @@ impl CommandFactory for CommandFactoryReal {
             },
             "descriptor" => Box::new(DescriptorCommand::new()),
             "generate-wallets" => match GenerateWalletsCommand::new(pieces) {
+                Ok(command) => Box::new(command),
+                Err(msg) => return Err(CommandSyntax(msg)),
+            },
+            "recover-wallets" => match RecoverWalletsCommand::new(pieces) {
                 Ok(command) => Box::new(command),
                 Err(msg) => return Err(CommandSyntax(msg)),
             },
@@ -114,6 +119,33 @@ mod tests {
         let result = subject
             .make(vec![
                 "generate-wallets".to_string(),
+                "--invalid".to_string(),
+                "password".to_string(),
+            ])
+            .err()
+            .unwrap();
+
+        let msg = match result {
+            CommandSyntax(msg) => msg,
+            x => panic!("Expected syntax error, got {:?}", x),
+        };
+        assert_eq!(msg.contains("Found argument"), true, "{}", msg);
+        assert_eq!(msg.contains("--invalid"), true, "{}", msg);
+        assert_eq!(
+            msg.contains("which wasn't expected, or isn't valid in this context"),
+            true,
+            "{}",
+            msg
+        );
+    }
+
+    #[test]
+    fn complains_about_recover_wallets_command_with_bad_syntax() {
+        let subject = CommandFactoryReal::new();
+
+        let result = subject
+            .make(vec![
+                "recover-wallets".to_string(),
                 "--invalid".to_string(),
                 "password".to_string(),
             ])
