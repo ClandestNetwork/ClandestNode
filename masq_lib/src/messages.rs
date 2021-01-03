@@ -578,8 +578,10 @@ pub struct UiRecoverWalletsRequest {
     pub db_password: String,
     #[serde(rename = "mnemonicPhrase")]
     pub mnemonic_phrase: Vec<String>,
-    pub passphrase: Option<String>,
-    pub language: String,
+    #[serde(rename = "mnemonicPassphraseOpt")]
+    pub mnemonic_passphrase_opt: Option<String>,
+    #[serde(rename = "mnemonicPhraseLanguage")]
+    pub mnemonic_phrase_language: String,
     #[serde(rename = "consumingDerivationPath")]
     pub consuming_derivation_path: String, // default to "m/44'/60'/0'/0/0"
     #[serde(rename = "earningWallet")]

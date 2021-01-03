@@ -242,7 +242,7 @@ impl Configurator {
         persistent_config: &mut Box<dyn PersistentConfiguration>,
     ) -> Result<MessageBody, MessageError> {
         Self::check_preconditions(persistent_config, "recover", &msg.db_password)?;
-        let language = Self::parse_language(&msg.language)?;
+        let language = Self::parse_language(&msg.mnemonic_phrase_language)?;
         let mnemonic = match Mnemonic::from_phrase(msg.mnemonic_phrase.join(" "), language) {
             Ok(m) => m,
             Err(e) => {
@@ -252,7 +252,7 @@ impl Configurator {
                 ))
             }
         };
-        let passphrase = msg.passphrase.unwrap_or_default();
+        let passphrase = msg.mnemonic_passphrase_opt.unwrap_or_default();
         let seed = Seed::new(&mnemonic, &passphrase);
         let _ = Self::generate_wallet(&seed, &msg.consuming_derivation_path)?;
         let earning_wallet = match Wallet::from_str(&msg.earning_wallet) {
@@ -375,10 +375,7 @@ impl Configurator {
         match Bip32ECKeyPair::from_raw(seed.as_bytes(), derivation_path) {
             Err(e) => Err((
                 DERIVATION_PATH_ERROR,
-                format!(
-                    "Bad syntax of the derivation path: {}: {}",
-                    e, derivation_path
-                ),
+                format!("Bad derivation-path syntax: {}: {}", e, derivation_path),
             )),
             Ok(kp) => Ok(Wallet::from(kp)),
         }
@@ -896,7 +893,9 @@ mod tests {
         assert_eq!(context_id, 4321);
         let mnemonic_phrase = request.mnemonic_phrase.join(" ");
         let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
-        let seed = PlainData::new(Bip39::seed(&mnemonic, &request.passphrase.unwrap()).as_ref());
+        let seed = PlainData::new(
+            Bip39::seed(&mnemonic, &request.mnemonic_passphrase_opt.unwrap()).as_ref(),
+        );
         let check_password_params = check_password_params_arc.lock().unwrap();
         assert_eq!(
             *check_password_params,
@@ -932,7 +931,7 @@ mod tests {
         assert_eq!(result, UiRecoverWalletsResponse {}.tmb(1234));
         let mnemonic_phrase = request.mnemonic_phrase.join(" ");
         let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
-        let seed = Bip39::seed(&mnemonic, &request.passphrase.unwrap());
+        let seed = Bip39::seed(&mnemonic, &request.mnemonic_passphrase_opt.unwrap());
         let earning_wallet = Configurator::generate_wallet(&seed, &request.earning_wallet).unwrap();
         let set_wallet_info_params = set_wallet_info_params_arc.lock().unwrap();
         assert_eq!(
@@ -956,7 +955,7 @@ mod tests {
             .set_wallet_info_result(Ok(()));
         let mut subject = make_subject(Some(persistent_config));
         let mut request = make_example_recover_wallets_request();
-        request.passphrase = None;
+        request.mnemonic_passphrase_opt = None;
 
         let result = subject.handle_recover_wallets(request.clone(), 1234);
 
@@ -1199,8 +1198,8 @@ mod tests {
             .into_iter()
             .map(|x| x.to_string())
             .collect::<Vec<String>>(),
-            passphrase: Some("ebullient".to_string()),
-            language: "English".to_string(),
+            mnemonic_passphrase_opt: Some("ebullient".to_string()),
+            mnemonic_phrase_language: "English".to_string(),
             consuming_derivation_path: "m/60'/44'/0'/0/4".to_string(),
             earning_wallet: "0x005e288d713a5fb3d7c9cf1b43810a98688c7223".to_string(),
         }

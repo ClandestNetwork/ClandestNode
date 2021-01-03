@@ -10,7 +10,7 @@ pub struct RecoverWalletsCommand {
     mnemonic_phrase: Vec<String>,
     passphrase_opt: Option<String>,
     language: String,
-    consuming_wallet_derivation_path: String,
+    consuming_path: String,
     earning_wallet: String,
 }
 
@@ -52,7 +52,7 @@ impl RecoverWalletsCommand {
                 .expect("language not properly defaulted")
                 .to_string(),
             passphrase_opt: matches.value_of("passphrase").map(|s| s.to_string()),
-            consuming_wallet_derivation_path: matches
+            consuming_path: matches
                 .value_of("consuming-path")
                 .expect("consuming-path not properly defaulted")
                 .to_string(),
@@ -66,9 +66,9 @@ impl Command for RecoverWalletsCommand {
         let input = UiRecoverWalletsRequest {
             db_password: self.db_password.clone(),
             mnemonic_phrase: self.mnemonic_phrase.clone(),
-            passphrase: self.passphrase_opt.clone(),
-            language: self.language.clone(),
-            consuming_derivation_path: self.consuming_wallet_derivation_path.clone(),
+            mnemonic_passphrase_opt: self.passphrase_opt.clone(),
+            mnemonic_phrase_language: self.language.clone(),
+            consuming_derivation_path: self.consuming_path.clone(),
             earning_wallet: self.earning_wallet.clone(),
         };
         let _: UiRecoverWalletsResponse = transaction(input, context, 1000)?;
@@ -121,8 +121,7 @@ pub fn recover_wallets_subcommand() -> App<'static, 'static> {
             .help ("Derivation path from which to generate the consuming wallet from which your bills will be paid. Remember to put it in double quotes; otherwise the single quotes will cause problems")
             .long ("consuming-path")
             .value_name ("CONSUMING-PATH")
-            .required (false)
-            .default_value("m/60'/44'/0'/0/0")
+            .required (true)
             .takes_value (true)
         )
         .arg(Arg::with_name ("earning-path")
@@ -188,7 +187,7 @@ mod tests {
                     .split (" ").into_iter ().map(|x| x.to_string()).collect(),
                 passphrase_opt: Some("booga".to_string()),
                 language: "English".to_string(),
-                consuming_wallet_derivation_path: "m/60'/44'/0'/100/0/200".to_string(),
+                consuming_path: "m/60'/44'/0'/100/0/200".to_string(),
                 earning_wallet: "m/60'/44'/0'/100/0/201".to_string()
             }
         )
@@ -227,7 +226,7 @@ mod tests {
                     .split (" ").into_iter ().map(|x| x.to_string()).collect(),
                 passphrase_opt: Some("booga".to_string()),
                 language: "English".to_string(),
-                consuming_wallet_derivation_path: "m/60'/44'/0'/100/0/200".to_string(),
+                consuming_path: "m/60'/44'/0'/100/0/200".to_string(),
                 earning_wallet: "0x0123456789012345678901234567890123456789".to_string()
             }
         )
@@ -277,7 +276,7 @@ mod tests {
                 mnemonic_phrase: vec!["word".to_string()],
                 language: "English".to_string(),
                 passphrase_opt: None,
-                consuming_wallet_derivation_path: "ooga".to_string(),
+                consuming_path: "ooga".to_string(),
                 earning_wallet: "booga".to_string()
             }
         )
@@ -358,7 +357,7 @@ mod tests {
             mnemonic_phrase: vec!["word".to_string()],
             language: "English".to_string(),
             passphrase_opt: Some("booga".to_string()),
-            consuming_wallet_derivation_path: "consuming path".to_string(),
+            consuming_path: "consuming path".to_string(),
             earning_wallet: "earning wallet".to_string(),
         };
 
@@ -372,8 +371,8 @@ mod tests {
                 UiRecoverWalletsRequest {
                     db_password: "password".to_string(),
                     mnemonic_phrase: vec!["word".to_string()],
-                    language: "English".to_string(),
-                    passphrase: Some("booga".to_string()),
+                    mnemonic_passphrase_opt: Some("booga".to_string()),
+                    mnemonic_phrase_language: "English".to_string(),
                     consuming_derivation_path: "consuming path".to_string(),
                     earning_wallet: "earning wallet".to_string()
                 }
