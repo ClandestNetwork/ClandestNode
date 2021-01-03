@@ -457,21 +457,21 @@ conversation_message!(UiConfigurationRequest, "configuration");
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UiConfigurationResponse {
     #[serde(rename = "currentSchemaVersion")]
-    current_schema_version: String,
+    pub current_schema_version: String,
     #[serde(rename = "clandestinePort")]
-    clandestine_port: u16,
+    pub clandestine_port: u16,
     #[serde(rename = "gasPrice")]
-    gas_price: u64,
+    pub gas_price: u64,
     #[serde(rename = "mnemonicSeedOpt")]
-    mnemonic_seed_opt: Option<String>,
+    pub mnemonic_seed_opt: Option<String>,
     #[serde(rename = "consumingWalletDerivationPathOpt")]
-    consuming_wallet_derivation_path_opt: Option<String>,
+    pub consuming_wallet_derivation_path_opt: Option<String>,
     #[serde(rename = "earningWalletAddressOpt")]
-    earning_wallet_address_opt: Option<String>,
+    pub earning_wallet_address_opt: Option<String>,
     #[serde(rename = "pastNeighbors")]
-    past_neighbors: Vec<String>,
+    pub past_neighbors: Vec<String>,
     #[serde(rename = "startBlock")]
-    start_block: u64,
+    pub start_block: u64,
 }
 conversation_message!(UiConfigurationResponse, "configuration");
 
@@ -575,13 +575,15 @@ fire_and_forget_message!(UiNewPasswordBroadcast, "newPassword");
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct UiRecoverWalletsRequest {
     #[serde(rename = "dbPassword")]
-    db_password: String,
+    pub db_password: String,
     #[serde(rename = "mnemonicPhrase")]
-    mnemonic_phrase: Vec<String>,
+    pub mnemonic_phrase: Vec<String>,
+    pub passphrase: Option<String>,
+    pub language: String,
     #[serde(rename = "consumingDerivationPath")]
-    consuming_derivation_path: String, // default to "m/44'/60'/0'/0/0"
+    pub consuming_derivation_path: String, // default to "m/44'/60'/0'/0/0"
     #[serde(rename = "earningWallet")]
-    earning_wallet: String, // either derivation path (default to "m/44'/60'/0'/0/1") or address
+    pub earning_wallet: String, // either derivation path (default to "m/44'/60'/0'/0/1") or address
 }
 conversation_message!(UiRecoverWalletsRequest, "recoverWallet");
 

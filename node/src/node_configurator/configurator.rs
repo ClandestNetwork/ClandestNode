@@ -2,11 +2,7 @@ use std::path::PathBuf;
 
 use actix::{Actor, Context, Handler, Recipient};
 
-use masq_lib::messages::{
-    FromMessageBody, ToMessageBody, UiChangePasswordRequest, UiChangePasswordResponse,
-    UiCheckPasswordRequest, UiCheckPasswordResponse, UiGenerateWalletsRequest,
-    UiGenerateWalletsResponse, UiNewPasswordBroadcast,
-};
+use masq_lib::messages::{FromMessageBody, ToMessageBody, UiChangePasswordRequest, UiChangePasswordResponse, UiCheckPasswordRequest, UiCheckPasswordResponse, UiGenerateWalletsRequest, UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiRecoverWalletsRequest, UiRecoverWalletsResponse};
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{
     MessageBody, MessagePath, MessageTarget, NodeFromUiMessage, NodeToUiMessage,
@@ -23,7 +19,8 @@ use crate::sub_lib::configurator::NewPasswordMessage;
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::peer_actors::BindMessage;
 use crate::sub_lib::wallet::Wallet;
-use bip39::{Language, MnemonicType, Seed};
+use bip39::{Language, MnemonicType, Seed, Mnemonic};
+use std::str::FromStr;
 
 pub const CONFIGURATOR_PREFIX: u64 = 0x0001_0000_0000_0000;
 pub const CONFIGURATOR_READ_ERROR: u64 = CONFIGURATOR_PREFIX | 1;
@@ -82,6 +79,17 @@ impl Handler<NodeFromUiMessage> for Configurator {
             debug!(
                 &self.logger,
                 "Sending response to generateWallets command:\n{:?}", response
+            );
+            self.send_to_ui_gateway(ClientId(msg.client_id), response);
+        } else if let Ok((body, context_id)) = UiRecoverWalletsRequest::fmb(msg.clone().body) {
+            debug!(
+                &self.logger,
+                "Handling {} message from client {}", msg.body.opcode, msg.client_id
+            );
+            let response = self.handle_recover_wallets(body, context_id);
+            debug!(
+                &self.logger,
+                "Sending response to recoverWallets command:\n{:?}", response
             );
             self.send_to_ui_gateway(ClientId(msg.client_id), response);
         }
@@ -178,6 +186,18 @@ impl Configurator {
         }
     }
 
+    fn handle_recover_wallets(
+        &mut self,
+        msg: UiRecoverWalletsRequest,
+        context_id: u64,
+    ) -> MessageBody {
+        match Self::unfriendly_handle_recover_wallets(msg, context_id, &mut self.persistent_config)
+        {
+            Ok(message_body) => message_body,
+            Err((code, msg)) => unimplemented!("Message: {}; code: {}", msg, code),
+        }
+    }
+
     fn unfriendly_handle_generate_wallets(
         msg: UiGenerateWalletsRequest,
         context_id: u64,
@@ -237,6 +257,44 @@ impl Configurator {
             earning_wallet_address: earning_wallet.string_address_from_keypair(),
         }
         .tmb(context_id))
+    }
+
+    fn unfriendly_handle_recover_wallets(
+        msg: UiRecoverWalletsRequest,
+        context_id: u64,
+        persistent_config: &mut Box<dyn PersistentConfiguration>,
+    ) -> Result<MessageBody, MessageError> {
+        match persistent_config.check_password(Some(msg.db_password.clone())) {
+            Err(e) => unimplemented! ("{:?}", e),
+            Ok(true) => (),
+            Ok(false) => unimplemented! (),
+        }
+        match persistent_config.mnemonic_seed_exists() {
+            Err(e) => unimplemented! ("{:?}", e),
+            Ok(true) => unimplemented! (),
+            Ok(false) => (),
+        }
+        let language = Self::parse_language (&msg.language)?;
+        let mnemonic = match Mnemonic::from_phrase (msg.mnemonic_phrase.join (" "), language) {
+            Ok (m) => m,
+            Err (e) => unimplemented! ("{:?}", e),
+        };
+        let passphrase = msg.passphrase.expect ("Test-drive me!");
+        let seed = Seed::new (&mnemonic, &passphrase);
+        let _ = Self::generate_wallet(&seed, &msg.consuming_derivation_path)?;
+        let earning_wallet = match Wallet::from_str (&msg.earning_wallet) {
+            Ok (w) => w,
+            Err (e) => unimplemented!("{:?}", e),
+        };
+        if let Err(e) = persistent_config.set_wallet_info(
+            &seed,
+            &msg.consuming_derivation_path,
+            &earning_wallet.string_address_from_keypair(),
+            &msg.db_password,
+        ) {
+            unimplemented! ("{:?}", e);
+        }
+        Ok(UiRecoverWalletsResponse {}.tmb(context_id))
     }
 
     fn generate_mnemonic(
@@ -339,10 +397,7 @@ mod tests {
 
     use actix::System;
 
-    use masq_lib::messages::{
-        ToMessageBody, UiChangePasswordResponse, UiCheckPasswordRequest, UiCheckPasswordResponse,
-        UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiStartOrder,
-    };
+    use masq_lib::messages::{ToMessageBody, UiChangePasswordResponse, UiCheckPasswordRequest, UiCheckPasswordResponse, UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiStartOrder, UiRecoverWalletsRequest, UiRecoverWalletsResponse};
     use masq_lib::ui_gateway::{MessagePath, MessageTarget};
 
     use crate::db_config::persistent_configuration::{
@@ -769,6 +824,56 @@ mod tests {
     }
 
     #[test]
+    fn handle_recover_wallets_works_with_earning_wallet_address() {
+        let check_password_params_arc = Arc::new(Mutex::new(vec![]));
+        let set_wallet_info_params_arc = Arc::new(Mutex::new(vec![]));
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_params(&check_password_params_arc)
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false))
+            .set_wallet_info_params(&set_wallet_info_params_arc)
+            .set_wallet_info_result(Ok(()));
+        let subject = make_subject(Some(persistent_config));
+        let subject_addr = subject.start();
+        let peer_actors = peer_actors_builder().ui_gateway(ui_gateway).build();
+        subject_addr.try_send(BindMessage { peer_actors }).unwrap();
+        let request = make_example_recover_wallets_request();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: request.clone().tmb(4321),
+            })
+            .unwrap();
+
+        let system = System::new("test");
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let response = ui_gateway_recording.get_record::<NodeToUiMessage>(0);
+        let (_, context_id) =
+            UiRecoverWalletsResponse::fmb(response.body.clone()).unwrap();
+        assert_eq!(context_id, 4321);
+        let mnemonic_phrase = request.mnemonic_phrase.join(" ");
+        let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
+        let seed = PlainData::new(Bip39::seed(&mnemonic, &request.passphrase.unwrap()).as_ref());
+        let check_password_params = check_password_params_arc.lock().unwrap();
+        assert_eq!(*check_password_params, vec![Some(request.db_password.clone())]);
+
+        let set_wallet_info_params = set_wallet_info_params_arc.lock().unwrap();
+        assert_eq!(
+            *set_wallet_info_params,
+            vec![(
+                seed,
+                request.consuming_derivation_path,
+                request.earning_wallet,
+                request.db_password,
+            )]
+        );
+    }
+
+    #[test]
     fn parse_language_handles_expected_languages() {
         vec![
             "English",
@@ -838,6 +943,20 @@ mod tests {
             mnemonic_passphrase_opt: Some("booga".to_string()),
             consuming_derivation_path: "m/44'/60'/0'/0/4".to_string(),
             earning_derivation_path: "m/44'/60'/0'/0/5".to_string(),
+        }
+    }
+
+    fn make_example_recover_wallets_request() -> UiRecoverWalletsRequest {
+        UiRecoverWalletsRequest {
+            db_password: "password".to_string(),
+            mnemonic_phrase: vec!["parent", "prevent", "vehicle", "tooth", "crazy", "cruel",
+                "update", "mango", "female", "mad", "spread", "plunge", "tiny", "inch", "under",
+                "engine", "enforce", "film", "awesome", "plunge", "cloud", "spell", "empower",
+                "pipe"].into_iter().map (|x| x.to_string()).collect::<Vec<String>>(),
+            passphrase: Some ("ebullient".to_string()),
+            language: "English".to_string(),
+            consuming_derivation_path: "m/60'/44'/0'/0/0".to_string(),
+            earning_wallet: "0x005e288d713a5fb3d7c9cf1b43810a98688c7223".to_string()
         }
     }
 
