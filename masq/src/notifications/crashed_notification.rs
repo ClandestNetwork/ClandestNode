@@ -54,13 +54,13 @@ mod tests {
     pub fn handles_child_wait_failure() {
         running_test();
         let mut stdout = ByteArrayWriter::new();
-        let mut stderr = ByteArrayWriter::new();
+        let stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
             process_id: 12345,
             crash_reason: CrashReason::ChildWaitFailure("Couldn't wait".to_string()),
         };
 
-        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated:\n------\nthe Daemon couldn't wait on the child process: Couldn't wait\n------\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
@@ -70,13 +70,13 @@ mod tests {
     pub fn handles_unknown_failure() {
         running_test();
         let mut stdout = ByteArrayWriter::new();
-        let mut stderr = ByteArrayWriter::new();
+        let stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
             process_id: 12345,
             crash_reason: CrashReason::Unrecognized("Just...failed!\n\n".to_string()),
         };
 
-        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated:\n------\nJust...failed!\n------\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
@@ -86,13 +86,13 @@ mod tests {
     pub fn handles_no_information_failure() {
         running_test();
         let mut stdout = ByteArrayWriter::new();
-        let mut stderr = ByteArrayWriter::new();
+        let stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
             process_id: 12345,
             crash_reason: CrashReason::NoInformation,
         };
 
-        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout);
 
         assert_eq! (stdout.get_string(), "\nThe Node running as process 12345 terminated.\nThe Daemon is once more accepting setup changes.\n\nmasq> ".to_string());
         assert_eq!(stderr.get_string(), "".to_string());
@@ -103,12 +103,11 @@ mod tests {
     pub fn handles_daemon_crash() {
         running_test();
         let mut stdout = ByteArrayWriter::new();
-        let mut stderr = ByteArrayWriter::new();
         let msg = UiNodeCrashedBroadcast {
             process_id: 12345,
             crash_reason: CrashReason::DaemonCrashed,
         };
 
-        CrashNotifier::handle_broadcast(msg, &mut stdout, &mut stderr);
+        CrashNotifier::handle_broadcast(msg, &mut stdout);
     }
 }

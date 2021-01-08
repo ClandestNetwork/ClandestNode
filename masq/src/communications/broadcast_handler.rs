@@ -70,7 +70,7 @@ impl BroadcastHandlerReal {
                     SetupCommand::handle_broadcast(body, stdout);
                 } else if let Ok((body, _)) = UiNodeCrashedBroadcast::fmb(message_body.clone()) {
                     CrashNotifier::handle_broadcast(body, stdout);
-                } else if let Ok((body, _)) = UiNewPasswordBroadcast::fmb(message_body.clone()) {
+                } else if let Ok((_, _)) = UiNewPasswordBroadcast::fmb(message_body.clone()) {
                     ChangePasswordCommand::handle_broadcast(stdout);
                 } else {
                     write!(

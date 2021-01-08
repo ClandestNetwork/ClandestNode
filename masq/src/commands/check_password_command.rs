@@ -62,7 +62,7 @@ impl CheckPasswordCommand {
 mod tests {
     use super::*;
     use crate::command_context::ContextError;
-    use crate::command_factory::{CommandFactory, CommandFactoryError, CommandFactoryReal};
+    use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::commands_common::{Command, CommandError};
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::{ToMessageBody, UiCheckPasswordRequest, UiCheckPasswordResponse};

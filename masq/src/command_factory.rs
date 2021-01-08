@@ -71,8 +71,6 @@ impl CommandFactoryReal {
 mod tests {
     use super::*;
     use crate::command_factory::CommandFactoryError::UnrecognizedSubcommand;
-    use crate::test_utils::mocks::CommandContextMock;
-    use masq_lib::messages::{ToMessageBody, UiChangePasswordResponse};
 
     #[test]
     fn complains_about_unrecognized_subcommand() {
@@ -89,8 +87,6 @@ mod tests {
     #[test]
     fn factory_produces_change_password() {
         let subject = CommandFactoryReal::new();
-        let mut context =
-            CommandContextMock::new().transact_result(Ok(UiChangePasswordResponse {}.tmb(1230)));
 
         let command = subject
             .make(vec![
@@ -206,8 +202,6 @@ mod tests {
     #[test]
     fn factory_produces_set_password() {
         let subject = CommandFactoryReal::new();
-        let mut context =
-            CommandContextMock::new().transact_result(Ok(UiChangePasswordResponse {}.tmb(1230)));
 
         let command = subject
             .make(vec!["set-password".to_string(), "abracadabra".to_string()])

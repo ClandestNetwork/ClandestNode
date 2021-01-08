@@ -1,9 +1,7 @@
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, Arg, SubCommand};
-use masq_lib::messages::{
-    UiChangePasswordRequest, UiChangePasswordResponse, UiNewPasswordBroadcast,
-};
+use masq_lib::messages::{UiChangePasswordRequest, UiChangePasswordResponse};
 use std::any::Any;
 use std::io::Write;
 
