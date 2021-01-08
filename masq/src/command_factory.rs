@@ -71,8 +71,8 @@ impl CommandFactoryReal {
 mod tests {
     use super::*;
     use crate::command_factory::CommandFactoryError::UnrecognizedSubcommand;
-    use masq_lib::messages::{UiChangePasswordResponse, ToMessageBody};
     use crate::test_utils::mocks::CommandContextMock;
+    use masq_lib::messages::{ToMessageBody, UiChangePasswordResponse};
 
     #[test]
     fn complains_about_unrecognized_subcommand() {
@@ -100,10 +100,16 @@ mod tests {
             ])
             .unwrap();
 
-        assert_eq! (command.as_any().downcast_ref::<ChangePasswordCommand>().unwrap(), &ChangePasswordCommand{
-            old_password: Some("abracadabra".to_string()),
-            new_password: "boringPassword".to_string()
-        });
+        assert_eq!(
+            command
+                .as_any()
+                .downcast_ref::<ChangePasswordCommand>()
+                .unwrap(),
+            &ChangePasswordCommand {
+                old_password: Some("abracadabra".to_string()),
+                new_password: "boringPassword".to_string()
+            }
+        );
     }
 
     #[test]
@@ -207,10 +213,16 @@ mod tests {
             .make(vec!["set-password".to_string(), "abracadabra".to_string()])
             .unwrap();
 
-        assert_eq! (command.as_any().downcast_ref::<ChangePasswordCommand>().unwrap(), &ChangePasswordCommand {
-            old_password: None,
-            new_password: "abracadabra".to_string()
-        });
+        assert_eq!(
+            command
+                .as_any()
+                .downcast_ref::<ChangePasswordCommand>()
+                .unwrap(),
+            &ChangePasswordCommand {
+                old_password: None,
+                new_password: "abracadabra".to_string()
+            }
+        );
     }
 
     #[test]

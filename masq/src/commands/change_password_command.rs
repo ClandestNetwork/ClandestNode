@@ -4,8 +4,8 @@ use clap::{App, Arg, SubCommand};
 use masq_lib::messages::{
     UiChangePasswordRequest, UiChangePasswordResponse, UiNewPasswordBroadcast,
 };
-use std::io::Write;
 use std::any::Any;
+use std::io::Write;
 
 #[derive(Debug, PartialEq)]
 pub struct ChangePasswordCommand {
@@ -45,9 +45,7 @@ impl ChangePasswordCommand {
         }
     }
 
-    pub fn handle_broadcast(
-        stdout: &mut dyn Write,
-    ) {
+    pub fn handle_broadcast(stdout: &mut dyn Write) {
         write!(
             stdout,
             "\nThe Node's database password has changed.\n\nmasq> "
@@ -67,7 +65,7 @@ impl Command for ChangePasswordCommand {
         Ok(())
     }
 
-    fn as_any (&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
