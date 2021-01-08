@@ -8,7 +8,7 @@ use std::any::Any;
 
 #[derive(Debug, PartialEq)]
 pub struct CheckPasswordCommand {
-    db_password_opt: Option<String>,
+    pub db_password_opt: Option<String>,
 }
 
 pub fn check_password_subcommand() -> App<'static, 'static> {
@@ -67,47 +67,6 @@ mod tests {
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::{ToMessageBody, UiCheckPasswordRequest, UiCheckPasswordResponse};
     use std::sync::{Arc, Mutex};
-
-    #[test]
-    fn testing_command_factory_with_good_command() {
-        let subject = CommandFactoryReal::new();
-
-        let result = subject
-            .make(vec!["check-password".to_string(), "bonkers".to_string()])
-            .unwrap();
-
-        let check_password_command: &CheckPasswordCommand = result.as_any().downcast_ref().unwrap();
-        assert_eq!(
-            check_password_command,
-            &CheckPasswordCommand {
-                db_password_opt: Some("bonkers".to_string()),
-            }
-        );
-    }
-
-    #[test]
-    fn testing_command_factory_with_bad_command() {
-        let subject = CommandFactoryReal::new();
-
-        let result = subject.make(vec![
-            "check-password".to_string(),
-            "bonkers".to_string(),
-            "invalid".to_string(),
-        ]);
-
-        match result {
-            Err(CommandFactoryError::CommandSyntax(msg)) => {
-                // Note: when run with MASQ/Node/ci/all.sh, msg contains escape sequences for color.
-                assert_eq!(
-                    msg.contains("which wasn't expected, or isn't valid in this context"),
-                    true,
-                    "{}",
-                    msg
-                )
-            }
-            x => panic!("Expected CommandSyntax error, got {:?}", x),
-        }
-    }
 
     #[test]
     fn check_password_command_with_a_password_right() {

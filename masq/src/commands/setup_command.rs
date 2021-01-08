@@ -75,7 +75,6 @@ impl SetupCommand {
     pub fn handle_broadcast(
         response: UiSetupBroadcast,
         stdout: &mut dyn Write,
-        _stderr: &mut dyn Write,
     ) {
         writeln!(stdout, "\nDaemon setup has changed:\n").expect("writeln! failed");
         Self::dump_setup(UiSetupInner::from(response), stdout);
