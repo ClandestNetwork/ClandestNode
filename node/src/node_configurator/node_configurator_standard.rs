@@ -2759,7 +2759,6 @@ mod tests {
     #[test]
     fn unprivileged_configuration_gets_parameter_gas_price() {
         running_test();
-        let _clap_guard = ClapGuard::new();
         let data_dir = ensure_node_home_directory_exists(
             "node_configurator_standard",
             "unprivileged_configuration_gets_parameter_gas_price",

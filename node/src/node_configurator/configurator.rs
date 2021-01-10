@@ -17,7 +17,7 @@ use crate::blockchain::bip39::Bip39;
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
 use crate::db_config::config_dao::ConfigDaoReal;
 use crate::db_config::persistent_configuration::{
-    PersistentConfiguration, PersistentConfigurationReal,
+    PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
 };
 use crate::sub_lib::configurator::NewPasswordMessage;
 use crate::sub_lib::logger::Logger;
@@ -152,11 +152,19 @@ impl Configurator {
             }
 
             Err(e) => {
-                warning!(self.logger, "Failed to change password: {:?}", e);
+                let error_m = if msg.old_password_opt.is_none()
+                    && e == PersistentConfigError::PasswordError
+                {
+                    "The database already has its password. Use change-password command instead"
+                        .to_string()
+                } else {
+                    format!("{:?}", e)
+                };
+                warning!(self.logger, "Failed to change password: {}", error_m);
                 MessageBody {
                     opcode: msg.opcode().to_string(),
                     path: MessagePath::Conversation(context_id),
-                    payload: Err((CONFIGURATOR_WRITE_ERROR, format!("{:?}", e))),
+                    payload: Err((CONFIGURATOR_WRITE_ERROR, error_m)),
                 }
             }
         }
@@ -536,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_change_password_handles_error() {
+    fn handle_change_password_handles_common_error() {
         init_test_logging();
         let persistent_config = PersistentConfigurationMock::new().change_password_result(Err(
             PersistentConfigError::DatabaseError("Didn't work good".to_string()),
@@ -562,6 +570,37 @@ mod tests {
         );
         TestLogHandler::new().exists_log_containing(
             r#"WARN: Configurator: Failed to change password: DatabaseError("Didn\'t work good")"#,
+        );
+    }
+
+    #[test]
+    fn handle_change_password_being_set_password_variation_advices_to_use_change_password_next_time(
+    ) {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new()
+            .change_password_result(Err(PersistentConfigError::PasswordError));
+        let mut subject = make_subject(Some(persistent_config));
+        let msg = UiChangePasswordRequest {
+            old_password_opt: None,
+            new_password: "IAmSureThisPasswordMustBeRightDamn".to_string(),
+        };
+
+        let result = subject.handle_change_password(msg, 1234, 4321);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "changePassword".to_string(),
+                path: MessagePath::Conversation(4321),
+                payload: Err((
+                    CONFIGURATOR_WRITE_ERROR,
+                    r#"The database already has its password. Use change-password command instead"#
+                        .to_string()
+                )),
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            r#"WARN: Configurator: Failed to change password: The database already has its password. Use change-password command instead"#,
         );
     }
 
