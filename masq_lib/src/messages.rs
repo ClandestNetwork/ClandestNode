@@ -457,21 +457,21 @@ conversation_message!(UiConfigurationRequest, "configuration");
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UiConfigurationResponse {
     #[serde(rename = "currentSchemaVersion")]
-    pub current_schema_version: String,
+    current_schema_version: String,
     #[serde(rename = "clandestinePort")]
-    pub clandestine_port: u16,
+    clandestine_port: u16,
     #[serde(rename = "gasPrice")]
-    pub gas_price: u64,
+    gas_price: u64,
     #[serde(rename = "mnemonicSeedOpt")]
-    pub mnemonic_seed_opt: Option<String>,
+    mnemonic_seed_opt: Option<String>,
     #[serde(rename = "consumingWalletDerivationPathOpt")]
-    pub consuming_wallet_derivation_path_opt: Option<String>,
+    consuming_wallet_derivation_path_opt: Option<String>,
     #[serde(rename = "earningWalletAddressOpt")]
-    pub earning_wallet_address_opt: Option<String>,
+    earning_wallet_address_opt: Option<String>,
     #[serde(rename = "pastNeighbors")]
-    pub past_neighbors: Vec<String>,
+    past_neighbors: Vec<String>,
     #[serde(rename = "startBlock")]
-    pub start_block: u64,
+    start_block: u64,
 }
 conversation_message!(UiConfigurationResponse, "configuration");
 
