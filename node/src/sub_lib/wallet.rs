@@ -17,9 +17,6 @@ use std::result::Result;
 use std::str::FromStr;
 use web3::types::{Address, H256};
 
-pub const DEFAULT_CONSUMING_DERIVATION_PATH: &str = "m/44'/60'/0'/0/0";
-pub const DEFAULT_EARNING_DERIVATION_PATH: &str = "m/44'/60'/0'/0/1";
-
 #[derive(Debug, PartialEq)]
 pub enum WalletError {
     InvalidAddress,
@@ -440,6 +437,7 @@ mod tests {
     use crate::blockchain::test_utils::make_meaningless_seed;
     use crate::test_utils::{make_paying_wallet, make_wallet};
     use bip39::{Language, Mnemonic, Seed};
+    use masq_lib::constants::DEFAULT_CONSUMING_DERIVATION_PATH;
     use masq_lib::test_utils::utils::DEFAULT_CHAIN_ID;
     use rusqlite::Connection;
     use rustc_hex::FromHex;

@@ -994,7 +994,7 @@ mod tests {
                 )))
                 .get_result(Ok(ConfigDaoRecord::new(
                     "consuming_wallet_derivation_path",
-                    Some("m/60'/44'/0'/4/4"),
+                    Some("m/44'/60'/0'/4/4"),
                     false,
                 ))),
         );
@@ -1034,7 +1034,7 @@ mod tests {
                 )))
                 .get_result(Ok(ConfigDaoRecord::new(
                     "earning_wallet_address",
-                    Some("m/60'/44'/0'/4/5"),
+                    Some("m/44'/60'/0'/4/5"),
                     false,
                 ))),
         );

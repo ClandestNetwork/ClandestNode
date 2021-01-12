@@ -179,7 +179,7 @@ mod tests {
                         &Bip39::mnemonic(MnemonicType::Words24, Language::English),
                         "",
                     ),
-                    "m/60'/44'/0'/4/4",
+                    "m/44'/60'/0'/4/4",
                     "0x0123456789012345678901234567890123456789",
                     "password",
                 )
@@ -211,7 +211,7 @@ mod tests {
         let check_null = |key: &str| assert_eq!(map.get(key), Some(&Null));
         let check_present = |key: &str| assert_eq!(map.get(key).is_some(), true);
         check("clandestinePort", "3456");
-        check("consumingWalletDerivationPath", "m/60'/44'/0'/4/4");
+        check("consumingWalletDerivationPath", "m/44'/60'/0'/4/4");
         check(
             "earningWalletAddress",
             "0x0123456789012345678901234567890123456789",

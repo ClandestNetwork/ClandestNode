@@ -154,10 +154,8 @@ impl Hash for Bip32ECKeyPair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sub_lib::wallet::{
-        DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
-    };
     use bip39::{Language, Mnemonic};
+    use masq_lib::constants::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
     use std::collections::hash_map::DefaultHasher;
 
     #[test]
