@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2021, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::line_reader::LineReader;
-use std::io::{BufRead};
+use std::io::BufRead;
 
 pub const MASQ_PROMPT: &str = "masq> ";
 
