@@ -28,6 +28,7 @@ use tiny_hderive::bip32::ExtendedPrivKey;
 use web3::transports::Http;
 use web3::types::{Address, Bytes};
 use web3::Web3;
+use masq_lib::constants::DEFAULT_CONSUMING_DERIVATION_PATH;
 
 #[test]
 fn verify_bill_payment() {
@@ -44,7 +45,7 @@ fn verify_bill_payment() {
     blockchain_server.wait_until_ready();
     let (_event_loop_handle, http) = Http::new(blockchain_server.service_url().as_ref()).unwrap();
     let web3 = Web3::new(http.clone());
-    let derivation_path = "m/44'/60'/0'/0/0";
+    let derivation_path = DEFAULT_CONSUMING_DERIVATION_PATH;
     let seed = make_seed();
     let (contract_owner_wallet, contract_owner_secret_key) =
         make_node_wallet(&seed, derivation_path);
