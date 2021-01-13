@@ -1,6 +1,7 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 use bip39::{Language, Mnemonic, Seed};
 use futures::Future;
+use masq_lib::constants::DEFAULT_CONSUMING_DERIVATION_PATH;
 use multinode_integration_tests_lib::blockchain::BlockchainServer;
 use multinode_integration_tests_lib::command::Command;
 use multinode_integration_tests_lib::masq_node::{MASQNode, MASQNodeUtils};
@@ -28,7 +29,6 @@ use tiny_hderive::bip32::ExtendedPrivKey;
 use web3::transports::Http;
 use web3::types::{Address, Bytes};
 use web3::Web3;
-use masq_lib::constants::DEFAULT_CONSUMING_DERIVATION_PATH;
 
 #[test]
 fn verify_bill_payment() {
