@@ -926,7 +926,7 @@ mod tests {
             .set_wallet_info_result(Ok(()));
         let mut subject = make_subject(Some(persistent_config));
         let mut request = make_example_recover_wallets_request();
-        request.earning_wallet = "m/60'/44'/0'/0/5".to_string();
+        request.earning_wallet = derivation_path(0, 5);
 
         let result = subject.handle_recover_wallets(request.clone(), 1234);
 
@@ -1202,7 +1202,7 @@ mod tests {
             .collect::<Vec<String>>(),
             mnemonic_passphrase_opt: Some("ebullient".to_string()),
             mnemonic_phrase_language: "English".to_string(),
-            consuming_derivation_path: "m/60'/44'/0'/0/4".to_string(),
+            consuming_derivation_path: derivation_path(0, 4),
             earning_wallet: "0x005e288d713a5fb3d7c9cf1b43810a98688c7223".to_string(),
         }
     }
