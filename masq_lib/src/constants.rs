@@ -9,5 +9,3 @@ pub const LOWEST_USABLE_INSECURE_PORT: u16 = 1025;
 pub const HIGHEST_USABLE_PORT: u16 = 65535;
 pub const DEFAULT_UI_PORT: u16 = 5333;
 pub const CURRENT_LOGFILE_NAME: &str = "MASQNode_rCURRENT.log";
-pub const DEFAULT_CONSUMING_DERIVATION_PATH: &str = "m/44'/60'/0'/0/0";
-pub const DEFAULT_EARNING_DERIVATION_PATH: &str = "m/44'/60'/0'/0/1";

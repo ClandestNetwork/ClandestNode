@@ -8,10 +8,11 @@ use crate::masq_node_client::MASQNodeClient;
 use crate::masq_node_server::MASQNodeServer;
 use bip39::{Language, Mnemonic, Seed};
 use masq_lib::constants::{
-    CURRENT_LOGFILE_NAME, DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
+    CURRENT_LOGFILE_NAME,
 };
 use masq_lib::test_utils::utils::{DEFAULT_CHAIN_ID, TEST_DEFAULT_CHAIN_NAME};
 use masq_lib::utils::localhost;
+use masq_lib::utils::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use node_lib::blockchain::bip32::Bip32ECKeyPair;
 use node_lib::blockchain::blockchain_interface::chain_id_from_name;
 use node_lib::sub_lib::accountant::DEFAULT_EARNING_WALLET;

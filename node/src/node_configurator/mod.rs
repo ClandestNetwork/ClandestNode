@@ -12,6 +12,7 @@ use crate::database::db_initializer::{DbInitializer, DbInitializerReal, DATABASE
 use crate::db_config::persistent_configuration::{
     PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
 };
+use crate::masq_lib::utils::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use crate::sub_lib::cryptde::PlainData;
 use crate::sub_lib::utils::make_new_multi_config;
 use crate::sub_lib::wallet::Wallet;
@@ -19,9 +20,7 @@ use bip39::Language;
 use clap::{crate_description, value_t, App, AppSettings, Arg};
 use dirs::{data_local_dir, home_dir};
 use masq_lib::command::StdStreams;
-use masq_lib::constants::{
-    DEFAULT_CHAIN_NAME, DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
-};
+use masq_lib::constants::DEFAULT_CHAIN_NAME;
 use masq_lib::multi_config::{merge, CommandLineVcl, EnvironmentVcl, MultiConfig, VclArg};
 use masq_lib::shared_schema::{
     chain_arg, config_file_arg, data_directory_arg, real_user_arg, ConfiguratorError,
@@ -734,14 +733,16 @@ mod tests {
     use super::*;
     use crate::blockchain::bip32::Bip32ECKeyPair;
     use crate::db_config::persistent_configuration::PersistentConfigError;
+    use crate::masq_lib::utils::{
+        DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH,
+    };
     use crate::node_configurator::node_configurator_standard::app;
     use crate::node_test_utils::MockDirsWrapper;
     use crate::sub_lib::utils::make_new_test_multi_config;
-    use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use crate::test_utils::ArgsBuilder;
     use bip39::{Mnemonic, Seed};
-    use masq_lib::constants::{DEFAULT_CHAIN_NAME, DEFAULT_EARNING_DERIVATION_PATH};
+    use masq_lib::constants::DEFAULT_CHAIN_NAME;
     use masq_lib::multi_config::MultiConfig;
     use masq_lib::shared_schema::{db_password_arg, ParamError};
     use masq_lib::test_utils::environment_guard::EnvironmentGuard;
@@ -801,9 +802,9 @@ mod tests {
 
     #[test]
     fn validate_earning_wallet_works_with_derivation_path() {
-        assert!(common_validators::validate_earning_wallet(String::from(
-            DEFAULT_EARNING_DERIVATION_PATH
-        ))
+        assert!(common_validators::validate_earning_wallet(
+            DEFAULT_EARNING_DERIVATION_PATH.to_string()
+        )
         .is_ok());
     }
 
@@ -1512,7 +1513,7 @@ mod tests {
         let earning_wallet = Wallet::from(
             Bip32ECKeyPair::from_raw(
                 TameWalletCreationConfigMaker::hardcoded_mnemonic_seed().as_ref(),
-                DEFAULT_EARNING_DERIVATION_PATH,
+                &DEFAULT_EARNING_DERIVATION_PATH,
             )
             .unwrap(),
         );

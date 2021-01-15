@@ -1,8 +1,9 @@
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, Arg, SubCommand};
-use masq_lib::constants::{DEFAULT_CONSUMING_DERIVATION_PATH, DEFAULT_EARNING_DERIVATION_PATH};
 use masq_lib::messages::{UiGenerateWalletsRequest, UiGenerateWalletsResponse};
+use masq_lib::utils::DEFAULT_CONSUMING_DERIVATION_PATH;
+use masq_lib::utils::DEFAULT_EARNING_DERIVATION_PATH;
 use std::any::Any;
 
 #[derive(Debug, PartialEq)]
@@ -126,21 +127,21 @@ pub fn generate_wallets_subcommand() -> App<'static, 'static> {
             .required(false)
             .takes_value(true)
         )
-        .arg(Arg::with_name("consuming-path")
-            .help("Derivation path from which to generate the consuming wallet from which your bills will be paid. Remember to put it in double quotes; otherwise the single quotes will cause problems")
-            .long("consuming-path")
-            .value_name("CONSUMING-PATH")
-            .required(false)
-            .default_value(DEFAULT_CONSUMING_DERIVATION_PATH)
-            .takes_value(true)
+        .arg(Arg::with_name ("consuming-path")
+            .help ("Derivation path from which to generate the consuming wallet from which your bills will be paid. Remember to put it in double quotes; otherwise the single quotes will cause problems")
+            .long ("consuming-path")
+            .value_name ("CONSUMING-PATH")
+            .required (false)
+            .default_value(DEFAULT_CONSUMING_DERIVATION_PATH.as_str())
+            .takes_value (true)
         )
-        .arg(Arg::with_name("earning-path")
-            .help("Derivation path from which to generate the earning wallet from which your bills will be paid. Can be the same as consuming-path. Remember to put it in double quotes; otherwise the single quotes will cause problems")
-            .long("earning-path")
-            .value_name("EARNING-PATH")
-            .required(false)
-            .default_value(DEFAULT_EARNING_DERIVATION_PATH)
-            .takes_value(true)
+        .arg(Arg::with_name ("earning-path")
+            .help ("Derivation path from which to generate the earning wallet from which your bills will be paid. Can be the same as consuming-path. Remember to put it in double quotes; otherwise the single quotes will cause problems")
+            .long ("earning-path")
+            .value_name ("EARNING-PATH")
+            .required (false)
+            .default_value(DEFAULT_EARNING_DERIVATION_PATH.as_str())
+            .takes_value (true)
         )
 }
 
