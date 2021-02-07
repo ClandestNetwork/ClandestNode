@@ -151,7 +151,7 @@ impl Configurator {
             }
 
             Err(e) => {
-                let error_m = Self::inspect_reason_of_password_error(e,&msg);
+                let error_m = Self::inspect_reason_of_password_error(e, &msg);
                 warning!(self.logger, "Failed to change password: {}", error_m);
                 MessageBody {
                     opcode: msg.opcode().to_string(),
@@ -163,12 +163,10 @@ impl Configurator {
     }
 
     fn inspect_reason_of_password_error(
-        e:PersistentConfigError,
-        msg:&UiChangePasswordRequest)
-        ->String{
-        if msg.old_password_opt.is_none()
-            && e == PersistentConfigError::PasswordError
-        {
+        e: PersistentConfigError,
+        msg: &UiChangePasswordRequest,
+    ) -> String {
+        if msg.old_password_opt.is_none() && e == PersistentConfigError::PasswordError {
             "The database already has its password. Now you may want to use 'change-password' \
              command instead"
                 .to_string()
@@ -205,18 +203,26 @@ impl Configurator {
     }
 
     fn get_wallet_addresses(&self, db_password: String) -> Result<(String, String), (u64, String)> {
-        let mnemonic = match self.persistent_config.mnemonic_seed(&db_password){
-            Ok(mnemonic_opt) => match mnemonic_opt{
-                None => return Err(( EARLY_QUESTIONING_ABOUT_DATA,"Wallets must exist prior to \
-                 demanding info on them (recover or generate wallets first)".to_string())),
-                Some(mnemonic) => mnemonic
-            }
-            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}",e)))
+        let mnemonic = match self.persistent_config.mnemonic_seed(&db_password) {
+            Ok(mnemonic_opt) => match mnemonic_opt {
+                None => {
+                    return Err((
+                        EARLY_QUESTIONING_ABOUT_DATA,
+                        "Wallets must exist prior to \
+                 demanding info on them (recover or generate wallets first)"
+                            .to_string(),
+                    ))
+                }
+                Some(mnemonic) => mnemonic,
+            },
+            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
         };
         let derivation_path = match self.persistent_config.consuming_wallet_derivation_path() {
             Ok(deriv_path_opt) => match deriv_path_opt {
-                None => panic!("Database corrupted: consuming derivation path not present despite \
-                 mnemonic seed in place!"),
+                None => panic!(
+                    "Database corrupted: consuming derivation path not present despite \
+                 mnemonic seed in place!"
+                ),
                 Some(deriv_path) => deriv_path,
             },
             Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
@@ -227,9 +233,11 @@ impl Configurator {
                 Err(e) => return Err((KEY_PAIR_CONSTRUCTION_ERROR, e)),
             };
         let earning_wallet_address = match self.persistent_config.earning_wallet_address() {
-            Ok(address) => match address{
-                None => panic!("Database corrupted: missing earning wallet address despite other \
-                 values for wallets in place!"),
+            Ok(address) => match address {
+                None => panic!(
+                    "Database corrupted: missing earning wallet address despite other \
+                 values for wallets in place!"
+                ),
                 Some(address) => address,
             },
             Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
@@ -884,7 +892,7 @@ mod tests {
         );
         TestLogHandler::new().exists_log_containing(
             "WARN: Configurator: Failed to change password: The database already has its \
-             password. Now you may want to use 'change-password' command instead"
+             password. Now you may want to use 'change-password' command instead",
         );
     }
 
