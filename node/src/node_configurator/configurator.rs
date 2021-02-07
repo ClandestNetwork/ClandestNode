@@ -5,7 +5,8 @@ use actix::{Actor, Context, Handler, Recipient};
 use masq_lib::messages::{
     FromMessageBody, ToMessageBody, UiChangePasswordRequest, UiChangePasswordResponse,
     UiCheckPasswordRequest, UiCheckPasswordResponse, UiGenerateWalletsRequest,
-    UiGenerateWalletsResponse, UiNewPasswordBroadcast,
+    UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiRecoverWalletsRequest,
+    UiRecoverWalletsResponse, UiWalletAddressesRequest, UiWalletAddressesResponse,
 };
 use masq_lib::ui_gateway::MessageTarget::ClientId;
 use masq_lib::ui_gateway::{
@@ -20,10 +21,12 @@ use crate::db_config::persistent_configuration::{
     PersistentConfigError, PersistentConfiguration, PersistentConfigurationReal,
 };
 use crate::sub_lib::configurator::NewPasswordMessage;
+use crate::sub_lib::cryptde::PlainData;
 use crate::sub_lib::logger::Logger;
 use crate::sub_lib::peer_actors::BindMessage;
-use crate::sub_lib::wallet::Wallet;
-use bip39::{Language, MnemonicType, Seed};
+use crate::sub_lib::wallet::{Wallet, WalletError};
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use std::str::FromStr;
 
 pub const CONFIGURATOR_PREFIX: u64 = 0x0001_0000_0000_0000;
 pub const CONFIGURATOR_READ_ERROR: u64 = CONFIGURATOR_PREFIX | 1;
@@ -34,6 +37,8 @@ pub const KEY_PAIR_CONSTRUCTION_ERROR: u64 = CONFIGURATOR_PREFIX | 5;
 pub const BAD_PASSWORD_ERROR: u64 = CONFIGURATOR_PREFIX | 6;
 pub const ALREADY_INITIALIZED_ERROR: u64 = CONFIGURATOR_PREFIX | 7;
 pub const DERIVATION_PATH_ERROR: u64 = CONFIGURATOR_PREFIX | 8;
+pub const MNEMONIC_PHRASE_ERROR: u64 = CONFIGURATOR_PREFIX | 9;
+pub const EARLY_QUESTIONING_ABOUT_DATA: u64 = CONFIGURATOR_PREFIX | 10;
 
 pub struct Configurator {
     persistent_config: Box<dyn PersistentConfiguration>,
@@ -65,6 +70,10 @@ impl Handler<NodeFromUiMessage> for Configurator {
                 "Handling {} message from client {}", msg.body.opcode, msg.client_id
             );
             let response = self.handle_check_password(body, context_id);
+            debug!(
+                &self.logger,
+                "Sending response to checkPassword command:\n{:?}", response
+            );
             self.send_to_ui_gateway(ClientId(msg.client_id), response);
         } else if let Ok((body, context_id)) = UiChangePasswordRequest::fmb(msg.clone().body) {
             debug!(
@@ -72,6 +81,10 @@ impl Handler<NodeFromUiMessage> for Configurator {
                 "Handling {} message from client {}", msg.body.opcode, msg.client_id
             );
             let response = self.handle_change_password(body, msg.client_id, context_id);
+            debug!(
+                &self.logger,
+                "Sending response to changePassword command:\n{:?}", response
+            );
             self.send_to_ui_gateway(ClientId(msg.client_id), response);
         } else if let Ok((body, context_id)) = UiGenerateWalletsRequest::fmb(msg.clone().body) {
             debug!(
@@ -82,6 +95,28 @@ impl Handler<NodeFromUiMessage> for Configurator {
             debug!(
                 &self.logger,
                 "Sending response to generateWallets command:\n{:?}", response
+            );
+            self.send_to_ui_gateway(ClientId(msg.client_id), response);
+        } else if let Ok((body, context_id)) = UiRecoverWalletsRequest::fmb(msg.clone().body) {
+            debug!(
+                &self.logger,
+                "Handling {} message from client {}", msg.body.opcode, msg.client_id
+            );
+            let response = self.handle_recover_wallets(body, context_id);
+            debug!(
+                &self.logger,
+                "Sending response to recoverWallets command:\n{:?}", response
+            );
+            self.send_to_ui_gateway(ClientId(msg.client_id), response);
+        } else if let Ok((body, context_id)) = UiWalletAddressesRequest::fmb(msg.clone().body) {
+            debug!(
+                &self.logger,
+                "Handling {} message from client {}", msg.body.opcode, msg.client_id
+            );
+            let response = self.handle_wallet_addresses(body, context_id);
+            debug!(
+                &self.logger,
+                "Sending response to walletAddresses command:\n{:?}", response
             );
             self.send_to_ui_gateway(ClientId(msg.client_id), response);
         }
@@ -128,7 +163,7 @@ impl Configurator {
                 MessageBody {
                     opcode: msg.opcode().to_string(),
                     path: MessagePath::Conversation(context_id),
-                    payload: Err((CONFIGURATOR_WRITE_ERROR, format!("{:?}", e))),
+                    payload: Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
                 }
             }
         }
@@ -152,14 +187,7 @@ impl Configurator {
             }
 
             Err(e) => {
-                let error_m = if msg.old_password_opt.is_none()
-                    && e == PersistentConfigError::PasswordError
-                {
-                    "The database already has its password. Use change-password command instead"
-                        .to_string()
-                } else {
-                    format!("{:?}", e)
-                };
+                let error_m = Self::inspect_reason_of_password_error(e,&msg);
                 warning!(self.logger, "Failed to change password: {}", error_m);
                 MessageBody {
                     opcode: msg.opcode().to_string(),
@@ -167,6 +195,95 @@ impl Configurator {
                     payload: Err((CONFIGURATOR_WRITE_ERROR, error_m)),
                 }
             }
+        }
+    }
+
+    fn inspect_reason_of_password_error(
+        e:PersistentConfigError,
+        msg:&UiChangePasswordRequest)
+        ->String{
+        if msg.old_password_opt.is_none()
+            && e == PersistentConfigError::PasswordError
+        {
+            "The database already has its password. Now you may want to use 'change-password' \
+             command instead"
+                .to_string()
+        } else {
+            format!("{:?}", e)
+        }
+    }
+
+    fn handle_wallet_addresses(
+        &self,
+        msg: UiWalletAddressesRequest,
+        context_id: u64,
+    ) -> MessageBody {
+        match self.get_wallet_addresses(msg.db_password.clone()) {
+            Ok((consuming, earning)) => UiWalletAddressesResponse {
+                consuming_wallet_address: consuming,
+                earning_wallet_address: earning,
+            }
+            .tmb(context_id),
+            Err((code, e_msg)) => {
+                warning!(
+                    self.logger,
+                    "Failed to obtain wallet addresses: {}, {}",
+                    code,
+                    e_msg
+                );
+                MessageBody {
+                    opcode: msg.opcode().to_string(),
+                    path: MessagePath::Conversation(context_id),
+                    payload: Err((code, e_msg)),
+                }
+            }
+        }
+    }
+
+    fn get_wallet_addresses(&self, db_password: String) -> Result<(String, String), (u64, String)> {
+        let mnemonic = match self.persistent_config.mnemonic_seed(&db_password){
+            Ok(mnemonic_opt) => match mnemonic_opt{
+                None => return Err(( EARLY_QUESTIONING_ABOUT_DATA,"Wallets must exist prior to \
+                 demanding info on them (recover or generate wallets first)".to_string())),
+                Some(mnemonic) => mnemonic
+            }
+            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}",e)))
+        };
+        let derivation_path = match self.persistent_config.consuming_wallet_derivation_path() {
+            Ok(deriv_path_opt) => match deriv_path_opt {
+                None => panic!("Database corrupted: consuming derivation path not present despite \
+                 mnemonic seed in place!"),
+                Some(deriv_path) => deriv_path,
+            },
+            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
+        };
+        let consuming_wallet_address =
+            match Self::recalculate_consuming_wallet(mnemonic, derivation_path) {
+                Ok(wallet) => wallet.string_address_from_keypair(),
+                Err(e) => return Err((KEY_PAIR_CONSTRUCTION_ERROR, e)),
+            };
+        let earning_wallet_address = match self.persistent_config.earning_wallet_address() {
+            Ok(address) => match address{
+                None => panic!("Database corrupted: missing earning wallet address despite other \
+                 values for wallets in place!"),
+                Some(address) => address,
+            },
+            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
+        };
+
+        Ok((consuming_wallet_address, earning_wallet_address))
+    }
+
+    fn recalculate_consuming_wallet(
+        seed: PlainData,
+        derivation_path: String,
+    ) -> Result<Wallet, String> {
+        match Bip32ECKeyPair::from_raw(seed.as_ref(), &derivation_path) {
+            Err(e) => Err(format!(
+                "Consuming wallet address error during generation: {}",
+                e
+            )),
+            Ok(kp) => Ok(Wallet::from(kp)),
         }
     }
 
@@ -186,12 +303,91 @@ impl Configurator {
         }
     }
 
+    fn handle_recover_wallets(
+        &mut self,
+        msg: UiRecoverWalletsRequest,
+        context_id: u64,
+    ) -> MessageBody {
+        match Self::unfriendly_handle_recover_wallets(msg, context_id, &mut self.persistent_config)
+        {
+            Ok(message_body) => message_body,
+            Err((code, msg)) => MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(context_id),
+                payload: Err((code, msg)),
+            },
+        }
+    }
+
     fn unfriendly_handle_generate_wallets(
         msg: UiGenerateWalletsRequest,
         context_id: u64,
         persistent_config: &mut Box<dyn PersistentConfiguration>,
     ) -> Result<MessageBody, MessageError> {
-        match persistent_config.check_password(Some(msg.db_password.clone())) {
+        Self::check_preconditions(persistent_config, "generate", &msg.db_password)?;
+        let (seed, mnemonic_phrase) = Self::generate_mnemonic(
+            &msg.mnemonic_passphrase_opt,
+            &msg.mnemonic_phrase_language,
+            msg.mnemonic_phrase_size,
+        )?;
+        let consuming_wallet = Self::generate_wallet(&seed, &msg.consuming_derivation_path)?;
+        let earning_wallet = Self::generate_wallet(&seed, &msg.earning_derivation_path)?;
+        Self::set_wallet_info(
+            persistent_config,
+            &seed,
+            &msg.consuming_derivation_path,
+            &earning_wallet.string_address_from_keypair(),
+            &msg.db_password,
+        )?;
+        Ok(UiGenerateWalletsResponse {
+            mnemonic_phrase,
+            consuming_wallet_address: consuming_wallet.string_address_from_keypair(),
+            earning_wallet_address: earning_wallet.string_address_from_keypair(),
+        }
+        .tmb(context_id))
+    }
+
+    fn unfriendly_handle_recover_wallets(
+        msg: UiRecoverWalletsRequest,
+        context_id: u64,
+        persistent_config: &mut Box<dyn PersistentConfiguration>,
+    ) -> Result<MessageBody, MessageError> {
+        Self::check_preconditions(persistent_config, "recover", &msg.db_password)?;
+        let language = Self::parse_language(&msg.mnemonic_phrase_language)?;
+        let mnemonic = match Mnemonic::from_phrase(msg.mnemonic_phrase.join(" "), language) {
+            Ok(m) => m,
+            Err(e) => {
+                return Err((
+                    MNEMONIC_PHRASE_ERROR,
+                    format!("Couldn't make a mnemonic out of the supplied phrase: {}", e),
+                ))
+            }
+        };
+        let passphrase = msg.mnemonic_passphrase_opt.unwrap_or_default();
+        let seed = Seed::new(&mnemonic, &passphrase);
+        let _ = Self::generate_wallet(&seed, &msg.consuming_derivation_path)?;
+        let earning_wallet = match Wallet::from_str(&msg.earning_wallet) {
+            Ok(w) => w,
+            Err(WalletError::InvalidAddress) => Self::generate_wallet(&seed, &msg.earning_wallet)?,
+            Err(e) => panic!("Unexpected error making Wallet from address: {:?}", e),
+        };
+        Self::set_wallet_info(
+            persistent_config,
+            &seed,
+            &msg.consuming_derivation_path,
+            &earning_wallet.string_address_from_keypair(),
+            &msg.db_password,
+        )?;
+        Ok(UiRecoverWalletsResponse {}.tmb(context_id))
+    }
+
+    #[allow(clippy::borrowed_box)]
+    fn check_preconditions(
+        persistent_config: &Box<dyn PersistentConfiguration>,
+        operation: &str,
+        db_password: &str,
+    ) -> Result<(), MessageError> {
+        match persistent_config.check_password(Some(db_password.to_string())) {
             Err(e) => {
                 return Err((
                     CONFIGURATOR_READ_ERROR,
@@ -202,7 +398,7 @@ impl Configurator {
             Ok(false) => {
                 return Err((
                     BAD_PASSWORD_ERROR,
-                    "Bad password; can't generate wallets".to_string(),
+                    format!("Bad password; can't {} wallets", operation),
                 ))
             }
         }
@@ -216,35 +412,15 @@ impl Configurator {
             Ok(true) => {
                 return Err((
                     ALREADY_INITIALIZED_ERROR,
-                    "Node already has a wallet pair; can't generate another".to_string(),
+                    format!(
+                        "Node already has a wallet pair; can't {} another",
+                        operation
+                    ),
                 ))
             }
             Ok(false) => (),
         }
-        let (seed, mnemonic_phrase) = Self::generate_mnemonic(
-            &msg.mnemonic_passphrase_opt,
-            &msg.mnemonic_phrase_language,
-            msg.mnemonic_phrase_size,
-        )?;
-        let consuming_wallet = Self::generate_wallet(&seed, &msg.consuming_derivation_path)?;
-        let earning_wallet = Self::generate_wallet(&seed, &msg.earning_derivation_path)?;
-        if let Err(e) = persistent_config.set_wallet_info(
-            &seed,
-            &msg.consuming_derivation_path,
-            &earning_wallet.string_address_from_keypair(),
-            &msg.db_password,
-        ) {
-            return Err((
-                CONFIGURATOR_WRITE_ERROR,
-                format!("Wallet information could not be set: {:?}", e),
-            ));
-        }
-        Ok(UiGenerateWalletsResponse {
-            mnemonic_phrase,
-            consuming_wallet_address: consuming_wallet.string_address_from_keypair(),
-            earning_wallet_address: earning_wallet.string_address_from_keypair(),
-        }
-        .tmb(context_id))
+        Ok(())
     }
 
     fn generate_mnemonic(
@@ -310,13 +486,31 @@ impl Configurator {
         match Bip32ECKeyPair::from_raw(seed.as_bytes(), derivation_path) {
             Err(e) => Err((
                 DERIVATION_PATH_ERROR,
-                format!(
-                    "Bad syntax of the derivation path: {}: {}",
-                    e, derivation_path
-                ),
+                format!("Bad derivation-path syntax: {}: {}", e, derivation_path),
             )),
             Ok(kp) => Ok(Wallet::from(kp)),
         }
+    }
+
+    fn set_wallet_info(
+        persistent_config: &mut Box<dyn PersistentConfiguration>,
+        seed: &dyn AsRef<[u8]>,
+        consuming_derivation_path: &str,
+        earning_wallet_address: &str,
+        db_password: &str,
+    ) -> Result<(), MessageError> {
+        if let Err(e) = persistent_config.set_wallet_info(
+            seed,
+            consuming_derivation_path,
+            earning_wallet_address,
+            db_password,
+        ) {
+            return Err((
+                CONFIGURATOR_WRITE_ERROR,
+                format!("Wallet information could not be set: {:?}", e),
+            ));
+        }
+        Ok(())
     }
 
     fn send_to_ui_gateway(&self, target: MessageTarget, body: MessageBody) {
@@ -349,7 +543,8 @@ mod tests {
 
     use masq_lib::messages::{
         ToMessageBody, UiChangePasswordResponse, UiCheckPasswordRequest, UiCheckPasswordResponse,
-        UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiStartOrder,
+        UiGenerateWalletsResponse, UiNewPasswordBroadcast, UiStartOrder, UiWalletAddressesRequest,
+        UiWalletAddressesResponse,
     };
     use masq_lib::ui_gateway::{MessagePath, MessageTarget};
 
@@ -364,10 +559,12 @@ mod tests {
     use crate::blockchain::bip32::Bip32ECKeyPair;
     use crate::blockchain::bip39::Bip39;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
+    use crate::node_configurator::configurator::MNEMONIC_PHRASE_ERROR;
     use crate::sub_lib::cryptde::PlainData;
     use crate::sub_lib::wallet::Wallet;
     use bip39::{Language, Mnemonic};
     use masq_lib::test_utils::utils::{ensure_node_home_directory_exists, DEFAULT_CHAIN_ID};
+    use masq_lib::utils::derivation_path;
 
     #[test]
     fn constructor_connects_with_database() {
@@ -476,7 +673,7 @@ mod tests {
             MessageBody {
                 opcode: "checkPassword".to_string(),
                 path: MessagePath::Conversation(4321),
-                payload: Err((CONFIGURATOR_WRITE_ERROR, "NotPresent".to_string()))
+                payload: Err((CONFIGURATOR_READ_ERROR, "NotPresent".to_string()))
             }
         );
         TestLogHandler::new()
@@ -544,7 +741,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_change_password_handles_common_error() {
+    fn handle_change_password_can_process_error() {
         init_test_logging();
         let persistent_config = PersistentConfigurationMock::new().change_password_result(Err(
             PersistentConfigError::DatabaseError("Didn't work good".to_string()),
@@ -574,7 +771,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_change_password_being_set_password_variation_advices_to_use_change_password_next_time(
+    fn handle_change_password_being_used_as_set_password_repeatedly_advices_to_use_change_password_command_next_time(
     ) {
         init_test_logging();
         let persistent_config = PersistentConfigurationMock::new()
@@ -594,14 +791,254 @@ mod tests {
                 path: MessagePath::Conversation(4321),
                 payload: Err((
                     CONFIGURATOR_WRITE_ERROR,
-                    r#"The database already has its password. Use change-password command instead"#
+                    "The database already has its password. Now you may want to use 'change-password' \
+                     command instead"
                         .to_string()
                 )),
             }
         );
         TestLogHandler::new().exists_log_containing(
-            r#"WARN: Configurator: Failed to change password: The database already has its password. Use change-password command instead"#,
+            "WARN: Configurator: Failed to change password: The database already has its \
+             password. Now you may want to use 'change-password' command instead"
         );
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works() {
+        let system = System::new("test");
+        let mnemonic_seed_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_params(&mnemonic_seed_params_arc)
+            .mnemonic_seed_result(Ok(Some(PlainData::new(
+                "snake, goal, cook, doom".as_bytes(),
+            ))))
+            .consuming_wallet_derivation_path_result(Ok(Some(String::from(derivation_path(0, 4)))))
+            .earning_wallet_address_result(Ok(Some(String::from(
+                "0x01234567890aa345678901234567890123456789",
+            ))));
+        let subject = make_subject(Some(persistent_config));
+        let subject_addr = subject.start();
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let peer_actors = peer_actors_builder().ui_gateway(ui_gateway).build();
+        subject_addr.try_send(BindMessage { peer_actors }).unwrap();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: UiWalletAddressesRequest {
+                    db_password: "123password".to_string(),
+                }
+                .tmb(4321),
+            })
+            .unwrap();
+
+        System::current().stop();
+        system.run();
+        let mnemonic_seed_params = mnemonic_seed_params_arc.lock().unwrap();
+        assert_eq!(*mnemonic_seed_params, vec!["123password".to_string()]);
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        assert_eq!(
+            ui_gateway_recording.get_record::<NodeToUiMessage>(0),
+            &NodeToUiMessage {
+                target: MessageTarget::ClientId(1234),
+                body: UiWalletAddressesResponse {
+                    consuming_wallet_address: "0x84646fb4dd69dd12fd779a569f7cdbe1e133b29b"
+                        .to_string(),
+                    earning_wallet_address: "0x01234567890aa345678901234567890123456789"
+                        .to_string()
+                }
+                .tmb(4321)
+            }
+        );
+        assert_eq!(ui_gateway_recording.len(), 1);
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works_if_mnemonic_seed_causes_error() {
+        // also consider as a test for bad password supplied; mnemonic_seed solves that within
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new().mnemonic_seed_result(Err(
+            PersistentConfigError::DatabaseError("Unknown error".to_string()),
+        ));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let result = subject.handle_wallet_addresses(msg, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "walletAddresses".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    CONFIGURATOR_READ_ERROR,
+                    r#"DatabaseError("Unknown error")"#.to_string()
+                ))
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            r#"WARN: Configurator: Failed to obtain wallet addresses: 281474976710657, DatabaseError("Unknown error")"#,
+        );
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works_if_mnemonic_seed_is_none() {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new().mnemonic_seed_result(Ok(None));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let result = subject.handle_wallet_addresses(msg, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "walletAddresses".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    EARLY_QUESTIONING_ABOUT_DATA,
+                    "Wallets must exist prior to demanding info on them (recover or generate wallets first)".to_string()
+                ))
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710666, Wallets \
+             must exist prior to demanding info on them (recover or generate wallets first)",
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Database corrupted: consuming derivation path not present despite mnemonic seed in place!"
+    )]
+    fn handle_wallet_addresses_panics_if_derivation_path_is_none() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .mnemonic_seed_result(Ok(Some(PlainData::new(b"snake, goal, cook, doom"))))
+            .consuming_wallet_derivation_path_result(Ok(None));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let _ = subject.handle_wallet_addresses(msg, 1234);
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works_if_derivation_path_causes_error() {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new()
+            .mnemonic_seed_result(Ok(Some(PlainData::new(b"snake, goal, cook, doom"))))
+            .consuming_wallet_derivation_path_result(Err(PersistentConfigError::DatabaseError(
+                "Unknown error 2".to_string(),
+            )));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let result = subject.handle_wallet_addresses(msg, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "walletAddresses".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    CONFIGURATOR_READ_ERROR,
+                    r#"DatabaseError("Unknown error 2")"#.to_string()
+                ))
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            r#"WARN: Configurator: Failed to obtain wallet addresses: 281474976710657, DatabaseError("Unknown error 2")"#,
+        );
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works_if_consuming_wallet_address_error() {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new()
+            .mnemonic_seed_result(Ok(Some(PlainData::new(b"snake, goal, cook, doom"))))
+            .consuming_wallet_derivation_path_result(Ok(Some(String::from("*************"))));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let result = subject.handle_wallet_addresses(msg, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "walletAddresses".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    KEY_PAIR_CONSTRUCTION_ERROR,
+                    r#"Consuming wallet address error during generation: InvalidDerivationPath"#
+                        .to_string()
+                ))
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710661, Consuming \
+             wallet address error during generation: InvalidDerivationPath",
+        );
+    }
+
+    #[test]
+    fn handle_wallet_addresses_works_if_earning_wallet_address_triggers_database_error() {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new()
+            .mnemonic_seed_result(Ok(Some(PlainData::new(
+                "snake, goal, cook, doom".as_bytes(),
+            ))))
+            .consuming_wallet_derivation_path_result(Ok(Some(String::from(derivation_path(0, 4)))))
+            .earning_wallet_address_result(Err(PersistentConfigError::DatabaseError(
+                "Unknown error 3".to_string(),
+            )));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let result = subject.handle_wallet_addresses(msg, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "walletAddresses".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    CONFIGURATOR_READ_ERROR,
+                    r#"DatabaseError("Unknown error 3")"#.to_string()
+                ))
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            r#"WARN: Configurator: Failed to obtain wallet addresses: 281474976710657, DatabaseError("Unknown error 3")"#,
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Database corrupted: missing earning wallet address despite other values for wallets in place!"
+    )]
+    fn handle_wallet_addresses_panics_if_earning_wallet_address_is_missing() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .mnemonic_seed_result(Ok(Some(PlainData::new(b"snake, goal, cook, doom"))))
+            .consuming_wallet_derivation_path_result(Ok(Some(String::from(derivation_path(0, 4)))))
+            .earning_wallet_address_result(Ok(None));
+        let subject = make_subject(Some(persistent_config));
+        let msg = UiWalletAddressesRequest {
+            db_password: "some password".to_string(),
+        };
+
+        let _ = subject.handle_wallet_addresses(msg, 1234);
     }
 
     #[test]
@@ -639,14 +1076,16 @@ mod tests {
         let mnemonic_phrase = generated_wallets.mnemonic_phrase.join(" ");
         let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
         let seed = PlainData::new(Bip39::seed(&mnemonic, "booga").as_ref());
-        let consuming_wallet =
-            Wallet::from(Bip32ECKeyPair::from_raw(seed.as_slice(), "m/44'/60'/0'/0/4").unwrap());
+        let consuming_wallet = Wallet::from(
+            Bip32ECKeyPair::from_raw(seed.as_slice(), &derivation_path(0, 4)).unwrap(),
+        );
         assert_eq!(
             generated_wallets.consuming_wallet_address,
             consuming_wallet.string_address_from_keypair()
         );
-        let earning_wallet =
-            Wallet::from(Bip32ECKeyPair::from_raw(seed.as_slice(), &"m/44'/60'/0'/0/5").unwrap());
+        let earning_wallet = Wallet::from(
+            Bip32ECKeyPair::from_raw(seed.as_slice(), &derivation_path(0, 5)).unwrap(),
+        );
         assert_eq!(
             generated_wallets.earning_wallet_address,
             earning_wallet.string_address_from_keypair()
@@ -659,7 +1098,7 @@ mod tests {
             *set_wallet_info_params,
             vec![(
                 seed,
-                "m/44'/60'/0'/0/4".to_string(),
+                derivation_path(0, 4),
                 earning_wallet.string_address_from_keypair(),
                 "password".to_string(),
             )]
@@ -740,8 +1179,8 @@ mod tests {
             mnemonic_phrase_size: 24,
             mnemonic_phrase_language: "SuperSpecial".to_string(),
             mnemonic_passphrase_opt: None,
-            consuming_derivation_path: "m/44'/60'/0'/0/4".to_string(),
-            earning_derivation_path: "m/44'/60'/0'/0/5".to_string(),
+            consuming_derivation_path: derivation_path(0, 4),
+            earning_derivation_path: derivation_path(0, 5),
         };
 
         let result = subject.handle_generate_wallets(msg, 4321);
@@ -797,6 +1236,260 @@ mod tests {
             result,
             MessageBody {
                 opcode: "generateWallets".to_string(),
+                path: MessagePath::Conversation(4321),
+                payload: Err((
+                    CONFIGURATOR_WRITE_ERROR,
+                    "Wallet information could not be set: BadDerivationPathFormat(\"booga\")"
+                        .to_string()
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_with_earning_wallet_address() {
+        let check_password_params_arc = Arc::new(Mutex::new(vec![]));
+        let set_wallet_info_params_arc = Arc::new(Mutex::new(vec![]));
+        let (ui_gateway, _, ui_gateway_recording_arc) = make_recorder();
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_params(&check_password_params_arc)
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false))
+            .set_wallet_info_params(&set_wallet_info_params_arc)
+            .set_wallet_info_result(Ok(()));
+        let subject = make_subject(Some(persistent_config));
+        let subject_addr = subject.start();
+        let peer_actors = peer_actors_builder().ui_gateway(ui_gateway).build();
+        subject_addr.try_send(BindMessage { peer_actors }).unwrap();
+        let request = make_example_recover_wallets_request();
+
+        subject_addr
+            .try_send(NodeFromUiMessage {
+                client_id: 1234,
+                body: request.clone().tmb(4321),
+            })
+            .unwrap();
+
+        let system = System::new("test");
+        System::current().stop();
+        system.run();
+        let ui_gateway_recording = ui_gateway_recording_arc.lock().unwrap();
+        let response = ui_gateway_recording.get_record::<NodeToUiMessage>(0);
+        let (_, context_id) = UiRecoverWalletsResponse::fmb(response.body.clone()).unwrap();
+        assert_eq!(context_id, 4321);
+        let mnemonic_phrase = request.mnemonic_phrase.join(" ");
+        let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
+        let seed = PlainData::new(
+            Bip39::seed(&mnemonic, &request.mnemonic_passphrase_opt.unwrap()).as_ref(),
+        );
+        let check_password_params = check_password_params_arc.lock().unwrap();
+        assert_eq!(
+            *check_password_params,
+            vec![Some(request.db_password.clone())]
+        );
+
+        let set_wallet_info_params = set_wallet_info_params_arc.lock().unwrap();
+        assert_eq!(
+            *set_wallet_info_params,
+            vec![(
+                seed,
+                request.consuming_derivation_path,
+                request.earning_wallet,
+                request.db_password,
+            )]
+        );
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_with_earning_wallet_derivation_path() {
+        let set_wallet_info_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false))
+            .set_wallet_info_params(&set_wallet_info_params_arc)
+            .set_wallet_info_result(Ok(()));
+        let mut subject = make_subject(Some(persistent_config));
+        let mut request = make_example_recover_wallets_request();
+        request.earning_wallet = derivation_path(0, 5);
+
+        let result = subject.handle_recover_wallets(request.clone(), 1234);
+
+        assert_eq!(result, UiRecoverWalletsResponse {}.tmb(1234));
+        let mnemonic_phrase = request.mnemonic_phrase.join(" ");
+        let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
+        let seed = Bip39::seed(&mnemonic, &request.mnemonic_passphrase_opt.unwrap());
+        let earning_wallet = Configurator::generate_wallet(&seed, &request.earning_wallet).unwrap();
+        let set_wallet_info_params = set_wallet_info_params_arc.lock().unwrap();
+        assert_eq!(
+            *set_wallet_info_params,
+            vec![(
+                PlainData::new(&seed.as_ref()),
+                request.consuming_derivation_path,
+                earning_wallet.string_address_from_keypair(),
+                request.db_password,
+            )]
+        );
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_without_passphrase() {
+        let set_wallet_info_params_arc = Arc::new(Mutex::new(vec![]));
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false))
+            .set_wallet_info_params(&set_wallet_info_params_arc)
+            .set_wallet_info_result(Ok(()));
+        let mut subject = make_subject(Some(persistent_config));
+        let mut request = make_example_recover_wallets_request();
+        request.mnemonic_passphrase_opt = None;
+
+        let result = subject.handle_recover_wallets(request.clone(), 1234);
+
+        assert_eq!(result, UiRecoverWalletsResponse {}.tmb(1234));
+        let mnemonic_phrase = request.mnemonic_phrase.join(" ");
+        let mnemonic = Mnemonic::from_phrase(&mnemonic_phrase, Language::English).unwrap();
+        let seed = Bip39::seed(&mnemonic, "");
+        let set_wallet_info_params = set_wallet_info_params_arc.lock().unwrap();
+        assert_eq!(
+            *set_wallet_info_params,
+            vec![(
+                PlainData::new(&seed.as_ref()),
+                request.consuming_derivation_path,
+                request.earning_wallet,
+                request.db_password,
+            )]
+        );
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_with_check_password_error() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Err(PersistentConfigError::NotPresent));
+        let mut subject = make_subject(Some(persistent_config));
+        let request = make_example_recover_wallets_request();
+
+        let result = subject.handle_recover_wallets(request, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    CONFIGURATOR_READ_ERROR,
+                    "Error checking password: NotPresent".to_string()
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_with_incorrect_password() {
+        let persistent_config = PersistentConfigurationMock::new().check_password_result(Ok(false));
+        let mut subject = make_subject(Some(persistent_config));
+        let request = make_example_recover_wallets_request();
+
+        let result = subject.handle_recover_wallets(request, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    BAD_PASSWORD_ERROR,
+                    "Bad password; can't recover wallets".to_string(),
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_handles_error_checking_for_mnemonic_seed() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Err(PersistentConfigError::NotPresent));
+        let mut subject = make_subject(Some(persistent_config));
+        let request = make_example_recover_wallets_request();
+
+        let result = subject.handle_recover_wallets(request, 1234);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(1234),
+                payload: Err((
+                    CONFIGURATOR_READ_ERROR,
+                    "Error checking mnemonic seed: NotPresent".to_string()
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_if_mnemonic_seed_is_already_set() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(true));
+        let mut subject = make_subject(Some(persistent_config));
+
+        let result = subject.handle_recover_wallets(make_example_recover_wallets_request(), 4321);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(4321),
+                payload: Err((
+                    ALREADY_INITIALIZED_ERROR,
+                    "Node already has a wallet pair; can't recover another".to_string()
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_if_mnemonic_cant_be_generated_from_phrase() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false));
+        let mut subject = make_subject(Some(persistent_config));
+        let mut request = make_example_recover_wallets_request();
+        request.mnemonic_phrase = vec!["ooga".to_string(), "booga".to_string()];
+
+        let result = subject.handle_recover_wallets(request, 4321);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
+                path: MessagePath::Conversation(4321),
+                payload: Err((
+                    MNEMONIC_PHRASE_ERROR,
+                    "Couldn't make a mnemonic out of the supplied phrase: invalid word in phrase"
+                        .to_string()
+                ))
+            }
+        )
+    }
+
+    #[test]
+    fn handle_recover_wallets_works_if_wallet_info_cant_be_set() {
+        let persistent_config = PersistentConfigurationMock::new()
+            .check_password_result(Ok(true))
+            .mnemonic_seed_exists_result(Ok(false))
+            .set_wallet_info_result(Err(PersistentConfigError::BadDerivationPathFormat(
+                "booga".to_string(),
+            )));
+        let mut subject = make_subject(Some(persistent_config));
+
+        let result = subject.handle_recover_wallets(make_example_recover_wallets_request(), 4321);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "recoverWallets".to_string(),
                 path: MessagePath::Conversation(4321),
                 payload: Err((
                     CONFIGURATOR_WRITE_ERROR,
@@ -875,8 +1568,26 @@ mod tests {
             mnemonic_phrase_size: 24,
             mnemonic_phrase_language: "English".to_string(),
             mnemonic_passphrase_opt: Some("booga".to_string()),
-            consuming_derivation_path: "m/44'/60'/0'/0/4".to_string(),
-            earning_derivation_path: "m/44'/60'/0'/0/5".to_string(),
+            consuming_derivation_path: derivation_path(0, 4),
+            earning_derivation_path: derivation_path(0, 5),
+        }
+    }
+
+    fn make_example_recover_wallets_request() -> UiRecoverWalletsRequest {
+        UiRecoverWalletsRequest {
+            db_password: "password".to_string(),
+            mnemonic_phrase: vec![
+                "parent", "prevent", "vehicle", "tooth", "crazy", "cruel", "update", "mango",
+                "female", "mad", "spread", "plunge", "tiny", "inch", "under", "engine", "enforce",
+                "film", "awesome", "plunge", "cloud", "spell", "empower", "pipe",
+            ]
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>(),
+            mnemonic_passphrase_opt: Some("ebullient".to_string()),
+            mnemonic_phrase_language: "English".to_string(),
+            consuming_derivation_path: derivation_path(0, 4),
+            earning_wallet: "0x005e288d713a5fb3d7c9cf1b43810a98688c7223".to_string(),
         }
     }
 
