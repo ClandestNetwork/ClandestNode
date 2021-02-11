@@ -167,8 +167,7 @@ impl Configurator {
         msg: &UiChangePasswordRequest,
     ) -> String {
         if msg.old_password_opt.is_none() && e == PersistentConfigError::PasswordError {
-            "The database already has its password. Now you may want to use 'change-password' \
-             command instead"
+            "The database already has a password. You may only change it"
                 .to_string()
         } else {
             format!("{:?}", e)
@@ -864,8 +863,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_change_password_being_used_as_set_password_repeatedly_advices_to_use_change_password_command_next_time(
-    ) {
+    fn handle_set_password_used_repeatedly_recommends_change_password_command_for_next_time() {
         init_test_logging();
         let persistent_config = PersistentConfigurationMock::new()
             .change_password_result(Err(PersistentConfigError::PasswordError));
@@ -884,15 +882,14 @@ mod tests {
                 path: MessagePath::Conversation(4321),
                 payload: Err((
                     CONFIGURATOR_WRITE_ERROR,
-                    "The database already has its password. Now you may want to use 'change-password' \
-                     command instead"
+                    "The database already has a password. You may only change it"
                         .to_string()
                 )),
             }
         );
         TestLogHandler::new().exists_log_containing(
-            "WARN: Configurator: Failed to change password: The database already has its \
-             password. Now you may want to use 'change-password' command instead",
+            "WARN: Configurator: Failed to change password: \
+            The database already has a password. You may only change it",
         );
     }
 
