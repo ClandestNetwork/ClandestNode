@@ -167,8 +167,7 @@ impl Configurator {
         msg: &UiChangePasswordRequest,
     ) -> String {
         if msg.old_password_opt.is_none() && e == PersistentConfigError::PasswordError {
-            "The database already has a password. You may only change it"
-                .to_string()
+            "The database already has a password. You may only change it".to_string()
         } else {
             format!("{:?}", e)
         }
@@ -882,8 +881,7 @@ mod tests {
                 path: MessagePath::Conversation(4321),
                 payload: Err((
                     CONFIGURATOR_WRITE_ERROR,
-                    "The database already has a password. You may only change it"
-                        .to_string()
+                    "The database already has a password. You may only change it".to_string()
                 )),
             }
         );
