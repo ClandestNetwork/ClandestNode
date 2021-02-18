@@ -133,6 +133,7 @@ impl BlockchainBridge {
             ui_sub: recipient!(addr, NodeFromUiMessage),
         }
     }
+
     fn handle_report_account_payable(
         &self,
         msg: ReportAccountsPayable,
@@ -168,13 +169,6 @@ impl BlockchainBridge {
                                     gas_price,
                                 ) {
                                     Ok(hash) => {
-                                        let amount =
-                                            u64::try_from(payable.balance).unwrap_or_else(|_| {
-                                                panic!(
-                                                    "Lost payable amount precision: {}",
-                                                    payable.balance
-                                                )
-                                            });
                                         Ok(Payment::new(payable.wallet.clone(), amount, hash))
                                     }
                                     Err(e) => Err(e),
