@@ -28,21 +28,14 @@ use crate::sub_lib::peer_actors::BindMessage;
 use crate::sub_lib::wallet::{Wallet, WalletError};
 use crate::test_utils::main_cryptde;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use masq_lib::constants::{
+    ALREADY_INITIALIZED_ERROR, BAD_PASSWORD_ERROR, CONFIGURATOR_READ_ERROR,
+    CONFIGURATOR_WRITE_ERROR, DERIVATION_PATH_ERROR, EARLY_QUESTIONING_ABOUT_DATA,
+    ILLEGAL_MNEMONIC_WORD_COUNT_ERROR, KEY_PAIR_CONSTRUCTION_ERROR, MNEMONIC_PHRASE_ERROR,
+    UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR, VALUE_MISSING_ERROR,
+};
 use rustc_hex::ToHex;
 use std::str::FromStr;
-
-pub const CONFIGURATOR_PREFIX: u64 = 0x0001_0000_0000_0000;
-pub const CONFIGURATOR_READ_ERROR: u64 = CONFIGURATOR_PREFIX | 1;
-pub const CONFIGURATOR_WRITE_ERROR: u64 = CONFIGURATOR_PREFIX | 2;
-pub const UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR: u64 = CONFIGURATOR_PREFIX | 3;
-pub const ILLEGAL_MNEMONIC_WORD_COUNT_ERROR: u64 = CONFIGURATOR_PREFIX | 4;
-pub const KEY_PAIR_CONSTRUCTION_ERROR: u64 = CONFIGURATOR_PREFIX | 5;
-pub const BAD_PASSWORD_ERROR: u64 = CONFIGURATOR_PREFIX | 6;
-pub const ALREADY_INITIALIZED_ERROR: u64 = CONFIGURATOR_PREFIX | 7;
-pub const DERIVATION_PATH_ERROR: u64 = CONFIGURATOR_PREFIX | 8;
-pub const MNEMONIC_PHRASE_ERROR: u64 = CONFIGURATOR_PREFIX | 9;
-pub const VALUE_MISSING_ERROR: u64 = CONFIGURATOR_PREFIX | 10;
-pub const EARLY_QUESTIONING_ABOUT_DATA: u64 = CONFIGURATOR_PREFIX | 11;
 
 pub struct Configurator {
     persistent_config: Box<dyn PersistentConfiguration>,
@@ -151,13 +144,25 @@ impl Configurator {
             }
 
             Err(e) => {
-                warning!(self.logger, "Failed to change password: {:?}", e);
+                let error_m = Self::inspect_reason_of_password_error(e, &msg);
+                warning!(self.logger, "Failed to change password: {}", error_m);
                 MessageBody {
                     opcode: msg.opcode().to_string(),
                     path: MessagePath::Conversation(context_id),
-                    payload: Err((CONFIGURATOR_WRITE_ERROR, format!("{:?}", e))),
+                    payload: Err((CONFIGURATOR_WRITE_ERROR, error_m)),
                 }
             }
+        }
+    }
+
+    fn inspect_reason_of_password_error(
+        e: PersistentConfigError,
+        msg: &UiChangePasswordRequest,
+    ) -> String {
+        if msg.old_password_opt.is_none() && e == PersistentConfigError::PasswordError {
+            "The database already has a password. You may only change it".to_string()
+        } else {
+            format!("{:?}", e)
         }
     }
 
@@ -189,16 +194,26 @@ impl Configurator {
     }
 
     fn get_wallet_addresses(&self, db_password: String) -> Result<(String, String), (u64, String)> {
-        let mnemonic = match self.persistent_config.mnemonic_seed(&db_password){
-            Ok(mnemonic_opt) => match mnemonic_opt{
-                None => return Err(( EARLY_QUESTIONING_ABOUT_DATA,"Wallets must exist prior to demanding info on them (recover or generate wallets first)".to_string())),
-                Some(mnemonic) => mnemonic
-            }
-            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}",e)))
+        let mnemonic = match self.persistent_config.mnemonic_seed(&db_password) {
+            Ok(mnemonic_opt) => match mnemonic_opt {
+                None => {
+                    return Err((
+                        EARLY_QUESTIONING_ABOUT_DATA,
+                        "Wallets must exist prior to \
+                 demanding info on them (recover or generate wallets first)"
+                            .to_string(),
+                    ))
+                }
+                Some(mnemonic) => mnemonic,
+            },
+            Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
         };
         let derivation_path = match self.persistent_config.consuming_wallet_derivation_path() {
             Ok(deriv_path_opt) => match deriv_path_opt {
-                None => panic!("Database corrupted: consuming derivation path not present despite mnemonic seed in place!"),
+                None => panic!(
+                    "Database corrupted: consuming derivation path not present despite \
+                 mnemonic seed in place!"
+                ),
                 Some(deriv_path) => deriv_path,
             },
             Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
@@ -209,8 +224,11 @@ impl Configurator {
                 Err(e) => return Err((KEY_PAIR_CONSTRUCTION_ERROR, e)),
             };
         let earning_wallet_address = match self.persistent_config.earning_wallet_address() {
-            Ok(address) => match address{
-                None => panic!("Database corrupted: missing earning wallet address despite other values for wallets in place!"),
+            Ok(address) => match address {
+                None => panic!(
+                    "Database corrupted: missing earning wallet address despite other \
+                 values for wallets in place!"
+                ),
                 Some(address) => address,
             },
             Err(e) => return Err((CONFIGURATOR_READ_ERROR, format!("{:?}", e))),
@@ -624,10 +642,15 @@ mod tests {
     use crate::blockchain::bip32::Bip32ECKeyPair;
     use crate::blockchain::bip39::Bip39;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
-    use crate::node_configurator::configurator::MNEMONIC_PHRASE_ERROR;
     use crate::sub_lib::cryptde::PlainData;
     use crate::sub_lib::wallet::Wallet;
     use bip39::{Language, Mnemonic};
+    use masq_lib::constants::{
+        ALREADY_INITIALIZED_ERROR, BAD_PASSWORD_ERROR, CONFIGURATOR_READ_ERROR,
+        EARLY_QUESTIONING_ABOUT_DATA, ILLEGAL_MNEMONIC_WORD_COUNT_ERROR,
+        KEY_PAIR_CONSTRUCTION_ERROR, MNEMONIC_PHRASE_ERROR, UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR,
+        VALUE_MISSING_ERROR,
+    };
     use masq_lib::test_utils::utils::{ensure_node_home_directory_exists, DEFAULT_CHAIN_ID};
     use masq_lib::utils::derivation_path;
 
@@ -836,6 +859,36 @@ mod tests {
     }
 
     #[test]
+    fn handle_set_password_used_repeatedly_recommends_change_password_command_for_next_time() {
+        init_test_logging();
+        let persistent_config = PersistentConfigurationMock::new()
+            .change_password_result(Err(PersistentConfigError::PasswordError));
+        let mut subject = make_subject(Some(persistent_config));
+        let msg = UiChangePasswordRequest {
+            old_password_opt: None,
+            new_password: "IAmSureThisPasswordMustBeRightDamn".to_string(),
+        };
+
+        let result = subject.handle_change_password(msg, 1234, 4321);
+
+        assert_eq!(
+            result,
+            MessageBody {
+                opcode: "changePassword".to_string(),
+                path: MessagePath::Conversation(4321),
+                payload: Err((
+                    CONFIGURATOR_WRITE_ERROR,
+                    "The database already has a password. You may only change it".to_string()
+                )),
+            }
+        );
+        TestLogHandler::new().exists_log_containing(
+            "WARN: Configurator: Failed to change password: \
+            The database already has a password. You may only change it",
+        );
+    }
+
+    #[test]
     fn handle_wallet_addresses_works() {
         let system = System::new("test");
         let mnemonic_seed_params_arc = Arc::new(Mutex::new(vec![]));
@@ -939,7 +992,8 @@ mod tests {
             }
         );
         TestLogHandler::new().exists_log_containing(
-            r#"WARN: Configurator: Failed to obtain wallet addresses: 281474976710667, Wallets must exist prior to demanding info on them (recover or generate wallets first)"#,
+            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710667, Wallets \
+             must exist prior to demanding info on them (recover or generate wallets first)",
         );
     }
 
@@ -1016,7 +1070,8 @@ mod tests {
             }
         );
         TestLogHandler::new().exists_log_containing(
-            r#"WARN: Configurator: Failed to obtain wallet addresses: 281474976710661, Consuming wallet address error during generation: InvalidDerivationPath"#,
+            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710661, Consuming \
+             wallet address error during generation: InvalidDerivationPath",
         );
     }
 

@@ -1,9 +1,12 @@
+// Copyright (c) 2019-2021, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
+
 use crate::command_context::CommandContext;
 use crate::commands::commands_common::{
     transaction, Command, CommandError, STANDARD_COMMAND_TIMEOUT_MILLIS,
 };
 use clap::{App, Arg, SubCommand};
 use masq_lib::messages::{UiWalletAddressesRequest, UiWalletAddressesResponse};
+use masq_lib::short_writeln;
 use std::any::Any;
 
 #[derive(Debug, PartialEq)]
@@ -43,18 +46,16 @@ impl Command for WalletAddressesCommand {
         };
         let msg: UiWalletAddressesResponse =
             transaction(input, context, STANDARD_COMMAND_TIMEOUT_MILLIS)?;
-        writeln!(
+        short_writeln!(
             context.stdout(),
             "Your consuming wallet address: {}",
             msg.consuming_wallet_address
-        )
-        .expect("writeln! failed");
-        writeln!(
+        );
+        short_writeln!(
             context.stdout(),
             "Your   earning wallet address: {}",
             msg.earning_wallet_address
-        )
-        .expect("writeln! failed");
+        );
         Ok(())
     }
     fn as_any(&self) -> &dyn Any {
