@@ -355,7 +355,7 @@ impl Accountant {
         );
         let future_report_new_payments_sub = self.report_new_payments_sub.clone();
         let start_block = match self.persistent_configuration.start_block() {
-            Ok(start_block_opt) => start_block_opt,
+            Ok(start_block) => start_block,
             Err(pce) => {
                 error!(
                     self.logger,

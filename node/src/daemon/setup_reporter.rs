@@ -541,9 +541,7 @@ impl ValueRetriever for ClandestinePort {
     ) -> Option<(String, UiSetupResponseValueStatus)> {
         if let Some(persistent_config) = persistent_config_opt {
             match persistent_config.clandestine_port() {
-                Ok(clandestine_port_opt) => {
-                    Some(clandestine_port_opt).map(|cp| (cp.to_string(), Default))
-                }
+                Ok(clandestine_port) => Some((clandestine_port.to_string(), Default)),
                 Err(_) => None,
             }
         } else {

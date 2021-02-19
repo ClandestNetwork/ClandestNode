@@ -136,7 +136,7 @@ impl BlockchainBridge {
 
     fn handle_report_account_payable(
         &self,
-        msg: ReportAccountsPayable,
+        creditors_msg: ReportAccountsPayable,
     ) -> MessageResult<ReportAccountsPayable> {
         MessageResult(match self.consuming_wallet.as_ref() {
             Some(consuming_wallet) => {
@@ -149,38 +149,45 @@ impl BlockchainBridge {
                         )))
                     }
                 };
-                Ok(msg
-                    .accounts
-                    .iter()
-                    .map(|payable| {
-                        match self
-                            .blockchain_interface
-                            .get_transaction_count(&consuming_wallet)
-                        {
-                            Ok(nonce) => {
-                                let amount = u64::try_from(payable.balance).unwrap_or_else(|_| {
-                                    panic!("Lost payable amount precision: {}", payable.balance)
-                                });
-                                match self.blockchain_interface.send_transaction(
-                                    &consuming_wallet,
-                                    &payable.wallet,
-                                    amount,
-                                    nonce,
-                                    gas_price,
-                                ) {
-                                    Ok(hash) => {
-                                        Ok(Payment::new(payable.wallet.clone(), amount, hash))
-                                    }
-                                    Err(e) => Err(e),
-                                }
-                            }
-                            Err(e) => Err(e),
-                        }
-                    })
-                    .collect::<Vec<BlockchainResult<Payment>>>())
+                Ok(self.process_payments(creditors_msg, gas_price, consuming_wallet))
             }
             None => Err(String::from("No consuming wallet specified")),
         })
+    }
+
+    fn process_payments(
+        &self,
+        creditors_msg: ReportAccountsPayable,
+        gas_price: u64,
+        consuming_wallet: &Wallet,
+    ) -> Vec<BlockchainResult<Payment>> {
+        creditors_msg
+            .accounts
+            .iter()
+            .map(|payable| {
+                match self
+                    .blockchain_interface
+                    .get_transaction_count(&consuming_wallet)
+                {
+                    Ok(nonce) => {
+                        let amount = u64::try_from(payable.balance).unwrap_or_else(|_| {
+                            panic!("Lost payable amount precision: {}", payable.balance)
+                        });
+                        match self.blockchain_interface.send_transaction(
+                            &consuming_wallet,
+                            &payable.wallet,
+                            amount,
+                            nonce,
+                            gas_price,
+                        ) {
+                            Ok(hash) => Ok(Payment::new(payable.wallet.clone(), amount, hash)),
+                            Err(e) => Err(e),
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            })
+            .collect::<Vec<BlockchainResult<Payment>>>()
     }
 }
 
