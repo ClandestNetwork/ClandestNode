@@ -32,7 +32,7 @@ use masq_lib::constants::{
     ALREADY_INITIALIZED_ERROR, BAD_PASSWORD_ERROR, CONFIGURATOR_READ_ERROR,
     CONFIGURATOR_WRITE_ERROR, DERIVATION_PATH_ERROR, EARLY_QUESTIONING_ABOUT_DATA,
     ILLEGAL_MNEMONIC_WORD_COUNT_ERROR, KEY_PAIR_CONSTRUCTION_ERROR, MNEMONIC_PHRASE_ERROR,
-    UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR, VALUE_MISSING_ERROR,
+    UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR,
 };
 use rustc_hex::ToHex;
 use std::str::FromStr;
@@ -649,7 +649,6 @@ mod tests {
         ALREADY_INITIALIZED_ERROR, BAD_PASSWORD_ERROR, CONFIGURATOR_READ_ERROR,
         EARLY_QUESTIONING_ABOUT_DATA, ILLEGAL_MNEMONIC_WORD_COUNT_ERROR,
         KEY_PAIR_CONSTRUCTION_ERROR, MNEMONIC_PHRASE_ERROR, UNRECOGNIZED_MNEMONIC_LANGUAGE_ERROR,
-        VALUE_MISSING_ERROR,
     };
     use masq_lib::test_utils::utils::{ensure_node_home_directory_exists, DEFAULT_CHAIN_ID};
     use masq_lib::utils::derivation_path;
@@ -992,7 +991,7 @@ mod tests {
             }
         );
         TestLogHandler::new().exists_log_containing(
-            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710667, Wallets \
+            "WARN: Configurator: Failed to obtain wallet addresses: 281474976710666, Wallets \
              must exist prior to demanding info on them (recover or generate wallets first)",
         );
     }
