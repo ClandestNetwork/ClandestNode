@@ -8,6 +8,8 @@ use std::fmt::Debug;
 use std::io;
 use winreg::enums::*;
 use winreg::RegKey;
+use std::net::IpAddr;
+use std::str::FromStr;
 
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
@@ -23,72 +25,13 @@ impl DnsModifier for WinDnsModifier {
     fn type_name(&self) -> &'static str {
         "WinDnsModifier"
     }
-
-    fn subvert(&self) -> Result<(), String> {
-        let interfaces = self.find_interfaces_to_subvert()?;
-        let begin_overhang: Vec<Box<dyn RegKeyTrait>> = vec![];
-        let begin_error_opt: Option<String> = None;
-        let (subverted_so_far, error_opt) = interfaces.into_iter().fold(
-            (begin_overhang, begin_error_opt),
-            |(so_far, error_opt), interface| {
-                if error_opt.is_some() {
-                    (so_far, error_opt)
-                } else {
-                    match self.subvert_interface(interface.as_ref()) {
-                        Ok(_) => (plus(so_far, interface), error_opt),
-                        Err(msg) => (plus(so_far, interface), Some(msg)),
-                    }
-                }
-            },
-        );
-        match error_opt {
-            Some(msg) => {
-                subverted_so_far
-                    .into_iter()
-                    .for_each(|interface| self.roll_back_subvert(interface.as_ref()));
-                Err(msg)
-            }
-            None => Ok(()),
-        }
-    }
-
-    fn revert(&self) -> Result<(), String> {
-        let interfaces = self.find_interfaces_to_revert()?;
-        let begin_overhang: Vec<Box<dyn RegKeyTrait>> = vec![];
-        let begin_error_opt: Option<String> = None;
-        let (overhang, error_opt) = interfaces.into_iter().fold(
-            (begin_overhang, begin_error_opt),
-            |(overhang, error_opt), interface| {
-                if error_opt.is_some() {
-                    (overhang, error_opt)
-                } else {
-                    match self.revert_interface(interface.as_ref()) {
-                        Ok(_) => (plus(overhang, interface), error_opt),
-                        Err(msg) => (plus(overhang, interface), Some(msg)),
-                    }
-                }
-            },
-        );
-        match error_opt {
-            Some(msg) => {
-                overhang
-                    .into_iter()
-                    .for_each(|interface| self.roll_back_revert(interface.as_ref()));
-                Err(msg)
-            }
-            None => Ok(()),
-        }
-    }
-
-    fn inspect(&self, stdout: &mut (dyn io::Write + Send)) -> Result<(), String> {
+    fn inspect(&self) ->  Result<Vec<IpAddr>, String> {
         let interfaces = self.find_interfaces_to_inspect()?;
         let dns_server_list_csv = self.find_dns_server_list(interfaces)?;
-        let dns_server_list = dns_server_list_csv.split(',');
-        let output = dns_server_list.fold(String::new(), |so_far, dns_server| {
-            format!("{}{}\n", so_far, dns_server)
-        });
-        write!(stdout, "{}", output).expect("write is broken");
-        Ok(())
+        let ip_vec:Vec<_> = dns_server_list_csv.split(',')
+            .flat_map(|ip_str| IpAddr::from_str(&ip_str))
+            .collect();
+        Ok(ip_vec)
     }
 }
 
@@ -108,30 +51,6 @@ impl Default for WinDnsModifier {
 impl WinDnsModifier {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    fn find_interfaces_to_subvert(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, String> {
-        self.find_interfaces(KEY_ALL_ACCESS)
-    }
-
-    fn find_interfaces_to_revert(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, String> {
-        let interface_key = self.handle_reg_error(
-            false,
-            self.hive.open_subkey_with_flags(
-                "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
-                KEY_ALL_ACCESS,
-            ),
-        )?;
-        let revertible_interfaces = interface_key
-            .enum_keys()
-            .into_iter()
-            .flatten()
-            .flat_map(|interface_name| {
-                interface_key.open_subkey_with_flags(&interface_name[..], KEY_ALL_ACCESS)
-            })
-            .filter(|interface| interface.get_value("NameServerBak").is_ok())
-            .collect();
-        Ok(revertible_interfaces)
     }
 
     pub fn find_interfaces_to_inspect(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, String> {
@@ -234,32 +153,6 @@ impl WinDnsModifier {
         }
     }
 
-    fn subvert_interface(&self, interface: &dyn RegKeyTrait) -> Result<(), String> {
-        let name_servers = interface
-            .get_value("NameServer")
-            .expect("Interface became unsubvertible. Check your DNS settings manually.");
-        if WinDnsModifier::is_subverted(&name_servers) {
-            return Ok(());
-        }
-        if WinDnsModifier::makes_no_sense(&name_servers) {
-            return Err(String::from(
-                "This system's DNS settings don't make sense; aborting",
-            ));
-        }
-        self.handle_reg_error(
-            false,
-            interface.set_value("NameServerBak", name_servers.as_str()),
-        )?;
-
-        self.set_nameservers(interface, "127.0.0.1").map_err(|e| {
-            if e == PERMISSION_DENIED_STR {
-                "You must have administrative privilege to modify your DNS settings".to_string()
-            } else {
-                format!("Unexpected error: {}", e)
-            }
-        })
-    }
-
     fn set_nameservers(
         &self,
         interface: &dyn RegKeyTrait,
@@ -295,67 +188,6 @@ impl WinDnsModifier {
         }
     }
 
-    fn roll_back_subvert(&self, interface: &dyn RegKeyTrait) {
-        let old_nameservers = match interface.get_value("NameServerBak") {
-            Err(_) => return, // Not yet backed up; no rollback necessary
-            Ok(s) => s,
-        };
-        interface.delete_value("NameServerBak").expect(
-            "Can't delete NameServerBak to roll back subversion. Check your DNS settings manually.",
-        );
-
-        if WinDnsModifier::is_subverted(&interface.get_value("NameServer").expect(
-            "Can't get NameServer value to roll back subversion. Check your DNS settings manually.",
-        )) {
-            self.set_nameservers(interface, &old_nameservers).expect(
-                "Can't reset NameServer to roll back subversion. Check your DNS settings manually.",
-            )
-        }
-    }
-
-    fn revert_interface(&self, interface: &dyn RegKeyTrait) -> Result<(), String> {
-        let old_name_servers = interface
-            .get_value("NameServerBak")
-            .expect("Interface became unrevertible. Check your DNS settings manually.");
-
-        match interface.get_value("NameServer") {
-            Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => (), // don't create new NameServer if none exists
-            _ => {
-                // but it's okay to overwrite an existing NameServer
-                match self.set_nameservers(interface, old_name_servers.as_str()) {
-                    Ok(()) => (),
-                    Err(ref e) if e == PERMISSION_DENIED_STR => {
-                        return Err(String::from(
-                            "You must have administrative privilege to modify your DNS settings",
-                        ))
-                    }
-                    Err(e) => return Err(format!("Unexpected error: {}", e)),
-                }
-            }
-        };
-
-        self.handle_reg_error(false, interface.delete_value("NameServerBak"))
-    }
-
-    fn roll_back_revert(&self, interface: &dyn RegKeyTrait) {
-        let old_nameservers = match interface.get_value("NameServer") {
-            Err(_) => return, // No NameServer; no rollback necessary
-            Ok(s) => s,
-        };
-        if WinDnsModifier::is_subverted(&old_nameservers) {
-            return;
-        }
-        interface
-            .set_value("NameServerBak", &old_nameservers)
-            .expect(
-                "Can't set NameServerBak to roll back reversion. Check your DNS settings manually.",
-            );
-
-        self.set_nameservers(interface, "127.0.0.1").expect(
-            "Can't reset NameServer to roll back reversion. Check your DNS settings manually.",
-        );
-    }
-
     fn handle_reg_error<T>(&self, read_only: bool, result: io::Result<T>) -> Result<T, String> {
         match result {
             Ok(retval) => Ok(retval),
@@ -374,10 +206,6 @@ impl WinDnsModifier {
         name_servers == "127.0.0.1" || name_servers.starts_with("127.0.0.1,")
     }
 
-    fn makes_no_sense(name_servers: &str) -> bool {
-        name_servers.split(',').any(|ip| ip == "127.0.0.1")
-    }
-
     fn get_default_gateway(interface: &dyn RegKeyTrait) -> Option<String> {
         let string_opt = match (
             interface.get_value("DefaultGateway"),
@@ -394,13 +222,6 @@ impl WinDnsModifier {
             None => None,
         }
     }
-}
-
-pub fn plus<T>(mut source: Vec<T>, item: T) -> Vec<T> {
-    let mut result = vec![];
-    result.append(&mut source);
-    result.push(item);
-    result
 }
 
 pub trait RegKeyTrait: Debug {
@@ -465,8 +286,6 @@ mod tests {
     use crate::dns_inspector::adapter_wrapper::test_utils::AdapterWrapperStub;
     use crate::dns_inspector::adapter_wrapper::AdapterWrapper;
     use crate::dns_inspector::ipconfig_wrapper::test_utils::IpconfigWrapperMock;
-    use crate::netsh::tests_utils::NetshMock;
-    use crate::dns_inspector::utils::get_parameters_from;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -691,844 +510,14 @@ mod tests {
     }
 
     #[test]
-    fn subvert_complains_if_permission_is_denied() {
-        let hive = RegKeyMock::default()
-            .open_subkey_with_flags_result(Err(Error::from_raw_os_error(PERMISSION_DENIED)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(
-            result.err().unwrap(),
-            "You must have administrative privilege to modify your DNS settings".to_string()
-        )
-    }
-
-    #[test]
-    fn subvert_complains_if_no_interfaces_key_exists() {
-        let hive = RegKeyMock::default()
-            .open_subkey_with_flags_result(Err(Error::from_raw_os_error(NOT_FOUND)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(
-            result.err().unwrap(),
-            "Registry contains no DNS information to modify".to_string()
-        )
-    }
-
-    #[test]
-    fn subvert_complains_about_unexpected_os_error_from_registry() {
-        let hive =
-            RegKeyMock::default().open_subkey_with_flags_result(Err(Error::from_raw_os_error(3)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        let string_err = result.err().unwrap();
-        assert!(
-            string_err.starts_with("Unexpected error: "),
-            "actual: {}",
-            &string_err
-        );
-        assert!(string_err.contains("code: 3"), "actual: {}", &string_err);
-    }
-
-    #[test]
-    fn subvert_complains_about_unexpected_os_error_from_netsh() {
-        let mut subject = WinDnsModifier::default();
-        let interface = RegKeyMock::new("interface")
-            .get_value_result("NameServer", Ok("8.8.8.8".to_string()))
-            .set_value_result("NameServerBak", Ok(()));
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        subject.ipconfig = Box::new(ipconfig);
-        let netsh = NetshMock::new()
-            .set_nameserver_result(Err(NetshError::IOError(Error::from_raw_os_error(3))));
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.subvert_interface(&interface);
-
-        let string_err = result.err().unwrap();
-        assert!(
-            string_err.starts_with("Unexpected error: "),
-            "actual: {}",
-            &string_err
-        );
-        assert!(string_err.contains("os error 3"), "actual: {}", &string_err);
-    }
-
-    #[test]
-    #[should_panic(
-        expected = "Can't reset NameServer to roll back subversion. Check your DNS settings manually."
-    )]
-    fn roll_back_subvert_panics_when_set_nameserver_fails() {
-        let mut subject = WinDnsModifier::new();
-        let interface = RegKeyMock::new("interface")
-            .delete_value_result("NameServerBak", Ok(()))
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Ok("fine".to_string()));
-
-        let netsh = NetshMock::new().set_nameserver_result(Err(NetshError::IOError(
-            Error::from_raw_os_error(PERMISSION_DENIED),
-        )));
-        subject.netsh = Box::new(netsh);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(build_adapter_stubs(&[(interface.path(), "Ethernet")]));
-        subject.ipconfig = Box::new(ipconfig);
-
-        subject.roll_back_subvert(&interface)
-    }
-
-    #[test]
-    fn subvert_complains_if_no_interfaces_have_default_gateway_or_dhcp_default_gateway_values() {
-        let get_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            );
-        let another_interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            );
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("one_interface"), Ok("another_interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
-    }
-
-    #[test]
-    fn subvert_complains_if_interfaces_have_blank_default_gateway_and_dhcp_default_gateway_values()
-    {
-        let get_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok(String::new()))
-            .get_value_result("DhcpDefaultGateway", Ok(String::new()));
-        let another_interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok(String::new()))
-            .get_value_result("DhcpDefaultGateway", Ok(String::new()));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("one_interface"), Ok("another_interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
-    }
-
-    #[test]
-    fn subvert_complains_if_interfaces_have_different_gateway_values() {
-        let one_interface = RegKeyMock::default()
-            .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("8.8.8.8".to_string()));
-        let another_interface = RegKeyMock::default()
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result("DhcpDefaultGateway", Ok("DHCP Gateway IP".to_string()))
-            .get_value_result("NameServer", Ok("8.8.8.8".to_string()));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("one_interface"), Ok("another_interface")])
-            .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(result.err().unwrap(), "This system has 2 active network interfaces configured with 2 different default gateways. Manual configuration required.".to_string());
-    }
-
-    #[test]
-    fn subvert_complains_if_dns_settings_dont_make_sense() {
-        let get_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("8.8.8.8,127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Err(Error::from_raw_os_error(NOT_FOUND)));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        subject.ipconfig = Box::new(ipconfig);
-
-        let result = subject.subvert();
-
-        assert_eq!(
-            result,
-            Err(String::from(
-                "This system's DNS settings don't make sense; aborting"
-            ))
-        );
-    }
-
-    #[test]
-    fn subvert_backs_off_if_dns_is_already_subverted() {
-        let get_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let ipconfig = IpconfigWrapperMock::new();
-        subject.ipconfig = Box::new(
-            ipconfig.get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())])),
-        );
-
-        let result = subject.subvert();
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(
-            get_parameters_from(open_subkey_with_flags_parameters_arc),
-            vec!(("interface".to_string(), KEY_ALL_ACCESS),)
-        );
-    }
-
-    #[test]
-    fn subvert_complains_if_name_server_key_exists_and_is_not_writable() {
-        let set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::new("interface")
-            .set_value_parameters(&set_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("Not MASQ".to_string()))
-            .set_value_result("NameServerBak", Ok(()))
-            .delete_value_parameters(&delete_value_parameters_arc)
-            .get_value_result("NameServerBak", Ok("Not MASQ".to_string()))
-            .delete_value_result("NameServerBak", Ok(()));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        let netsh = NetshMock::new().set_nameserver_result(Err(NetshError::IOError(
-            Error::from_raw_os_error(PERMISSION_DENIED),
-        )));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        subject.ipconfig = Box::new(ipconfig);
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.subvert();
-
-        assert_eq!(
-            result.err().expect("result was not an error"),
-            "You must have administrative privilege to modify your DNS settings"
-        );
-        assert_eq!(
-            get_parameters_from(delete_value_parameters_arc),
-            vec!("NameServerBak".to_string(),)
-        );
-    }
-
-    #[test]
-    fn subvert_backs_out_successes_if_there_is_a_failure_setting_nameserver() {
-        let one_active_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_active_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_active_interface = RegKeyMock::new("one_active_interface")
-            .set_value_parameters(&one_active_set_value_parameters_arc)
-            .delete_value_parameters(&one_active_delete_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok("Common Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("8.8.8.8,8.8.8.9".to_string())) // identify as subvertible
-            .get_value_result("NameServer", Ok("8.8.8.8,8.8.8.9".to_string())) // retrieve for backup
-            .set_value_result("NameServerBak", Ok(()))
-            .get_value_result("NameServerBak", Ok("8.8.8.8,8.8.8.9".to_string()))
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string())) // identify as needing backout
-            .delete_value_result("NameServerBak", Ok(()));
-        let another_active_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_active_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_active_interface = RegKeyMock::new("another_active_interface")
-            .set_value_parameters(&another_active_set_value_parameters_arc)
-            .delete_value_parameters(&another_active_delete_value_parameters_arc)
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result("DhcpDefaultGateway", Ok("Common Gateway IP".to_string()))
-            .get_value_result("NameServer", Ok("9.9.9.9".to_string()))
-            .set_value_result("NameServerBak", Ok(()))
-            .get_value_result("NameServerBak", Ok("9.9.9.9".to_string()))
-            .delete_value_result("NameServerBak", Ok(()));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![
-                Ok("one_active_interface"),
-                Ok("another_active_interface"),
-            ])
-            .open_subkey_with_flags_result(Ok(Box::new(one_active_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_active_interface)));
-
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let netsh = NetshMock::new()
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Err(NetshError::IOError(Error::from_raw_os_error(
-                PERMISSION_DENIED,
-            ))))
-            .set_nameserver_result(Ok(()));
-        let set_nameserver_params = netsh.set_nameserver_parameters.clone();
-        subject.netsh = Box::new(netsh);
-        let ipconfig = IpconfigWrapperMock::new();
-        subject.ipconfig = Box::new(
-            ipconfig
-                .get_adapters_result(build_adapter_stubs(&[
-                    ("one_active_interface", "Ethernet"),
-                    ("another_active_interface", "Othernet"),
-                ]))
-                .get_adapters_result(build_adapter_stubs(&[
-                    ("one_active_interface", "Ethernet"),
-                    ("another_active_interface", "Othernet"),
-                ]))
-                .get_adapters_result(build_adapter_stubs(&[
-                    ("one_active_interface", "Ethernet"),
-                    ("another_active_interface", "Othernet"),
-                ])),
-        );
-
-        let result = subject.subvert();
-
-        assert_eq!(
-            result.err().expect("result was not an error"),
-            "You must have administrative privilege to modify your DNS settings"
-        );
-        assert_eq!(
-            get_parameters_from(one_active_set_value_parameters_arc),
-            vec!(("NameServerBak".to_string(), "8.8.8.8,8.8.8.9".to_string()),)
-        );
-        assert_eq!(
-            get_parameters_from(one_active_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string(),)
-        );
-        assert_eq!(
-            get_parameters_from(another_active_set_value_parameters_arc),
-            vec!(("NameServerBak".to_string(), "9.9.9.9".to_string()),)
-        );
-        assert_eq!(
-            get_parameters_from(another_active_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string(),)
-        );
-        assert_eq!(
-            get_parameters_from(set_nameserver_params),
-            vec![
-                ("Ethernet".to_string(), "127.0.0.1".to_string()),
-                ("Othernet".to_string(), "127.0.0.1".to_string()),
-                ("Ethernet".to_string(), "8.8.8.8,8.8.8.9".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn subvert_works_if_everything_is_fine() {
-        let one_active_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_active_interface = RegKeyMock::new("one_active_interface")
-            .get_value_result("DefaultGateway", Ok("Common Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Ok("8.8.8.8,8.8.8.9".to_string()))
-            .get_value_result("DhcpIPAddress", Ok("192.168.1.234".to_string()))
-            .set_value_parameters(&one_active_set_value_parameters_arc)
-            .set_value_result("NameServerBak", Ok(()));
-        let another_active_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_active_interface = RegKeyMock::new("another_active_interface")
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result("DhcpDefaultGateway", Ok("Common Gateway IP".to_string()))
-            .get_value_result("NameServer", Ok("9.9.9.9".to_string()))
-            .get_value_result("DhcpIPAddress", Ok("192.168.1.246".to_string()))
-            .set_value_parameters(&another_active_set_value_parameters_arc)
-            .set_value_result("NameServerBak", Ok(()));
-        let inactive_interface = RegKeyMock::new("inactive_interface")
-            .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            );
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![
-                Ok("one_active_interface"),
-                Ok("another_active_interface"),
-                Ok("inactive_interface"),
-            ])
-            .open_subkey_with_flags_result(Ok(Box::new(one_active_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_active_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(inactive_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let netsh = NetshMock::new()
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()));
-        let netsh_params_arc = netsh.set_nameserver_parameters.clone();
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        subject.netsh = Box::new(netsh);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_active_interface", "One Ethernet"),
-                ("another_active_interface", "Another Ethernet"),
-            ]))
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_active_interface", "One Ethernet"),
-                ("another_active_interface", "Another Ethernet"),
-            ]));
-        subject.ipconfig = Box::new(ipconfig);
-
-        let result = subject.subvert();
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(
-            get_parameters_from(one_active_set_value_parameters_arc),
-            vec![("NameServerBak".to_string(), "8.8.8.8,8.8.8.9".to_string())]
-        );
-        assert_eq!(
-            get_parameters_from(another_active_set_value_parameters_arc),
-            vec![("NameServerBak".to_string(), "9.9.9.9".to_string())]
-        );
-
-        assert_eq!(
-            get_parameters_from(netsh_params_arc),
-            vec![
-                ("One Ethernet".to_string(), "127.0.0.1".to_string()),
-                ("Another Ethernet".to_string(), "127.0.0.1".to_string())
-            ]
-        );
-    }
-
-    #[test]
-    fn subvert_fails_if_no_nameserver_value_exists() {
-        let get_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::default()
-            .get_value_parameters(&get_value_parameters_arc)
-            .set_value_parameters(&set_value_parameters_arc)
-            .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
-            .get_value_result(
-                "DhcpDefaultGateway",
-                Err(Error::from_raw_os_error(NOT_FOUND)),
-            )
-            .get_value_result("NameServer", Err(Error::from_raw_os_error(NOT_FOUND)));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.subvert();
-
-        assert_eq!(result, Err("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
-    }
-
-    #[test]
-    fn revert_complains_if_backup_exists_and_backup_value_is_not_deletable() {
-        let set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let set_nameserver_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::new("interface")
-            .set_value_parameters(&set_value_parameters_arc)
-            .delete_value_parameters(&delete_value_parameters_arc)
-            .get_value_result("NameServerBak", Ok("8.8.8.8".to_string()))
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServer", Ok("8.8.8.8".to_string()))
-            .set_value_result("NameServerBak", Ok(()))
-            .delete_value_result(
-                "NameServerBak",
-                Err(Error::from_raw_os_error(PERMISSION_DENIED)),
-            );
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]))
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        subject.ipconfig = Box::new(ipconfig);
-        let mut netsh = NetshMock::new()
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()));
-        netsh.set_nameserver_parameters = set_nameserver_parameters_arc.clone();
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.revert();
-
-        assert_eq!(
-            result,
-            Err(String::from(
-                "You must have administrative privilege to modify your DNS settings"
-            ))
-        );
-        assert_eq!(
-            get_parameters_from(set_value_parameters_arc),
-            vec!(("NameServerBak".to_string(), "8.8.8.8".to_string()),)
-        );
-        assert_eq!(
-            get_parameters_from(set_nameserver_parameters_arc),
-            vec![
-                ("Ethernet".to_string(), "8.8.8.8".to_string()),
-                ("Ethernet".to_string(), "127.0.0.1".to_string()),
-            ]
-        )
-    }
-
-    #[test]
-    fn revert_complains_if_backup_exists_and_active_value_is_not_writable() {
-        let set_nameserver_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::new("interface")
-            .delete_value_parameters(&delete_value_parameters_arc)
-            .get_value_result("NameServerBak", Ok("Backed up IP".to_string()))
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .delete_value_result("NameServerBak", Ok(()))
-            .set_value_result("NameServerBak", Ok(()));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        subject.ipconfig = Box::new(ipconfig);
-        let mut netsh = NetshMock::new().set_nameserver_result(Err(NetshError::IOError(
-            Error::from_raw_os_error(PERMISSION_DENIED),
-        )));
-        netsh.set_nameserver_parameters = set_nameserver_parameters_arc.clone();
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.revert();
-
-        assert_eq!(
-            result,
-            Err(String::from(
-                "You must have administrative privilege to modify your DNS settings"
-            ))
-        );
-        assert_eq!(
-            get_parameters_from(set_nameserver_parameters_arc),
-            vec![("Ethernet".to_string(), "Backed up IP".to_string())]
-        );
-    }
-
-    #[test]
-    fn revert_backs_out_successes_if_there_are_failures() {
-        let one_subverted_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_subverted_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let set_nameserver_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_subverted_interface = RegKeyMock::new("one_subverted_interface")
-            .set_value_parameters(&one_subverted_set_value_parameters_arc)
-            .delete_value_parameters(&one_subverted_delete_value_parameters_arc)
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Ok("8.8.8.8".to_string()))
-            .delete_value_result("NameServerBak", Ok(()))
-            .get_value_result("NameServer", Ok("8.8.8.8".to_string()))
-            .set_value_result("NameServerBak", Ok(()));
-        let another_subverted_set_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_subverted_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_subverted_interface = RegKeyMock::new("another_subverted_interface")
-            .set_value_parameters(&another_subverted_set_value_parameters_arc)
-            .delete_value_parameters(&another_subverted_delete_value_parameters_arc)
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Ok("9.9.9.9".to_string()))
-            .get_value_result("NameServer", Ok("9.9.9.9".to_string()))
-            .delete_value_result(
-                "NameServerBak",
-                Err(Error::from_raw_os_error(PERMISSION_DENIED)),
-            )
-            .set_value_result("NameServerBak", Ok(()));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![
-                Ok("one_subverted_interface"),
-                Ok("another_subverted_interface"),
-            ])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(one_subverted_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_subverted_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]))
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]))
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]))
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]));
-        subject.ipconfig = Box::new(ipconfig);
-        let mut netsh = NetshMock::new()
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()));
-        netsh.set_nameserver_parameters = set_nameserver_parameters_arc.clone();
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.revert();
-
-        assert_eq!(
-            result,
-            Err(String::from(
-                "You must have administrative privilege to modify your DNS settings"
-            ))
-        );
-        assert_eq!(
-            get_parameters_from(one_subverted_set_value_parameters_arc),
-            vec!(("NameServerBak".to_string(), "8.8.8.8".to_string()),)
-        );
-        assert_eq!(
-            get_parameters_from(one_subverted_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string(),)
-        );
-        assert_eq!(
-            get_parameters_from(another_subverted_set_value_parameters_arc),
-            vec!(("NameServerBak".to_string(), "9.9.9.9".to_string()),)
-        );
-        assert_eq!(
-            get_parameters_from(another_subverted_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string())
-        );
-        assert_eq!(
-            get_parameters_from(set_nameserver_parameters_arc),
-            vec![
-                ("Ethernet".to_string(), "8.8.8.8".to_string()),
-                ("WiFi".to_string(), "9.9.9.9".to_string()),
-                ("Ethernet".to_string(), "127.0.0.1".to_string()),
-                ("WiFi".to_string(), "127.0.0.1".to_string()),
-            ]
-        )
-    }
-
-    #[test]
-    fn revert_works_if_everything_is_fine() {
-        let one_subverted_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let set_nameserver_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let one_subverted_interface = RegKeyMock::new("one_subverted_interface")
-            .delete_value_parameters(&one_subverted_delete_value_parameters_arc)
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Ok("8.8.8.8".to_string()))
-            .delete_value_result("NameServerBak", Ok(()));
-        let another_subverted_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let another_subverted_interface = RegKeyMock::new("another_subverted_interface")
-            .delete_value_parameters(&another_subverted_delete_value_parameters_arc)
-            .get_value_result("NameServer", Ok("127.0.0.1".to_string()))
-            .get_value_result("NameServerBak", Ok("9.9.9.9".to_string()))
-            .set_value_result("NameServer", Ok(()))
-            .delete_value_result("NameServerBak", Ok(()));
-        let unsubverted_delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let unsubverted_interface = RegKeyMock::new("unsubverted_interface")
-            .delete_value_parameters(&unsubverted_delete_value_parameters_arc)
-            .get_value_result("NameServer", Ok("10.10.10.10".to_string()))
-            .get_value_result("NameServerBak", Err(Error::from_raw_os_error(NOT_FOUND)));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![
-                Ok("one_subverted_interface"),
-                Ok("another_subverted_interface"),
-                Ok("unsubverted_interface"),
-            ])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(one_subverted_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(another_subverted_interface)))
-            .open_subkey_with_flags_result(Ok(Box::new(unsubverted_interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]))
-            .get_adapters_result(build_adapter_stubs(&[
-                ("one_subverted_interface", "Ethernet"),
-                ("another_subverted_interface", "WiFi"),
-            ]));
-        subject.ipconfig = Box::new(ipconfig);
-        let mut netsh = NetshMock::new()
-            .set_nameserver_result(Ok(()))
-            .set_nameserver_result(Ok(()));
-        netsh.set_nameserver_parameters = set_nameserver_parameters_arc.clone();
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.revert();
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(
-            get_parameters_from(set_nameserver_parameters_arc),
-            vec![
-                ("Ethernet".to_string(), "8.8.8.8".to_string()),
-                ("WiFi".to_string(), "9.9.9.9".to_string())
-            ]
-        );
-        assert_eq!(
-            get_parameters_from(one_subverted_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string())
-        );
-        assert_eq!(
-            get_parameters_from(another_subverted_delete_value_parameters_arc),
-            vec!("NameServerBak".to_string())
-        );
-        assert_eq!(
-            get_parameters_from(unsubverted_delete_value_parameters_arc).len(),
-            0
-        );
-    }
-
-    #[test]
-    fn revert_succeeds_with_no_work_if_no_subverted_nic_is_found() {
-        let delete_value_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::default()
-            .delete_value_parameters(&delete_value_parameters_arc)
-            .get_value_result("NameServerBak", Err(Error::from_raw_os_error(NOT_FOUND)));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.revert();
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(get_parameters_from(delete_value_parameters_arc).len(), 0);
-    }
-
-    #[test]
-    fn revert_succeeds_after_deleting_name_server_bak_if_no_name_server_is_found() {
-        let set_value_parameters = Arc::new(Mutex::new(vec![]));
-        let delete_value_parameters = Arc::new(Mutex::new(vec![]));
-        let interface = RegKeyMock::default()
-            .set_value_parameters(&set_value_parameters)
-            .delete_value_parameters(&delete_value_parameters)
-            .get_value_result("NameServerBak", Ok("8.8.8.8".to_string()))
-            .get_value_result("NameServer", Err(Error::from_raw_os_error(NOT_FOUND)))
-            .delete_value_result("NameServerBak", Ok(()));
-        let open_subkey_with_flags_parameters_arc = Arc::new(Mutex::new(vec![]));
-        let interfaces = RegKeyMock::default()
-            .enum_keys_result(vec![Ok("interface")])
-            .open_subkey_with_flags_parameters(&open_subkey_with_flags_parameters_arc)
-            .open_subkey_with_flags_result(Ok(Box::new(interface)));
-        let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
-        subject.hive = Box::new(hive);
-
-        let result = subject.revert();
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(
-            get_parameters_from(delete_value_parameters),
-            vec!("NameServerBak".to_string())
-        );
-    }
-
-    #[test]
-    fn revert_complains_about_unexpected_os_error_from_netsh() {
-        let mut subject = WinDnsModifier::default();
-        let interface = RegKeyMock::new("interface")
-            .get_value_result("NameServerBak", Ok("8.8.8.8".to_string()))
-            .get_value_result("NameServer", Ok("OverwriteMe".to_string()));
-        let ipconfig = IpconfigWrapperMock::new()
-            .get_adapters_result(Ok(vec![Box::new(AdapterWrapperStub::default())]));
-        subject.ipconfig = Box::new(ipconfig);
-        let netsh = NetshMock::new()
-            .set_nameserver_result(Err(NetshError::IOError(Error::from_raw_os_error(3))));
-        subject.netsh = Box::new(netsh);
-
-        let result = subject.revert_interface(&interface);
-
-        let string_err = result.err().unwrap();
-        assert!(
-            string_err.starts_with("Unexpected error: "),
-            "actual: {}",
-            &string_err
-        );
-        assert!(string_err.contains("os error 3"), "actual: {}", &string_err);
-    }
-
-    #[test]
     fn inspect_complains_if_no_interfaces_key_exists() {
-        let mut stream_holder = FakeStreamHolder::new();
+        let stream_holder = FakeStreamHolder::new();
         let hive = RegKeyMock::default()
             .open_subkey_with_flags_result(Err(Error::from_raw_os_error(NOT_FOUND)));
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         assert_eq!(
             result.err().unwrap(),
@@ -1539,13 +528,12 @@ mod tests {
 
     #[test]
     fn inspect_complains_about_unexpected_os_error() {
-        let mut stream_holder = FakeStreamHolder::new();
         let hive =
             RegKeyMock::default().open_subkey_with_flags_result(Err(Error::from_raw_os_error(3)));
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         let string_err = result.err().unwrap();
         assert_eq!(
@@ -1555,12 +543,10 @@ mod tests {
             &string_err
         );
         assert_eq!(string_err.contains("code: 3"), true, "{}", &string_err);
-        assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
 
     #[test]
     fn inspect_complains_if_no_interfaces_have_default_gateway_or_dhcp_default_gateway_values() {
-        let mut stream_holder = FakeStreamHolder::new();
         let one_interface = RegKeyMock::default()
             .get_value_result("DefaultGateway", Err(Error::from_raw_os_error(NOT_FOUND)))
             .get_value_result(
@@ -1581,16 +567,14 @@ mod tests {
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
-        assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
 
     #[test]
     fn inspect_complains_if_interfaces_have_blank_default_gateway_and_dhcp_default_gateway_values()
     {
-        let mut stream_holder = FakeStreamHolder::new();
         let one_interface = RegKeyMock::default()
             .get_value_result("DefaultGateway", Ok(String::new()))
             .get_value_result("DhcpDefaultGateway", Ok(String::new()));
@@ -1605,15 +589,13 @@ mod tests {
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
-        assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
 
     #[test]
     fn inspect_complains_if_interfaces_have_different_gateway_values() {
-        let mut stream_holder = FakeStreamHolder::new();
         let one_interface = RegKeyMock::default()
             .get_value_result("DefaultGateway", Ok("Gateway IP".to_string()))
             .get_value_result(
@@ -1642,15 +624,13 @@ mod tests {
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         assert_eq!(result.err().unwrap(), "This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.".to_string());
-        assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
 
     #[test]
     fn inspect_complains_if_interfaces_have_different_dns_server_lists() {
-        let mut stream_holder = FakeStreamHolder::new();
         let one_interface = RegKeyMock::default()
             .get_value_result("DefaultGateway", Ok("1.2.3.4".to_string()))
             .get_value_result(
@@ -1687,15 +667,13 @@ mod tests {
                 ])),
         );
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
         assert_eq!(result.err().unwrap(), "This system has 2 active network interfaces configured with 2 different DNS server lists. Cannot summarize DNS settings.".to_string());
-        assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
 
     #[test]
     fn inspect_works_if_everything_is_fine() {
-        let mut stream_holder = FakeStreamHolder::new();
         let one_active_interface = RegKeyMock::default()
             .get_value_result("DefaultGateway", Ok("Common Gateway IP".to_string()))
             .get_value_result(
@@ -1733,13 +711,9 @@ mod tests {
             ("another_active_interface", "Wifi"),
         ])));
 
-        let result = subject.inspect(stream_holder.streams().stdout);
+        let result = subject.inspect();
 
-        assert_eq!(result, Ok(()));
-        assert_eq!(
-            stream_holder.stdout.get_string(),
-            "8.8.8.8\n8.8.8.9\n".to_string()
-        );
+        assert_eq!(result.unwrap(), vec![IpAddr::from_str("8.8.8.8").unwrap(),IpAddr::from_str("8.8.8.9").unwrap()]);
     }
 
     fn build_adapter_stubs(
@@ -1845,14 +819,6 @@ mod tests {
             self
         }
 
-        pub fn open_subkey_with_flags_parameters(
-            mut self,
-            parameters: &Arc<Mutex<Vec<(String, u32)>>>,
-        ) -> RegKeyMock {
-            self.open_subkey_with_flags_parameters = parameters.clone();
-            self
-        }
-
         pub fn open_subkey_with_flags_result(
             self,
             result: io::Result<Box<dyn RegKeyTrait>>,
@@ -1863,39 +829,8 @@ mod tests {
             self
         }
 
-        pub fn get_value_parameters(mut self, parameters: &Arc<Mutex<Vec<String>>>) -> RegKeyMock {
-            self.get_value_parameters = parameters.clone();
-            self
-        }
-
         pub fn get_value_result(self, name: &str, result: io::Result<String>) -> RegKeyMock {
             self.prepare_result(&self.get_value_results, name, result);
-            self
-        }
-
-        pub fn set_value_parameters(
-            mut self,
-            parameters: &Arc<Mutex<Vec<(String, String)>>>,
-        ) -> RegKeyMock {
-            self.set_value_parameters = parameters.clone();
-            self
-        }
-
-        pub fn set_value_result(self, name: &str, result: io::Result<()>) -> RegKeyMock {
-            self.prepare_result(&self.set_value_results, name, result);
-            self
-        }
-
-        pub fn delete_value_parameters(
-            mut self,
-            parameters: &Arc<Mutex<Vec<String>>>,
-        ) -> RegKeyMock {
-            self.delete_value_parameters = parameters.clone();
-            self
-        }
-
-        pub fn delete_value_result(self, name: &str, result: io::Result<()>) -> RegKeyMock {
-            self.prepare_result(&self.delete_value_results, name, result);
             self
         }
 

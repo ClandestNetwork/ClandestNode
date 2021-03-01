@@ -42,7 +42,7 @@ pub mod test_utils {
     }
 
     impl AdapterWrapperStub {
-        pub fn new() -> Self {
+        pub fn _new() -> Self {
             Default::default()
         }
     }
