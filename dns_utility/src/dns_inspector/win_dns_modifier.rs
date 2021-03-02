@@ -54,18 +54,20 @@ impl WinDnsModifier {
         Default::default()
     }
 
-    pub fn find_interfaces_to_inspect(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, String> {
+    pub fn find_interfaces_to_inspect(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
         self.find_interfaces(KEY_READ)
     }
 
-    fn find_interfaces(&self, access_required: u32) -> Result<Vec<Box<dyn RegKeyTrait>>, String> {
-        let interface_key = self.handle_reg_error(
+    fn find_interfaces(&self, access_required: u32) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
+        let interface_key = match self.handle_reg_error(
             access_required == KEY_READ,
             self.hive.open_subkey_with_flags(
                 "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
-                access_required,
-            ),
-        )?;
+                access_required)
+                ){
+            Ok(entries)=>entries,
+            Err(e) => return Err(DnsInspectionError::RegistryQueryOsError(e))
+        };
         let gateway_interfaces: Vec<Box<dyn RegKeyTrait>> = interface_key
             .enum_keys()
             .into_iter()
@@ -79,7 +81,7 @@ impl WinDnsModifier {
             })
             .collect();
         if gateway_interfaces.is_empty() {
-            return Err("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
+            return Err(DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
         }
         let distinct_gateway_ips: HashSet<String> = gateway_interfaces
             .iter()
@@ -91,8 +93,10 @@ impl WinDnsModifier {
                 code if code == KEY_READ => "Cannot summarize DNS settings.",
                 _ => "",
             };
-            Err (format! ("This system has {} active network interfaces configured with {} different default gateways. {}",
-                gateway_interfaces.len (), distinct_gateway_ips.len (), msg))
+            Err (DnsInspectionError::ConflictingEntries(
+                format! ("This system has {} active network interfaces configured with {} different default gateways. {}",
+                gateway_interfaces.len (), distinct_gateway_ips.len (), msg)
+            ))
         } else {
             Ok(gateway_interfaces)
         }
@@ -101,7 +105,7 @@ impl WinDnsModifier {
     pub fn find_dns_server_list(
         &self,
         interfaces: Vec<Box<dyn RegKeyTrait>>,
-    ) -> Result<String, String> {
+    ) -> Result<String, DnsInspectionError> {
         let interfaces_len = interfaces.len();
         let list_result_vec: Vec<Result<String, String>> = interfaces
             .into_iter()
@@ -115,17 +119,17 @@ impl WinDnsModifier {
             })
             .collect();
         if !errors.is_empty() {
-            return Err(errors.join(", "));
+            return Err(DnsInspectionError::InaccessibleInterface(errors.join(", ")));
         }
         let list_set: HashSet<String> = list_result_vec
             .into_iter()
             .flat_map(|result| match result {
-                Err(e) => panic!("Error magically appeared: {}", e),
+                Err(_e) => None,             //is this correct or not, there used to be panic!() of meaning like "shouldn't happen"?
                 Ok(list) => Some(list),
             })
             .collect();
         if list_set.len() > 1 {
-            Err (format! ("This system has {} active network interfaces configured with {} different DNS server lists. Cannot summarize DNS settings.", interfaces_len, list_set.len ()))
+            Err (DnsInspectionError::ConflictingEntries(format! ("This system has {} active network interfaces configured with {} different DNS server lists. Cannot summarize DNS settings.", interfaces_len, list_set.len ())))
         } else {
             let list_vec = list_set.into_iter().collect::<Vec<String>>();
             Ok(list_vec[0].clone())
@@ -293,6 +297,7 @@ mod tests {
     use std::io::Error;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use crate::dns_inspector::DnsInspectionError;
 
     #[test]
     fn is_subverted_says_no_if_masq_dns_appears_too_late() {
@@ -521,8 +526,7 @@ mod tests {
         let result = subject.inspect();
 
         assert_eq!(
-            result.err().unwrap(),
-            "Registry contains no DNS information to display".to_string()
+            result.err().unwrap(),DnsInspectionError::RegistryQueryOsError("Registry contains no DNS information to display".to_string())
         );
         assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
@@ -536,14 +540,13 @@ mod tests {
 
         let result = subject.inspect();
 
-        let string_err = result.err().unwrap();
+        let error = result.err().unwrap();
+
         assert_eq!(
-            string_err.starts_with("Unexpected error: "),
-            true,
-            "{}",
-            &string_err
+            error,DnsInspectionError::RegistryQueryOsError(r#"Unexpected error: Os { code: 3, kind: NotFound, message: "The system cannot find the path specified." }"#.to_string()),
+            "{:?}",
+            &error
         );
-        assert_eq!(string_err.contains("code: 3"), true, "{}", &string_err);
     }
 
     #[test]
@@ -570,7 +573,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
+        assert_eq!(result.err().unwrap(), DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
     }
 
     #[test]
@@ -592,7 +595,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), "This system has no accessible network interfaces configured with default gateways and DNS servers".to_string());
+        assert_eq!(result.err().unwrap(), DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
     }
 
     #[test]
@@ -627,7 +630,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), "This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.".to_string());
+        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries("This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.".to_string()));
     }
 
     #[test]
@@ -670,7 +673,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), "This system has 2 active network interfaces configured with 2 different DNS server lists. Cannot summarize DNS settings.".to_string());
+        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries("This system has 2 active network interfaces configured with 2 different DNS server lists. Cannot summarize DNS settings.".to_string()));
     }
 
     #[test]

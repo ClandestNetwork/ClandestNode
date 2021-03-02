@@ -30,6 +30,9 @@ pub enum DnsInspectionError {
     NotConnected,
     BadEntryFormat(String),
     InvalidConfigFile(String),
+    ConflictingEntries(String),
+    InaccessibleInterface(String),
+    RegistryQueryOsError(String)
 }
 
 impl Debug for DnsInspectionError {
@@ -38,6 +41,9 @@ impl Debug for DnsInspectionError {
             DnsInspectionError::NotConnected => unimplemented!(), // This system does not appear to be connected to a network
             DnsInspectionError::BadEntryFormat(msg) => unimplemented!(), // Badly formatted nameserver line: {}
             DnsInspectionError::InvalidConfigFile(msg) => unimplemented!(), // /etc/resolv.conf is not a UTF-8 text file
+            DnsInspectionError::ConflictingEntries(msg) => unimplemented!(), //,
+            DnsInspectionError::InaccessibleInterface(msg) => unimplemented!(),
+            DnsInspectionError::RegistryQueryOsError(msg) => write!(f,"{}",msg)
         }
     }
 }
