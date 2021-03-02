@@ -8,8 +8,9 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use std::net::IpAddr;
+use std::net::{IpAddr, AddrParseError};
 use std::str::FromStr;
+use crate::dns_inspector::DnsInspectionError;
 
 pub struct ResolvConfDnsModifier {
     root: PathBuf,
@@ -21,7 +22,7 @@ impl DnsModifier for ResolvConfDnsModifier {
     }
 
     #[allow(unused_mut)]
-    fn inspect(&self) -> Result<Vec<IpAddr>, String> {
+    fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, contents) = self.open_resolv_conf(false)?;
         self.inspect_contents(contents)
     }
@@ -40,7 +41,7 @@ impl ResolvConfDnsModifier {
         }
     }
 
-    fn open_resolv_conf(&self, for_write: bool) -> Result<(File, String), String> {
+    fn open_resolv_conf(&self, for_write: bool) -> Result<(File, String), DnsInspectionError> {
         let mut open_options = OpenOptions::new();
         open_options.read(true);
         open_options.write(for_write);
@@ -51,30 +52,35 @@ impl ResolvConfDnsModifier {
         let mut file = match open_options.open(path.clone()) {
             Ok(f) => f,
             Err(ref e) if e.kind() == ErrorKind::NotFound => {
-                return Err(ResolvConfDnsModifier::process_msg(
+                return Err(DnsInspectionError::InvalidConfigFile(ResolvConfDnsModifier::process_msg(
                     "/etc/resolv.conf was not found",
                     for_write,
-                ));
+                )));
             }
             Err(ref e) if e.kind() == ErrorKind::PermissionDenied => {
                 let suffix = if for_write { " and writable" } else { "" };
                 let msg = format!("/etc/resolv.conf is not readable{}", suffix);
-                return Err(ResolvConfDnsModifier::process_msg(msg.as_str(), for_write));
+                return Err(DnsInspectionError::InvalidConfigFile(ResolvConfDnsModifier::process_msg(
+                    msg.as_str(),
+                    for_write
+                )));
             }
             Err(ref e) if e.raw_os_error() == Some(21) => {
-                return Err(ResolvConfDnsModifier::process_msg(
+                return Err(DnsInspectionError::InvalidConfigFile(ResolvConfDnsModifier::process_msg(
                     "/etc/resolv.conf is a directory",
                     for_write,
-                ));
+                )));
             }
-            Err(e) => return Err(format!("Unexpected error opening {:?}: {}", path, e)),
+            Err(e) => return Err(DnsInspectionError::InvalidConfigFile(
+                format!("Unexpected error opening {:?}: {}", path, e)
+            )),
         };
         let mut contents = String::new();
         if file.read_to_string(&mut contents).is_err() {
-            return Err(ResolvConfDnsModifier::process_msg(
+            return Err(DnsInspectionError::InvalidConfigFile(ResolvConfDnsModifier::process_msg(
                 "/etc/resolv.conf is not a UTF-8 text file",
                 for_write,
-            ));
+            )));
         }
         Ok((file, contents))
     }
@@ -90,28 +96,43 @@ impl ResolvConfDnsModifier {
     fn inspect_contents(
         &self,
         contents: String,
-    ) -> Result<Vec<IpAddr>, String> {
+    ) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let active_nameservers = self.active_nameservers(&contents[..]);
-        let ip_vec: Vec<IpAddr> = active_nameservers
+        let (ip_str_ok_vec, err_vec): (Vec<Result<String, DnsInspectionError>>, Vec<Result<String, DnsInspectionError>>) = active_nameservers
             .into_iter()
-            .map(|pair| self.nameserver_line_to_ip(pair.0))
-            .flat_map(|ip_str| IpAddr::from_str(&ip_str))
-            .collect();
+            .map(|pair| self.nameserver_line_to_ip_str(pair.0))
+            .partition(|result| result.is_ok());
+        let (ip_ok_vec, err_vec): (Vec<Result<IpAddr, AddrParseError>>, Vec<Result<IpAddr, AddrParseError>>) = match (ip_str_ok_vec, err_vec) {
+            (ip_str_ok_vec, err_vec) if ip_str_ok_vec.is_empty() && err_vec.is_empty() => return Err(DnsInspectionError::NotConnected),
+            (ip_str_ok_vec, err_vec) if ip_str_ok_vec.is_empty() => unimplemented!(),
+            (ip_str_ok_vec, _) => ip_str_ok_vec
+                .into_iter()
+                .map(|ip_str_ok| IpAddr::from_str(&ip_str_ok.expect("partition() didn't work")))
+                .partition(|result| result.is_ok()),
+        };
+        let ip_vec = match (ip_ok_vec, err_vec) {
+            (ip_vec, err_vec) if ip_vec.is_empty() => unimplemented!(),
+            (ip_vec, _) => ip_vec
+                .into_iter()
+                .map (|ok_result| ok_result.expect("partition() didn't work"))
+                .collect()
+        };
         self.check_disconnected(&ip_vec)?;
         Ok(ip_vec)
     }
 
-    pub fn nameserver_line_to_ip(&self, nameserver_line: String) -> String {
+    pub fn nameserver_line_to_ip_str(&self, nameserver_line: String) -> Result<String, DnsInspectionError> {
         let regex = Regex::new(r"^\s*nameserver\s+([^\s#]*)").expect("Regex syntax error");
-        let captures = regex
-            .captures(nameserver_line.as_str())
-            .unwrap_or_else(|| panic!("Badly formatted nameserver line: {}", nameserver_line));
-        String::from(
+        let captures = match regex.captures(nameserver_line.as_str()) {
+            Some(cap) => cap,
+            None => return Err(DnsInspectionError::BadEntryFormat(nameserver_line))
+        };
+        Ok(String::from(
             captures
                 .get(1)
                 .expect("Regex had no capture group")
                 .as_str(),
-        )
+        ))
     }
 
     pub fn active_nameservers(&self, contents: &str) -> Vec<(String, usize)> {
@@ -125,11 +146,9 @@ impl ResolvConfDnsModifier {
             .collect()
     }
 
-    fn check_disconnected(&self, active_nameservers: &Vec<IpAddr>) -> Result<(), String> {
+    fn check_disconnected(&self, active_nameservers: &Vec<IpAddr>) -> Result<(), DnsInspectionError> {
         if active_nameservers.is_empty() {
-            Err(String::from(
-                "This system does not appear to be connected to a network",
-            ))
+            Err(DnsInspectionError::NotConnected)
         } else {
             Ok(())
         }
@@ -147,12 +166,13 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    #[should_panic(expected = "Badly formatted nameserver line: booga-booga")]
-    fn nameserver_line_to_ip_panics_when_given_badly_formatted_nameserver_line() {
+    fn nameserver_line_to_ip_complains_when_given_badly_formatted_nameserver_line() {
         let nameserver_line = "booga-booga".to_string();
         let subject = ResolvConfDnsModifier::new();
 
-        subject.nameserver_line_to_ip(nameserver_line);
+        let result = subject.nameserver_line_to_ip_str(nameserver_line);
+
+        assert_eq! (result, Err(DnsInspectionError::BadEntryFormat("booga-booga".to_string())))
     }
 
     #[test]
@@ -161,9 +181,9 @@ mod tests {
             "  \t  \tnameserver  \t  \t booga-booga  \t\t  # comment #".to_string();
         let subject = ResolvConfDnsModifier::new();
 
-        let result = subject.nameserver_line_to_ip(nameserver_line);
+        let result = subject.nameserver_line_to_ip_str(nameserver_line);
 
-        assert_eq!(result, "booga-booga".to_string());
+        assert_eq!(result, Ok("booga-booga".to_string()));
     }
 
     #[test]
@@ -171,9 +191,9 @@ mod tests {
         let nameserver_line = "nameserver booga-booga".to_string();
         let subject = ResolvConfDnsModifier::new();
 
-        let result = subject.nameserver_line_to_ip(nameserver_line);
+        let result = subject.nameserver_line_to_ip_str(nameserver_line);
 
-        assert_eq!(result, "booga-booga".to_string());
+        assert_eq!(result, Ok("booga-booga".to_string()));
     }
 
     #[test]
@@ -232,7 +252,7 @@ mod tests {
 
         assert_eq!(
             result.err().unwrap(),
-            String::from("/etc/resolv.conf was not found")
+            DnsInspectionError::InvalidConfigFile(String::from("/etc/resolv.conf was not found"))
         );
     }
 
@@ -252,7 +272,7 @@ mod tests {
 
         assert_eq!(
             result.err().unwrap(),
-            String::from("/etc/resolv.conf is not a UTF-8 text file")
+            DnsInspectionError::InvalidConfigFile(String::from("/etc/resolv.conf is not a UTF-8 text file"))
         );
     }
 
@@ -270,7 +290,7 @@ mod tests {
 
         assert_eq!(
             result.err().unwrap(),
-            String::from("/etc/resolv.conf is not readable")
+            DnsInspectionError::InvalidConfigFile(String::from("/etc/resolv.conf is not readable"))
         );
     }
 
@@ -287,7 +307,7 @@ mod tests {
 
         assert_eq!(
             result.err().unwrap(),
-            String::from("/etc/resolv.conf is not a UTF-8 text file")
+            DnsInspectionError::InvalidConfigFile("/etc/resolv.conf is not a UTF-8 text file".to_string())
         );
     }
 
@@ -302,7 +322,7 @@ mod tests {
 
         assert_eq!(
             result.err().unwrap(),
-            String::from("This system does not appear to be connected to a network")
+            DnsInspectionError::NotConnected
         );
     }
 

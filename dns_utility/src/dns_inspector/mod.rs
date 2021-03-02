@@ -22,8 +22,27 @@ mod utils;
 
 use std::net::IpAddr;
 use crate::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
+use std::fmt::{Formatter, Debug};
+use std::fmt;
 
-pub fn dns_servers () -> Result<Vec<IpAddr>, String> {
+#[derive (Clone, PartialEq)]
+pub enum DnsInspectionError {
+    NotConnected,
+    BadEntryFormat(String),
+    InvalidConfigFile(String),
+}
+
+impl Debug for DnsInspectionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            DnsInspectionError::NotConnected => unimplemented!(), // This system does not appear to be connected to a network
+            DnsInspectionError::BadEntryFormat(msg) => unimplemented!(), // Badly formatted nameserver line: {}
+            DnsInspectionError::InvalidConfigFile(msg) => unimplemented!(), // /etc/resolv.conf is not a UTF-8 text file
+        }
+    }
+}
+
+pub fn dns_servers () -> Result<Vec<IpAddr>, DnsInspectionError> {
     let factory = DnsModifierFactoryReal::new();
     let modifier = factory.make().unwrap();
     modifier.inspect()

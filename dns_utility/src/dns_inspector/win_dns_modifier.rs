@@ -10,6 +10,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 use std::net::IpAddr;
 use std::str::FromStr;
+use crate::dns_inspector::DnsInspectionError;
 
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
@@ -25,7 +26,7 @@ impl DnsModifier for WinDnsModifier {
     fn type_name(&self) -> &'static str {
         "WinDnsModifier"
     }
-    fn inspect(&self) ->  Result<Vec<IpAddr>, String> {
+    fn inspect(&self) ->  Result<Vec<IpAddr>, DnsInspectionError> {
         let interfaces = self.find_interfaces_to_inspect()?;
         let dns_server_list_csv = self.find_dns_server_list(interfaces)?;
         let ip_vec:Vec<_> = dns_server_list_csv.split(',')

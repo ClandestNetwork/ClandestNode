@@ -13,6 +13,7 @@ use system_configuration::dynamic_store::SCDynamicStore;
 use system_configuration::dynamic_store::SCDynamicStoreBuilder;
 use std::net::IpAddr;
 use std::str::FromStr;
+use crate::dns_inspector::DnsInspectionError;
 
 const PRIMARY_SERVICE: &str = "PrimaryService";
 const SERVER_ADDRESSES: &str = "ServerAddresses";
@@ -27,7 +28,7 @@ impl DnsModifier for DynamicStoreDnsModifier {
         "DynamicStoreDnsModifier"
     }
 
-    fn inspect(&self) -> Result<Vec<IpAddr>, String> {
+    fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, dns_info) = self.get_dns_info(false)?;
         let active_addresses = match dns_info.get(SERVER_ADDRESSES) {
             None => return Err(String::from("This system has no DNS settings")),
