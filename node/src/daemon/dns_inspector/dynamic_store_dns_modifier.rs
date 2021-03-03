@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 #![cfg(target_os = "macos")]
-use crate::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
 use regex::Regex;
 use std::collections::HashMap;
 
@@ -13,7 +13,7 @@ use system_configuration::dynamic_store::SCDynamicStore;
 use system_configuration::dynamic_store::SCDynamicStoreBuilder;
 use std::net::IpAddr;
 use std::str::FromStr;
-use crate::dns_inspector::DnsInspectionError;
+use crate::daemon::dns_inspector::DnsInspectionError;
 
 const PRIMARY_SERVICE: &str = "PrimaryService";
 const SERVER_ADDRESSES: &str = "ServerAddresses";

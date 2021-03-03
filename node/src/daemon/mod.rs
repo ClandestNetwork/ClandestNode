@@ -2,6 +2,7 @@
 
 pub mod crash_notification;
 pub mod daemon_initializer;
+mod dns_inspector;
 pub mod launch_verifier;
 mod launcher;
 mod setup_reporter;

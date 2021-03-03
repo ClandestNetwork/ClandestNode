@@ -1,17 +1,17 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
-use crate::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
 #[cfg(target_os = "linux")]
 use std::fs::File;
 #[cfg(target_os = "linux")]
 use std::path::Path;
 
 #[cfg(target_os = "linux")]
-use crate::dns_inspector::resolv_conf_dns_modifier::ResolvConfDnsModifier;
+use crate::daemon::dns_inspector::resolv_conf_dns_modifier::ResolvConfDnsModifier;
 
 #[cfg(target_os = "macos")]
-use crate::dns_inspector::dynamic_store_dns_modifier::DynamicStoreDnsModifier;
+use crate::daemon::dns_inspector::dynamic_store_dns_modifier::DynamicStoreDnsModifier;
 #[cfg(target_os = "windows")]
-use crate::dns_inspector::win_dns_modifier::WinDnsModifier;
+use crate::daemon::dns_inspector::win_dns_modifier::WinDnsModifier;
 
 pub trait DnsModifierFactory {
     fn make(&self) -> Option<Box<dyn DnsModifier>>;

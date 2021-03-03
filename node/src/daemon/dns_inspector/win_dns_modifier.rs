@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io;
@@ -8,7 +8,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 use std::net::IpAddr;
 use std::str::FromStr;
-use crate::dns_inspector::DnsInspectionError;
+use crate::daemon::dns_inspector::DnsInspectionError;
 
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
@@ -230,7 +230,7 @@ mod tests {
     use std::io::Error;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use crate::dns_inspector::DnsInspectionError;
+    use crate::daemon::dns_inspector::DnsInspectionError;
 
     #[test]
     fn get_default_gateway_sees_dhcp_if_both_are_specified() {

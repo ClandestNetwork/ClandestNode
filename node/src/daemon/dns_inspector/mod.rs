@@ -19,7 +19,7 @@ mod win_dns_modifier;
 mod utils;
 
 use std::net::IpAddr;
-use crate::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
+use crate::daemon::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
 use std::fmt::{Formatter, Debug};
 use std::fmt;
 
@@ -55,7 +55,7 @@ pub fn dns_servers () -> Result<Vec<IpAddr>, DnsInspectionError> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
+    use crate::daemon::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
 
     #[test]
     fn dns_inspection_errors_render_properly() {

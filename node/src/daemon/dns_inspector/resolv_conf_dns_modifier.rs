@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 #![cfg(target_os = "linux")]
-use crate::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
 use regex::Regex;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -10,7 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::net::{IpAddr};
 use std::str::FromStr;
-use crate::dns_inspector::DnsInspectionError;
+use crate::daemon::dns_inspector::DnsInspectionError;
 
 pub struct ResolvConfDnsModifier {
     root: PathBuf,
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_nameserver_directive_has_bad_ip_address() {
-        let root = make_root("inspect_complains_if_there_is_no_preexisting_nameserver_directive");
+        let root = make_root("inspect_complains_if_nameserver_directive_has_bad_ip_address");
         make_resolv_conf(&root, "nameserver 300.301.302.303");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root;
