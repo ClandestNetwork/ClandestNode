@@ -29,9 +29,9 @@ impl DnsModifier for DynamicStoreDnsModifier {
     }
 
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
-        let (_, dns_info) = self.get_dns_info(false)?;
+        let (_, dns_info) = self.get_dns_info()?;
         let active_addresses = match dns_info.get(SERVER_ADDRESSES) {
-            None => return Err(String::from("This system has no DNS settings")),
+            None => return Err(DnsInspectionError::NotConnected),
             Some(sa) => sa,
         };
         let ip_vec: Vec<IpAddr> = active_addresses
@@ -57,49 +57,36 @@ impl DynamicStoreDnsModifier {
 
     fn get_dns_info(
         &self,
-        for_write: bool,
-    ) -> Result<(String, HashMap<String, Vec<String>>), String> {
+    ) -> Result<(String, HashMap<String, Vec<String>>), DnsInspectionError> {
         let ipv4_map = match self
             .store
             .get_dictionary_string_cfpl("State:/Network/Global/IPv4")
         {
             Some(m) => m,
             None => {
-                return Err(DynamicStoreDnsModifier::process_msg(
-                    "Dynamic-Store path State:/Network/Global/IPv4 not found",
-                    for_write,
-                ));
+                return Err(DnsInspectionError::NotConnected);
             }
         };
         let primary_service_cfpl = match ipv4_map.get(PRIMARY_SERVICE) {
             Some(ps) => ps,
             None => {
-                return Err(DynamicStoreDnsModifier::process_msg(
-                    "Dynamic-Store path State:/Network/Global/IPv4/PrimaryService not found",
-                    for_write,
-                ));
+                return Err(DnsInspectionError::NotConnected);
             }
         };
         let primary_service =
             match self.store.cfpl_to_string(&primary_service_cfpl) {
                 Ok(s) => s,
-                Err(_) => return Err(DynamicStoreDnsModifier::process_msg(
-                    "Dynamic-Store path State:/Network/Global/IPv4/PrimaryService is not a string",
-                    for_write,
-                )),
+                Err(_) => return Err(DnsInspectionError::ConfigValueTypeError("State:/Network/Global/IPv4/PrimaryService".to_string())),
             };
         let dns_base_path = format!("State:/Network/Service/{}/DNS", primary_service);
         let dns_map = match self.store.get_dictionary_string_cfpl(&dns_base_path[..]) {
             Some(m) => m,
             None => {
-                return Err(DynamicStoreDnsModifier::process_msg(
-                    "This system has no DNS settings",
-                    for_write,
-                ));
+                return Err(DnsInspectionError::NotConnected)
             }
         };
         let mut result: HashMap<String, Vec<String>> = HashMap::new();
-        match self.get_server_addresses(&dns_map, &dns_base_path, &SERVER_ADDRESSES, for_write) {
+        match self.get_server_addresses(&dns_map, &dns_base_path, &SERVER_ADDRESSES) {
             Err(e) => return Err(e),
             Ok(None) => (),
             Ok(Some(sa)) => {
@@ -107,19 +94,11 @@ impl DynamicStoreDnsModifier {
             }
         }
         if let Ok(Some(sa)) =
-            self.get_server_addresses(&dns_map, &dns_base_path, SERVER_ADDRESSES_BAK, for_write)
+            self.get_server_addresses(&dns_map, &dns_base_path, SERVER_ADDRESSES_BAK)
         {
             result.insert(String::from(SERVER_ADDRESSES_BAK), sa);
         }
         Ok((dns_base_path, result))
-    }
-
-    fn process_msg(msg: &str, for_write: bool) -> String {
-        if for_write {
-            format!("{}; DNS settings cannot be modified", msg)
-        } else {
-            msg.to_string()
-        }
     }
 
     fn get_server_addresses(
@@ -127,8 +106,7 @@ impl DynamicStoreDnsModifier {
         dns_map: &HashMap<String, CFPropertyList>,
         dns_base_path: &str,
         dns_leaf: &str,
-        for_write: bool,
-    ) -> Result<Option<Vec<String>>, String> {
+    ) -> Result<Option<Vec<String>>, DnsInspectionError> {
         let server_addresses_cfpl = match dns_map.get(dns_leaf) {
             Some(sa) => sa,
             None => return Ok(None),
@@ -136,14 +114,9 @@ impl DynamicStoreDnsModifier {
         let server_address_cfpls = match self.store.cfpl_to_vec(&server_addresses_cfpl) {
             Ok(sa) => sa,
             Err(_) => {
-                return Err(DynamicStoreDnsModifier::process_msg(
-                    format!(
-                        "Dynamic-Store path {}/{} is not an array",
-                        dns_base_path, dns_leaf
-                    )
-                    .as_str(),
-                    for_write,
-                ));
+                return Err(DnsInspectionError::ConfigValueTypeError(format!(
+                    "{}/{}", dns_base_path, dns_leaf
+                )));
             }
         };
         if server_address_cfpls.is_empty() {
@@ -159,14 +132,7 @@ impl DynamicStoreDnsModifier {
             )
             .collect();
         if server_address_opts.contains(&None) {
-            return Err(DynamicStoreDnsModifier::process_msg(
-                format!(
-                    "Dynamic-Store path {}/{} is not an array of strings",
-                    dns_base_path, dns_leaf
-                )
-                .as_str(),
-                for_write,
-            ));
+            return Err(DnsInspectionError::ConfigValueTypeError(format!("{}/{}", dns_base_path, dns_leaf)))
         }
         Ok(Some(
             server_address_opts
@@ -465,9 +431,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(String::from(
-                "Dynamic-Store path State:/Network/Global/IPv4 not found"
-            ))
+            Err(DnsInspectionError::NotConnected)
         );
     }
 
@@ -482,9 +446,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(String::from(
-                "Dynamic-Store path State:/Network/Global/IPv4/PrimaryService not found"
-            ))
+            Err(DnsInspectionError::NotConnected)
         );
     }
 
@@ -505,9 +467,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(String::from(
-                "Dynamic-Store path State:/Network/Global/IPv4/PrimaryService is not a string"
-            ))
+            Err(DnsInspectionError::ConfigValueTypeError("State:/Network/Global/IPv4/PrimaryService".to_string()))
         );
     }
 
@@ -527,7 +487,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result, Err(String::from("This system has no DNS settings")));
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -547,7 +507,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result, Err(String::from("This system has no DNS settings")));
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -570,7 +530,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq! (result, Err (String::from ("Dynamic-Store path State:/Network/Service/booga/DNS/ServerAddresses is not an array")));
+        assert_eq! (result, Err (DnsInspectionError::ConfigValueTypeError(String::from ("State:/Network/Service/booga/DNS/ServerAddresses"))));
     }
 
     #[test]
@@ -600,7 +560,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq! (result, Err (String::from ("Dynamic-Store path State:/Network/Service/booga/DNS/ServerAddresses is not an array of strings")));
+        assert_eq! (result, Err (DnsInspectionError::ConfigValueTypeError(String::from ("State:/Network/Service/booga/DNS/ServerAddresses"))));
     }
 
     #[test]

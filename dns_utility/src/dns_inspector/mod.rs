@@ -32,7 +32,8 @@ pub enum DnsInspectionError {
     InvalidConfigFile(String),
     ConflictingEntries(String),
     InaccessibleInterface(String),
-    RegistryQueryOsError(String)
+    RegistryQueryOsError(String),
+    ConfigValueTypeError(String), // State:/Network/Service/booga/DNS/ServerAddresses
 }
 
 impl Debug for DnsInspectionError {
@@ -44,6 +45,7 @@ impl Debug for DnsInspectionError {
             DnsInspectionError::ConflictingEntries(_) => unimplemented!(),
             DnsInspectionError::InaccessibleInterface(_) => unimplemented!(),
             DnsInspectionError::RegistryQueryOsError(_) => unimplemented!(),
+            DnsInspectionError::ConfigValueTypeError(msg) => write! (f, "Config value is not of the correct type: {}", msg),
         }
     }
 }
@@ -65,6 +67,7 @@ pub mod tests {
             DnsInspectionError::NotConnected,
             DnsInspectionError::BadEntryFormat("bad entry format".to_string()),
             DnsInspectionError::InvalidConfigFile("invalid config file".to_string()),
+            DnsInspectionError::ConfigValueTypeError("type error".to_string()),
         ].into_iter()
             .map(|e| format!("{:?}", e))
             .collect::<Vec<String>>();
@@ -73,6 +76,7 @@ pub mod tests {
             "This system does not appear to be connected to a network".to_string(),
             "Bad entry format: bad entry format".to_string(),
             "Invalid config file: invalid config file".to_string(),
+            "Config value is not of the correct type: type error".to_string(),
         ])
     }
 
