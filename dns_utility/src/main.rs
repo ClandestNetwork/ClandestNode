@@ -1,10 +1,10 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use dns_utility_lib::dns_utility::DnsUtility;
+// use dns_utility_lib::dns_utility::DnsUtility;
 use dns_utility_lib::dns_inspector::dns_servers;
-use masq_lib::command::Command;
-use masq_lib::command::StdStreams;
-use std::io;
+// use masq_lib::command::Command;
+// use masq_lib::command::StdStreams;
+// use std::io;
 
 pub fn main() {
     let servers_result = dns_servers();

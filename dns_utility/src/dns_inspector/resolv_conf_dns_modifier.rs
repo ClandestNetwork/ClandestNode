@@ -8,7 +8,7 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use std::net::{IpAddr, AddrParseError};
+use std::net::{IpAddr};
 use std::str::FromStr;
 use crate::dns_inspector::DnsInspectionError;
 
@@ -99,13 +99,13 @@ impl ResolvConfDnsModifier {
     ) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let active_nameservers = self.active_nameservers(&contents[..]);
         type Triple = (Option<String>, Option<IpAddr>, Option<DnsInspectionError>);
-        let (successes, mut failures): (Vec<Triple>, Vec<Triple>) = active_nameservers
+        let (successes, failures): (Vec<Triple>, Vec<Triple>) = active_nameservers
             .into_iter()
             .map (|(nameserver_line, _)| {
                 match self.nameserver_line_to_ip_str(nameserver_line) {
                     Ok(ip_str) => match IpAddr::from_str(&ip_str) {
                         Ok(ip_addr) => (Some (ip_str), Some(ip_addr), None),
-                        Err (e) => (Some (ip_str.clone()), None, Some (DnsInspectionError::BadEntryFormat(ip_str))),
+                        Err (_) => (Some (ip_str.clone()), None, Some (DnsInspectionError::BadEntryFormat(ip_str))),
                     },
                     Err(e) => (None, None, Some (e))
                 }

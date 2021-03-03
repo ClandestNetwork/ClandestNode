@@ -30,6 +30,9 @@ pub enum DnsInspectionError {
     NotConnected,
     BadEntryFormat(String),
     InvalidConfigFile(String),
+    ConflictingEntries(String),
+    InaccessibleInterface(String),
+    RegistryQueryOsError(String)
 }
 
 impl Debug for DnsInspectionError {
@@ -38,6 +41,9 @@ impl Debug for DnsInspectionError {
             DnsInspectionError::NotConnected => write!(f, "This system does not appear to be connected to a network"),
             DnsInspectionError::BadEntryFormat(msg) => write! (f, "Bad entry format: {}", msg),
             DnsInspectionError::InvalidConfigFile(msg) => write! (f, "Invalid config file: {}", msg),
+            DnsInspectionError::ConflictingEntries(_) => unimplemented!(),
+            DnsInspectionError::InaccessibleInterface(_) => unimplemented!(),
+            DnsInspectionError::RegistryQueryOsError(_) => unimplemented!(),
         }
     }
 }
