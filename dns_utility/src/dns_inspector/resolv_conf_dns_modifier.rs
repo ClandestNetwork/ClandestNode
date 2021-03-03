@@ -98,24 +98,26 @@ impl ResolvConfDnsModifier {
         contents: String,
     ) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let active_nameservers = self.active_nameservers(&contents[..]);
-        let (ip_str_ok_vec, err_vec): (Vec<Result<String, DnsInspectionError>>, Vec<Result<String, DnsInspectionError>>) = active_nameservers
+        type Triple = (Option<String>, Option<IpAddr>, Option<DnsInspectionError>);
+        let (successes, mut failures): (Vec<Triple>, Vec<Triple>) = active_nameservers
             .into_iter()
-            .map(|pair| self.nameserver_line_to_ip_str(pair.0))
-            .partition(|result| result.is_ok());
-        let (ip_ok_vec, err_vec): (Vec<Result<IpAddr, AddrParseError>>, Vec<Result<IpAddr, AddrParseError>>) = match (ip_str_ok_vec, err_vec) {
-            (ip_str_ok_vec, err_vec) if ip_str_ok_vec.is_empty() && err_vec.is_empty() => return Err(DnsInspectionError::NotConnected),
-            (ip_str_ok_vec, err_vec) if ip_str_ok_vec.is_empty() => unimplemented!(),
-            (ip_str_ok_vec, _) => ip_str_ok_vec
+            .map (|(nameserver_line, _)| {
+                match self.nameserver_line_to_ip_str(nameserver_line) {
+                    Ok(ip_str) => match IpAddr::from_str(&ip_str) {
+                        Ok(ip_addr) => (Some (ip_str), Some(ip_addr), None),
+                        Err (e) => (Some (ip_str.clone()), None, Some (DnsInspectionError::BadEntryFormat(ip_str))),
+                    },
+                    Err(e) => (None, None, Some (e))
+                }
+            })
+            .partition(|(_, _, err_opt)| err_opt.is_none());
+        let ip_vec: Vec<IpAddr> = match (successes, failures) {
+            (s, f) if s.is_empty() && f.is_empty() => return Err(DnsInspectionError::NotConnected),
+            (s, mut f) if s.is_empty() => return Err(f.remove(0).2.expect("partition() isn't working")),
+            (s, _) => s
                 .into_iter()
-                .map(|ip_str_ok| IpAddr::from_str(&ip_str_ok.expect("partition() didn't work")))
-                .partition(|result| result.is_ok()),
-        };
-        let ip_vec = match (ip_ok_vec, err_vec) {
-            (ip_vec, err_vec) if ip_vec.is_empty() => unimplemented!(),
-            (ip_vec, _) => ip_vec
-                .into_iter()
-                .map (|ok_result| ok_result.expect("partition() didn't work"))
-                .collect()
+                .flat_map(|(_, ip_addr_opt, _)| ip_addr_opt)
+                .collect(),
         };
         self.check_disconnected(&ip_vec)?;
         Ok(ip_vec)
@@ -327,9 +329,24 @@ mod tests {
     }
 
     #[test]
+    fn inspect_complains_if_nameserver_directive_has_bad_ip_address() {
+        let root = make_root("inspect_complains_if_there_is_no_preexisting_nameserver_directive");
+        make_resolv_conf(&root, "nameserver 300.301.302.303");
+        let mut subject = ResolvConfDnsModifier::new();
+        subject.root = root;
+
+        let result = subject.inspect();
+
+        assert_eq!(
+            result.err().unwrap(),
+            DnsInspectionError::BadEntryFormat("300.301.302.303".to_string())
+        );
+    }
+
+    #[test]
     fn inspect_works_if_everything_is_copacetic() {
         let root = make_root("inspect_works_if_everything_is_copacetic");
-        make_resolv_conf (&root, "#comment\n## nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 9.9.9.9\n#nameserver 127.0.0.1\n");
+        make_resolv_conf (&root, "#comment\n## nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 2603:6011:b504:bf01:2ad:24ff:fe57:fd78\n#nameserver 127.0.0.1\n");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root.clone();
 
@@ -337,7 +354,7 @@ mod tests {
 
         assert_eq! (result, vec![
             IpAddr::from_str("8.8.8.8").unwrap(),
-            IpAddr::from_str("9.9.9.9").unwrap(),
+            IpAddr::from_str("2603:6011:b504:bf01:2ad:24ff:fe57:fd78").unwrap(),
         ]);
     }
 
@@ -359,14 +376,4 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
         file
     }
-    //
-    // fn get_resolv_conf(root: &PathBuf) -> String {
-    //     let path = Path::new(root)
-    //         .join(Path::new("etc"))
-    //         .join(Path::new("resolv.conf"));
-    //     let mut file = File::open(path).unwrap();
-    //     let mut contents = String::new();
-    //     file.read_to_string(&mut contents).unwrap();
-    //     contents
-    // }
 }

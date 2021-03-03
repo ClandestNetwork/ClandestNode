@@ -35,9 +35,9 @@ pub enum DnsInspectionError {
 impl Debug for DnsInspectionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            DnsInspectionError::NotConnected => unimplemented!(), // This system does not appear to be connected to a network
-            DnsInspectionError::BadEntryFormat(msg) => unimplemented!(), // Badly formatted nameserver line: {}
-            DnsInspectionError::InvalidConfigFile(msg) => unimplemented!(), // /etc/resolv.conf is not a UTF-8 text file
+            DnsInspectionError::NotConnected => write!(f, "This system does not appear to be connected to a network"),
+            DnsInspectionError::BadEntryFormat(msg) => write! (f, "Bad entry format: {}", msg),
+            DnsInspectionError::InvalidConfigFile(msg) => write! (f, "Invalid config file: {}", msg),
         }
     }
 }
@@ -52,6 +52,23 @@ pub fn dns_servers () -> Result<Vec<IpAddr>, DnsInspectionError> {
 pub mod tests {
     use super::*;
     use crate::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
+
+    #[test]
+    fn dns_inspection_errors_render_properly() {
+        let strings = vec![
+            DnsInspectionError::NotConnected,
+            DnsInspectionError::BadEntryFormat("bad entry format".to_string()),
+            DnsInspectionError::InvalidConfigFile("invalid config file".to_string()),
+        ].into_iter()
+            .map(|e| format!("{:?}", e))
+            .collect::<Vec<String>>();
+
+        assert_eq! (strings, vec![
+            "This system does not appear to be connected to a network".to_string(),
+            "Bad entry format: bad entry format".to_string(),
+            "Invalid config file: invalid config file".to_string(),
+        ])
+    }
 
     #[test]
     fn dns_servers_works() {
