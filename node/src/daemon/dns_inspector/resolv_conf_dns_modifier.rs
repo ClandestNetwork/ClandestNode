@@ -17,10 +17,6 @@ pub struct ResolvConfDnsModifier {
 }
 
 impl DnsModifier for ResolvConfDnsModifier {
-    fn type_name(&self) -> &'static str {
-        "ResolvConfDnsModifier"
-    }
-
     #[allow(unused_mut)]
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, contents) = self.open_resolv_conf(false)?;
@@ -233,15 +229,6 @@ mod tests {
                 (String::from("nameserver ending"), 38)
             )
         );
-    }
-
-    #[test]
-    fn instance_knows_its_type_name() {
-        let subject = ResolvConfDnsModifier::new();
-
-        let result = subject.type_name();
-
-        assert_eq!(result, "ResolvConfDnsModifier");
     }
 
     #[test]

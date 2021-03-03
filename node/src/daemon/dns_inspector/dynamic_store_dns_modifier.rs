@@ -24,10 +24,6 @@ pub struct DynamicStoreDnsModifier {
 }
 
 impl DnsModifier for DynamicStoreDnsModifier {
-    fn type_name(&self) -> &'static str {
-        "DynamicStoreDnsModifier"
-    }
-
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, dns_info) = self.get_dns_info()?;
         let active_addresses = match dns_info.get(SERVER_ADDRESSES) {

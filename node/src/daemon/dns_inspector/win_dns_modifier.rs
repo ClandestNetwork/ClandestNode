@@ -18,9 +18,6 @@ pub struct WinDnsModifier {
 }
 
 impl DnsModifier for WinDnsModifier {
-    fn type_name(&self) -> &'static str {
-        "WinDnsModifier"
-    }
     fn inspect(&self) ->  Result<Vec<IpAddr>, DnsInspectionError> {
         let interfaces = self.find_interfaces_to_inspect()?;
         let dns_server_list_csv = self.find_dns_server_list(interfaces)?;
@@ -289,15 +286,6 @@ mod tests {
         let result = WinDnsModifier::get_default_gateway(interface.as_ref());
 
         assert_eq!(result, None)
-    }
-
-    #[test]
-    fn windnsmodifier_knows_its_type_name() {
-        let subject = WinDnsModifier::default();
-
-        let result = subject.type_name();
-
-        assert_eq!(result, "WinDnsModifier");
     }
 
     #[test]

@@ -4,6 +4,5 @@ use std::net::IpAddr;
 use crate::daemon::dns_inspector::DnsInspectionError;
 
 pub trait DnsModifier {
-    fn type_name(&self) -> &'static str;
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError>;
 }
