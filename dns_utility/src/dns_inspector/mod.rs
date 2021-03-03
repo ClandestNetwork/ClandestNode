@@ -13,8 +13,6 @@ mod adapter_wrapper;
 mod dns_modifier;
 mod dns_modifier_factory;
 mod dynamic_store_dns_modifier;
-#[cfg(target_os = "windows")]
-mod ipconfig_wrapper;
 mod resolv_conf_dns_modifier;
 #[cfg(target_os = "windows")]
 mod win_dns_modifier;
@@ -30,8 +28,7 @@ pub enum DnsInspectionError {
     NotConnected,
     BadEntryFormat(String),
     InvalidConfigFile(String),
-    ConflictingEntries(String),
-    InaccessibleInterface(String),
+    ConflictingEntries(usize, usize), // This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.
     RegistryQueryOsError(String),
     ConfigValueTypeError(String), // State:/Network/Service/booga/DNS/ServerAddresses
 }
@@ -42,9 +39,8 @@ impl Debug for DnsInspectionError {
             DnsInspectionError::NotConnected => write!(f, "This system does not appear to be connected to a network"),
             DnsInspectionError::BadEntryFormat(msg) => write! (f, "Bad entry format: {}", msg),
             DnsInspectionError::InvalidConfigFile(msg) => write! (f, "Invalid config file: {}", msg),
-            DnsInspectionError::ConflictingEntries(_) => unimplemented!(),
-            DnsInspectionError::InaccessibleInterface(_) => unimplemented!(),
-            DnsInspectionError::RegistryQueryOsError(_) => unimplemented!(),
+            DnsInspectionError::ConflictingEntries(interfaces, gateways) => write! (f, "This system has {} active network interfaces configured with {} different default gateways. Cannot summarize DNS settings.", interfaces, gateways),
+            DnsInspectionError::RegistryQueryOsError(msg) => write! (f, "{}", msg),
             DnsInspectionError::ConfigValueTypeError(msg) => write! (f, "Config value is not of the correct type: {}", msg),
         }
     }
@@ -67,6 +63,8 @@ pub mod tests {
             DnsInspectionError::NotConnected,
             DnsInspectionError::BadEntryFormat("bad entry format".to_string()),
             DnsInspectionError::InvalidConfigFile("invalid config file".to_string()),
+            DnsInspectionError::ConflictingEntries(1234, 4321),
+            DnsInspectionError::RegistryQueryOsError("registry query os error".to_string()),
             DnsInspectionError::ConfigValueTypeError("type error".to_string()),
         ].into_iter()
             .map(|e| format!("{:?}", e))
@@ -76,6 +74,8 @@ pub mod tests {
             "This system does not appear to be connected to a network".to_string(),
             "Bad entry format: bad entry format".to_string(),
             "Invalid config file: invalid config file".to_string(),
+            "This system has 1234 active network interfaces configured with 4321 different default gateways. Cannot summarize DNS settings.".to_string(),
+            "registry query os error".to_string(),
             "Config value is not of the correct type: type error".to_string(),
         ])
     }

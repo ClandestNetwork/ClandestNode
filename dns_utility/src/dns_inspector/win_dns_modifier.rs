@@ -1,8 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::dns_inspector::dns_modifier::DnsModifier;
-use crate::dns_inspector::ipconfig_wrapper::{IpconfigWrapper, IpconfigWrapperReal};
-use crate::netsh::{Netsh, NetshCommand, NetshError};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io;
@@ -14,12 +12,9 @@ use crate::dns_inspector::DnsInspectionError;
 
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
-const PERMISSION_DENIED_STR: &str = "Permission denied";
 
 pub struct WinDnsModifier {
     hive: Box<dyn RegKeyTrait>,
-    ipconfig: Box<dyn IpconfigWrapper>,
-    netsh: Box<dyn Netsh>,
 }
 
 impl DnsModifier for WinDnsModifier {
@@ -43,13 +38,12 @@ impl Default for WinDnsModifier {
                 RegKey::predef(HKEY_LOCAL_MACHINE),
                 "HKEY_LOCAL_MACHINE",
             )),
-            ipconfig: Box::new(IpconfigWrapperReal {}),
-            netsh: Box::new(NetshCommand {}),
         }
     }
 }
 
 impl WinDnsModifier {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Default::default()
     }
@@ -59,15 +53,11 @@ impl WinDnsModifier {
     }
 
     fn find_interfaces(&self, access_required: u32) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
-        let interface_key = match self.handle_reg_error(
-            access_required == KEY_READ,
+        let interface_key = self.handle_reg_error(
             self.hive.open_subkey_with_flags(
                 "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
                 access_required)
-                ){
-            Ok(entries)=>entries,
-            Err(e) => return Err(DnsInspectionError::RegistryQueryOsError(e))
-        };
+                )?;
         let gateway_interfaces: Vec<Box<dyn RegKeyTrait>> = interface_key
             .enum_keys()
             .into_iter()
@@ -81,22 +71,14 @@ impl WinDnsModifier {
             })
             .collect();
         if gateway_interfaces.is_empty() {
-            return Err(DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
+            return Err(DnsInspectionError::NotConnected);
         }
         let distinct_gateway_ips: HashSet<String> = gateway_interfaces
             .iter()
             .flat_map(|interface| WinDnsModifier::get_default_gateway(interface.as_ref()))
             .collect();
         if distinct_gateway_ips.len() > 1 {
-            let msg = match access_required {
-                code if code == KEY_ALL_ACCESS => "Manual configuration required.",
-                code if code == KEY_READ => "Cannot summarize DNS settings.",
-                _ => "",
-            };
-            Err (DnsInspectionError::ConflictingEntries(
-                format! ("This system has {} active network interfaces configured with {} different default gateways. {}",
-                gateway_interfaces.len (), distinct_gateway_ips.len (), msg)
-            ))
+            Err (DnsInspectionError::ConflictingEntries(gateway_interfaces.len (), distinct_gateway_ips.len ()))
         } else {
             Ok(gateway_interfaces)
         }
@@ -107,11 +89,11 @@ impl WinDnsModifier {
         interfaces: Vec<Box<dyn RegKeyTrait>>,
     ) -> Result<String, DnsInspectionError> {
         let interfaces_len = interfaces.len();
-        let list_result_vec: Vec<Result<String, String>> = interfaces
+        let list_result_vec: Vec<Result<String, DnsInspectionError>> = interfaces
             .into_iter()
             .map(|interface| self.find_dns_servers_for_interface(interface))
             .collect();
-        let errors: Vec<String> = list_result_vec
+        let mut errors: Vec<DnsInspectionError> = list_result_vec
             .iter()
             .flat_map(|result_ref| match *result_ref {
                 Err(ref e) => Some(e.clone()),
@@ -119,7 +101,7 @@ impl WinDnsModifier {
             })
             .collect();
         if !errors.is_empty() {
-            return Err(DnsInspectionError::InaccessibleInterface(errors.join(", ")));
+            return Err(errors.remove(0))
         }
         let list_set: HashSet<String> = list_result_vec
             .into_iter()
@@ -129,7 +111,7 @@ impl WinDnsModifier {
             })
             .collect();
         if list_set.len() > 1 {
-            Err (DnsInspectionError::ConflictingEntries(format! ("This system has {} active network interfaces configured with {} different DNS server lists. Cannot summarize DNS settings.", interfaces_len, list_set.len ())))
+            Err (DnsInspectionError::ConflictingEntries(interfaces_len, list_set.len ()))
         } else {
             let list_vec = list_set.into_iter().collect::<Vec<String>>();
             Ok(list_vec[0].clone())
@@ -139,76 +121,30 @@ impl WinDnsModifier {
     fn find_dns_servers_for_interface(
         &self,
         interface: Box<dyn RegKeyTrait>,
-    ) -> Result<String, String> {
+    ) -> Result<String, DnsInspectionError> {
         match (
             interface.get_value("DhcpNameServer"),
             interface.get_value("NameServer"),
         ) {
-            (Err(_), Err(_)) => Err(
-                "Interface has neither NameServer nor DhcpNameServer; probably not connected"
-                    .to_string(),
-            ),
-            (Err(_), Ok(ref permanent)) if permanent == &String::new() => Err(
-                "Interface has neither NameServer nor DhcpNameServer; probably not connected"
-                    .to_string(),
-            ),
+            (Err(_), Err(_)) => Err(DnsInspectionError::NotConnected),
+            (Err(_), Ok(ref permanent)) if permanent == &String::new() => Err(DnsInspectionError::NotConnected),
             (Ok(ref dhcp), Err(_)) => Ok(dhcp.clone()),
             (Ok(ref dhcp), Ok(ref permanent)) if permanent == &String::new() => Ok(dhcp.clone()),
             (_, Ok(permanent)) => Ok(permanent),
         }
     }
 
-    fn set_nameservers(
-        &self,
-        interface: &dyn RegKeyTrait,
-        nameservers: &str,
-    ) -> Result<(), String> {
-        if let Some(friendly_name) = self.find_adapter_friendly_name(interface) {
-            match self.netsh.set_nameserver(&friendly_name, nameservers) {
-                Ok(()) => Ok(()),
-                Err(NetshError::IOError(ref e)) if e.raw_os_error() == Some(PERMISSION_DENIED) => {
-                    Err(PERMISSION_DENIED_STR.to_string())
-                }
-                Err(NetshError::IOError(ref e)) => Err(e.to_string()),
-                Err(e) => Err(format!("{:?}", e)),
-            }
-        } else {
-            Err(format!(
-                "Could not find adapter name for interface: {}",
-                interface.path()
-            ))
-        }
-    }
-
-    fn find_adapter_friendly_name(&self, interface: &dyn RegKeyTrait) -> Option<String> {
-        if let Ok(adapters) = self.ipconfig.get_adapters() {
-            adapters
-                .into_iter()
-                .find(|adapter| {
-                    adapter.adapter_name().to_lowercase() == interface.path().to_lowercase()
-                })
-                .map(|adapter| adapter.friendly_name().to_string())
-        } else {
-            None
-        }
-    }
-
-    fn handle_reg_error<T>(&self, read_only: bool, result: io::Result<T>) -> Result<T, String> {
+    fn handle_reg_error<T>(&self, result: io::Result<T>) -> Result<T, DnsInspectionError> {
         match result {
             Ok(retval) => Ok(retval),
-            Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => Err(String::from(
+            Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => Err(DnsInspectionError::RegistryQueryOsError(String::from(
                 "You must have administrative privilege to modify your DNS settings",
-            )),
-            Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => Err(format!(
-                "Registry contains no DNS information {}",
-                if read_only { "to display" } else { "to modify" }
-            )),
-            Err(ref e) => Err(format!("Unexpected error: {:?}", e)),
+            ))),
+            Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => Err(DnsInspectionError::RegistryQueryOsError(format!(
+                "Registry contains no DNS information to display"
+            ))),
+            Err(ref e) => Err(DnsInspectionError::RegistryQueryOsError(format!("Unexpected error: {:?}", e))),
         }
-    }
-
-    fn is_subverted(name_servers: &str) -> bool {
-        name_servers == "127.0.0.1" || name_servers.starts_with("127.0.0.1,")
     }
 
     fn get_default_gateway(interface: &dyn RegKeyTrait) -> Option<String> {
@@ -288,9 +224,6 @@ impl RegKeyReal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dns_inspector::adapter_wrapper::test_utils::AdapterWrapperStub;
-    use crate::dns_inspector::adapter_wrapper::AdapterWrapper;
-    use crate::dns_inspector::ipconfig_wrapper::test_utils::IpconfigWrapperMock;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -298,27 +231,6 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
     use crate::dns_inspector::DnsInspectionError;
-
-    #[test]
-    fn is_subverted_says_no_if_masq_dns_appears_too_late() {
-        let result = WinDnsModifier::is_subverted(&"1.1.1.1,127.0.0.1".to_string());
-
-        assert_eq!(result, false)
-    }
-
-    #[test]
-    fn is_subverted_says_no_if_first_dns_is_only_masq_like() {
-        let result = WinDnsModifier::is_subverted(&"127.0.0.11".to_string());
-
-        assert_eq!(result, false)
-    }
-
-    #[test]
-    fn is_subverted_says_yes_if_first_dns_is_masq() {
-        let result = WinDnsModifier::is_subverted(&"127.0.0.1,1.1.1.1".to_string());
-
-        assert_eq!(result, true)
-    }
 
     #[test]
     fn get_default_gateway_sees_dhcp_if_both_are_specified() {
@@ -399,13 +311,7 @@ mod tests {
 
         let result = subject.find_dns_servers_for_interface(interface);
 
-        assert_eq!(
-            result,
-            Err(
-                "Interface has neither NameServer nor DhcpNameServer; probably not connected"
-                    .to_string()
-            )
-        );
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -490,29 +396,7 @@ mod tests {
 
         let result = subject.find_dns_servers_for_interface(interface);
 
-        assert_eq!(
-            result,
-            Err(
-                "Interface has neither NameServer nor DhcpNameServer; probably not connected"
-                    .to_string()
-            )
-        );
-    }
-
-    #[test]
-    fn set_nameservers_complains_if_it_cant_find_the_adapter_friendly_name() {
-        let mut subject = WinDnsModifier::new();
-        let ipconfig =
-            IpconfigWrapperMock::new().get_adapters_result(Err(Error::from_raw_os_error(3).into()));
-        subject.ipconfig = Box::new(ipconfig);
-        let interface = RegKeyMock::new("the_interface");
-
-        let result = subject.set_nameservers(&interface, "nevermind");
-
-        assert_eq!(
-            result,
-            Err("Could not find adapter name for interface: the_interface".to_string())
-        );
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -573,7 +457,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
+        assert_eq!(result.err().unwrap(), DnsInspectionError::NotConnected);
     }
 
     #[test]
@@ -595,7 +479,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::InaccessibleInterface("This system has no accessible network interfaces configured with default gateways and DNS servers".to_string()));
+        assert_eq!(result.err().unwrap(), DnsInspectionError::NotConnected);
     }
 
     #[test]
@@ -630,7 +514,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries("This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.".to_string()));
+        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries(3, 2));
     }
 
     #[test]
@@ -656,24 +540,12 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let ipconfig = IpconfigWrapperMock::new();
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
-        subject.ipconfig = Box::new(
-            ipconfig
-                .get_adapters_result(build_adapter_stubs(&[
-                    ("one_interface", "Ethernet"),
-                    ("another_interface", "Wifi"),
-                ]))
-                .get_adapters_result(build_adapter_stubs(&[
-                    ("one_interface", "Ethernet"),
-                    ("another_interface", "Wifi"),
-                ])),
-        );
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries("This system has 2 active network interfaces configured with 2 different DNS server lists. Cannot summarize DNS settings.".to_string()));
+        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries(2, 2));
     }
 
     #[test]
@@ -709,29 +581,10 @@ mod tests {
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
         let mut subject = WinDnsModifier::default();
         subject.hive = Box::new(hive);
-        let ipconfig = IpconfigWrapperMock::new();
-        subject.ipconfig = Box::new(ipconfig.get_adapters_result(build_adapter_stubs(&[
-            ("one_active_interface", "Ethernet"),
-            ("another_active_interface", "Wifi"),
-        ])));
 
         let result = subject.inspect();
 
         assert_eq!(result.unwrap(), vec![IpAddr::from_str("8.8.8.8").unwrap(),IpAddr::from_str("8.8.8.9").unwrap()]);
-    }
-
-    fn build_adapter_stubs(
-        names: &[(&str, &str)],
-    ) -> Result<Vec<Box<dyn AdapterWrapper>>, ipconfig::error::Error> {
-        Ok(names
-            .iter()
-            .map(|(adapter_name, friendly_name)| {
-                Box::new(AdapterWrapperStub {
-                    adapter_name: adapter_name.to_string(),
-                    friendly_name: friendly_name.to_string(),
-                }) as Box<dyn AdapterWrapper>
-            })
-            .collect())
     }
 
     #[derive(Debug, Default)]
@@ -795,21 +648,6 @@ mod tests {
     }
 
     impl RegKeyMock {
-        pub fn new(path: &str) -> RegKeyMock {
-            RegKeyMock {
-                path: path.to_string(),
-                enum_keys_results: RefCell::new(vec![]),
-                open_subkey_with_flags_parameters: Arc::new(Mutex::new(vec![])),
-                open_subkey_with_flags_results: RefCell::new(vec![]),
-                get_value_parameters: Arc::new(Mutex::new(vec![])),
-                get_value_results: RefCell::new(HashMap::new()),
-                set_value_parameters: Arc::new(Mutex::new(vec![])),
-                set_value_results: RefCell::new(HashMap::new()),
-                delete_value_parameters: Arc::new(Mutex::new(vec![])),
-                delete_value_results: RefCell::new(HashMap::new()),
-            }
-        }
-
         pub fn enum_keys_result(self, result: Vec<io::Result<&str>>) -> RegKeyMock {
             self.enum_keys_results.borrow_mut().push(
                 result
