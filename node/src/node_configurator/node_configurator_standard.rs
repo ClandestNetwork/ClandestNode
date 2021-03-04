@@ -560,17 +560,16 @@ pub mod standard {
                 }
             }
             Some(ref s) if s == "consume-only" => {
-                let mut errors = ConfiguratorError::new (vec![]);
+                let mut errors = ConfiguratorError::new(vec![]);
                 if neighbor_configs.is_empty() {
                     errors = errors.another_required("neighborhood-mode", "Node cannot run as --neighborhood-mode consume-only without --neighbors specified");
                 }
                 if value_m!(multi_config, "dns-servers", String).is_some() {
                     errors = errors.another_required("neighborhood-mode", "Node cannot run as --neighborhood-mode consume-only if --dns-servers is specified");
                 }
-                if errors.len() > 0 {
+                if !errors.is_empty() {
                     Err(errors)
-                }
-                else {
+                } else {
                     Ok(NeighborhoodMode::ConsumeOnly(neighbor_configs))
                 }
             }
@@ -1353,16 +1352,14 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(
-                ConfiguratorError::required(
-                    "neighborhood-mode",
-                    "Node cannot run as --neighborhood-mode consume-only without --neighbors specified"
-                )
-                .another_required(
-                    "neighborhood-mode",
-                    "Node cannot run as --neighborhood-mode consume-only if --dns-servers is specified"
-                )
+            Err(ConfiguratorError::required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode consume-only without --neighbors specified"
             )
+            .another_required(
+                "neighborhood-mode",
+                "Node cannot run as --neighborhood-mode consume-only if --dns-servers is specified"
+            ))
         )
     }
 

@@ -482,8 +482,7 @@ impl ProxyServer {
                     } else {
                         None
                     },
-                )
-                .expect("Could not transmit to hopper");
+                );
             }
             None => {
                 debug!(logger,
@@ -520,8 +519,7 @@ impl ProxyServer {
                                         } else {
                                             None
                                         },
-                                    )
-                                    .expect("Could not transmit to hopper");
+                                    );
                                 }
                                 Ok(None) => {
                                     ProxyServer::handle_route_failure(
@@ -664,7 +662,7 @@ impl ProxyServer {
         accountant_routing_sub: &Recipient<ReportRoutingServiceConsumedMessage>,
         add_return_route_sub: &Recipient<AddReturnRouteMessage>,
         retire_stream_key_via: Option<&Recipient<StreamShutdownMsg>>,
-    ) -> Result<(), ()> {
+    ) {
         match route_query_response.expected_services {
             ExpectedServices::RoundTrip(over, back, return_route_id) => {
                 let return_route_info = AddReturnRouteMessage {
@@ -701,7 +699,6 @@ impl ProxyServer {
             }
             _ => panic!("Expected RoundTrip ExpectedServices but got OneWay"),
         }
-        Ok(())
     }
 
     fn report_routing_service(
@@ -2290,8 +2287,7 @@ mod tests {
             &peer_actors.accountant.report_routing_service_consumed,
             &peer_actors.proxy_server.add_return_route,
             None,
-        )
-        .unwrap();
+        );
 
         System::current().stop();
         system.run();
@@ -2367,8 +2363,7 @@ mod tests {
             &peer_actors.accountant.report_routing_service_consumed,
             &peer_actors.proxy_server.add_return_route,
             Some(&peer_actors.proxy_server.stream_shutdown_sub),
-        )
-        .unwrap();
+        );
 
         System::current().stop();
         system.run();
@@ -2684,8 +2679,7 @@ mod tests {
             &peer_actors.accountant.report_routing_service_consumed,
             &peer_actors.proxy_server.add_return_route,
             None,
-        )
-        .unwrap();
+        );
     }
 
     #[test]

@@ -14,16 +14,16 @@ pub mod dns_modifier;
 pub mod dns_modifier_factory;
 mod dynamic_store_dns_modifier;
 mod resolv_conf_dns_modifier;
+mod utils;
 #[cfg(target_os = "windows")]
 mod win_dns_modifier;
-mod utils;
 
-use std::net::IpAddr;
-use crate::daemon::dns_inspector::dns_modifier_factory::{DnsModifierFactory};
-use std::fmt::{Formatter, Debug};
+use crate::daemon::dns_inspector::dns_modifier_factory::DnsModifierFactory;
 use std::fmt;
+use std::fmt::{Debug, Formatter};
+use std::net::IpAddr;
 
-#[derive (Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum DnsInspectionError {
     NotConnected,
     BadEntryFormat(String),
@@ -46,7 +46,9 @@ impl Debug for DnsInspectionError {
     }
 }
 
-pub fn dns_servers (factory: Box<dyn DnsModifierFactory>) -> Result<Vec<IpAddr>, DnsInspectionError> {
+pub fn dns_servers(
+    factory: Box<dyn DnsModifierFactory>,
+) -> Result<Vec<IpAddr>, DnsInspectionError> {
     let modifier = factory.make().unwrap();
     modifier.inspect()
 }
@@ -54,7 +56,9 @@ pub fn dns_servers (factory: Box<dyn DnsModifierFactory>) -> Result<Vec<IpAddr>,
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::daemon::dns_inspector::dns_modifier_factory::{DnsModifierFactoryReal, DnsModifierFactory};
+    use crate::daemon::dns_inspector::dns_modifier_factory::{
+        DnsModifierFactory, DnsModifierFactoryReal,
+    };
 
     #[test]
     fn dns_inspection_errors_render_properly() {
@@ -65,9 +69,10 @@ pub mod tests {
             DnsInspectionError::ConflictingEntries(1234, 4321),
             DnsInspectionError::RegistryQueryOsError("registry query os error".to_string()),
             DnsInspectionError::ConfigValueTypeError("type error".to_string()),
-        ].into_iter()
-            .map(|e| format!("{:?}", e))
-            .collect::<Vec<String>>();
+        ]
+        .into_iter()
+        .map(|e| format!("{:?}", e))
+        .collect::<Vec<String>>();
 
         assert_eq! (strings, vec![
             "This system does not appear to be connected to a network".to_string(),
@@ -87,6 +92,6 @@ pub mod tests {
 
         let actual_result = dns_servers(Box::new(factory));
 
-        assert_eq! (actual_result, expected_result);
+        assert_eq!(actual_result, expected_result);
     }
 }

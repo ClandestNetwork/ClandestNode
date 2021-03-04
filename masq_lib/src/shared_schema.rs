@@ -472,6 +472,10 @@ impl ConfiguratorError {
     pub fn len(&self) -> usize {
         self.param_errors.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]

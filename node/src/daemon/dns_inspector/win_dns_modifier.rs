@@ -1,14 +1,14 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
 use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::DnsInspectionError;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io;
-use winreg::enums::*;
-use winreg::RegKey;
 use std::net::IpAddr;
 use std::str::FromStr;
-use crate::daemon::dns_inspector::DnsInspectionError;
+use winreg::enums::*;
+use winreg::RegKey;
 
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
@@ -18,10 +18,11 @@ pub struct WinDnsModifier {
 }
 
 impl DnsModifier for WinDnsModifier {
-    fn inspect(&self) ->  Result<Vec<IpAddr>, DnsInspectionError> {
+    fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let interfaces = self.find_interfaces_to_inspect()?;
         let dns_server_list_csv = self.find_dns_server_list(interfaces)?;
-        let ip_vec:Vec<_> = dns_server_list_csv.split(',')
+        let ip_vec: Vec<_> = dns_server_list_csv
+            .split(',')
             .flat_map(|ip_str| IpAddr::from_str(&ip_str))
             .collect();
         Ok(ip_vec)
@@ -45,16 +46,20 @@ impl WinDnsModifier {
         Default::default()
     }
 
-    pub fn find_interfaces_to_inspect(&self) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
+    pub fn find_interfaces_to_inspect(
+        &self,
+    ) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
         self.find_interfaces(KEY_READ)
     }
 
-    fn find_interfaces(&self, access_required: u32) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
-        let interface_key = self.handle_reg_error(
-            self.hive.open_subkey_with_flags(
-                "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
-                access_required)
-                )?;
+    fn find_interfaces(
+        &self,
+        access_required: u32,
+    ) -> Result<Vec<Box<dyn RegKeyTrait>>, DnsInspectionError> {
+        let interface_key = self.handle_reg_error(self.hive.open_subkey_with_flags(
+            "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
+            access_required,
+        ))?;
         let gateway_interfaces: Vec<Box<dyn RegKeyTrait>> = interface_key
             .enum_keys()
             .into_iter()
@@ -75,7 +80,10 @@ impl WinDnsModifier {
             .flat_map(|interface| WinDnsModifier::get_default_gateway(interface.as_ref()))
             .collect();
         if distinct_gateway_ips.len() > 1 {
-            Err (DnsInspectionError::ConflictingEntries(gateway_interfaces.len (), distinct_gateway_ips.len ()))
+            Err(DnsInspectionError::ConflictingEntries(
+                gateway_interfaces.len(),
+                distinct_gateway_ips.len(),
+            ))
         } else {
             Ok(gateway_interfaces)
         }
@@ -98,17 +106,20 @@ impl WinDnsModifier {
             })
             .collect();
         if !errors.is_empty() {
-            return Err(errors.remove(0))
+            return Err(errors.remove(0));
         }
         let list_set: HashSet<String> = list_result_vec
             .into_iter()
             .flat_map(|result| match result {
-                Err(_e) => None,             //is this correct or not, there used to be panic!() of meaning like "shouldn't happen"?
+                Err(_e) => None, //is this correct or not, there used to be panic!() of meaning like "shouldn't happen"?
                 Ok(list) => Some(list),
             })
             .collect();
         if list_set.len() > 1 {
-            Err (DnsInspectionError::ConflictingEntries(interfaces_len, list_set.len ()))
+            Err(DnsInspectionError::ConflictingEntries(
+                interfaces_len,
+                list_set.len(),
+            ))
         } else {
             let list_vec = list_set.into_iter().collect::<Vec<String>>();
             Ok(list_vec[0].clone())
@@ -124,7 +135,9 @@ impl WinDnsModifier {
             interface.get_value("NameServer"),
         ) {
             (Err(_), Err(_)) => Err(DnsInspectionError::NotConnected),
-            (Err(_), Ok(ref permanent)) if permanent == &String::new() => Err(DnsInspectionError::NotConnected),
+            (Err(_), Ok(ref permanent)) if permanent == &String::new() => {
+                Err(DnsInspectionError::NotConnected)
+            }
             (Ok(ref dhcp), Err(_)) => Ok(dhcp.clone()),
             (Ok(ref dhcp), Ok(ref permanent)) if permanent == &String::new() => Ok(dhcp.clone()),
             (_, Ok(permanent)) => Ok(permanent),
@@ -134,13 +147,20 @@ impl WinDnsModifier {
     fn handle_reg_error<T>(&self, result: io::Result<T>) -> Result<T, DnsInspectionError> {
         match result {
             Ok(retval) => Ok(retval),
-            Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => Err(DnsInspectionError::RegistryQueryOsError(String::from(
-                "You must have administrative privilege to modify your DNS settings",
+            Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => {
+                Err(DnsInspectionError::RegistryQueryOsError(String::from(
+                    "You must have administrative privilege to modify your DNS settings",
+                )))
+            }
+            Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => {
+                Err(DnsInspectionError::RegistryQueryOsError(format!(
+                    "Registry contains no DNS information to display"
+                )))
+            }
+            Err(ref e) => Err(DnsInspectionError::RegistryQueryOsError(format!(
+                "Unexpected error: {:?}",
+                e
             ))),
-            Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => Err(DnsInspectionError::RegistryQueryOsError(format!(
-                "Registry contains no DNS information to display"
-            ))),
-            Err(ref e) => Err(DnsInspectionError::RegistryQueryOsError(format!("Unexpected error: {:?}", e))),
         }
     }
 
@@ -221,13 +241,13 @@ impl RegKeyReal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::daemon::dns_inspector::DnsInspectionError;
     use masq_lib::test_utils::fake_stream_holder::FakeStreamHolder;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::io::Error;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use crate::daemon::dns_inspector::DnsInspectionError;
 
     #[test]
     fn get_default_gateway_sees_dhcp_if_both_are_specified() {
@@ -398,7 +418,10 @@ mod tests {
         let result = subject.inspect();
 
         assert_eq!(
-            result.err().unwrap(),DnsInspectionError::RegistryQueryOsError("Registry contains no DNS information to display".to_string())
+            result.err().unwrap(),
+            DnsInspectionError::RegistryQueryOsError(
+                "Registry contains no DNS information to display".to_string()
+            )
         );
         assert_eq!(stream_holder.stdout.get_string(), String::new());
     }
@@ -502,7 +525,10 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries(3, 2));
+        assert_eq!(
+            result.err().unwrap(),
+            DnsInspectionError::ConflictingEntries(3, 2)
+        );
     }
 
     #[test]
@@ -533,7 +559,10 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.err().unwrap(), DnsInspectionError::ConflictingEntries(2, 2));
+        assert_eq!(
+            result.err().unwrap(),
+            DnsInspectionError::ConflictingEntries(2, 2)
+        );
     }
 
     #[test]
@@ -572,7 +601,13 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(result.unwrap(), vec![IpAddr::from_str("8.8.8.8").unwrap(),IpAddr::from_str("8.8.8.9").unwrap()]);
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                IpAddr::from_str("8.8.8.8").unwrap(),
+                IpAddr::from_str("8.8.8.9").unwrap()
+            ]
+        );
     }
 
     #[derive(Debug, Default)]

@@ -279,7 +279,7 @@ impl RoutingService {
             (Component::ProxyClient, MessageType::ClientRequest(vd)) => {
                 if !self.is_decentralized || payer_owns_secret_key {
                     let proxy_client_subs = match &self.routing_service_subs.proxy_client_subs_opt {
-                        Some (pcs) => pcs,
+                        Some(pcs) => pcs,
                         None => {
                             warning!(self.logger, "Received CORES package from {:?} for Proxy Client, but Proxy Client isn't running", immediate_neighbor);
                             return;
@@ -820,7 +820,7 @@ mod tests {
                 &main_cryptde.public_key(),
                 &payload.clone().into(),
             )
-                .unwrap(),
+            .unwrap(),
         );
         let data_ser = PlainData::new(&serde_cbor::ser::to_vec(&lcp).unwrap()[..]);
         let data_enc = main_cryptde
@@ -832,7 +832,7 @@ mod tests {
             sequence_number: None,
             last_data: true,
             is_clandestine: false,
-            data: data_enc.into()
+            data: data_enc.into(),
         };
 
         let system = System::new("converts_live_message_to_expired_for_proxy_client");

@@ -4,16 +4,16 @@ use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
 use regex::Regex;
 use std::collections::HashMap;
 
+use crate::daemon::dns_inspector::DnsInspectionError;
 use core_foundation::array::CFArray;
 use core_foundation::base::FromVoid;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::propertylist::CFPropertyList;
 use core_foundation::string::CFString;
-use system_configuration::dynamic_store::SCDynamicStore;
-use system_configuration::dynamic_store::SCDynamicStoreBuilder;
 use std::net::IpAddr;
 use std::str::FromStr;
-use crate::daemon::dns_inspector::DnsInspectionError;
+use system_configuration::dynamic_store::SCDynamicStore;
+use system_configuration::dynamic_store::SCDynamicStoreBuilder;
 
 const PRIMARY_SERVICE: &str = "PrimaryService";
 const SERVER_ADDRESSES: &str = "ServerAddresses";
@@ -51,9 +51,7 @@ impl DynamicStoreDnsModifier {
         Default::default()
     }
 
-    fn get_dns_info(
-        &self,
-    ) -> Result<(String, HashMap<String, Vec<String>>), DnsInspectionError> {
+    fn get_dns_info(&self) -> Result<(String, HashMap<String, Vec<String>>), DnsInspectionError> {
         let ipv4_map = match self
             .store
             .get_dictionary_string_cfpl("State:/Network/Global/IPv4")
@@ -69,17 +67,18 @@ impl DynamicStoreDnsModifier {
                 return Err(DnsInspectionError::NotConnected);
             }
         };
-        let primary_service =
-            match self.store.cfpl_to_string(&primary_service_cfpl) {
-                Ok(s) => s,
-                Err(_) => return Err(DnsInspectionError::ConfigValueTypeError("State:/Network/Global/IPv4/PrimaryService".to_string())),
-            };
+        let primary_service = match self.store.cfpl_to_string(&primary_service_cfpl) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(DnsInspectionError::ConfigValueTypeError(
+                    "State:/Network/Global/IPv4/PrimaryService".to_string(),
+                ))
+            }
+        };
         let dns_base_path = format!("State:/Network/Service/{}/DNS", primary_service);
         let dns_map = match self.store.get_dictionary_string_cfpl(&dns_base_path[..]) {
             Some(m) => m,
-            None => {
-                return Err(DnsInspectionError::NotConnected)
-            }
+            None => return Err(DnsInspectionError::NotConnected),
         };
         let mut result: HashMap<String, Vec<String>> = HashMap::new();
         match self.get_server_addresses(&dns_map, &dns_base_path, &SERVER_ADDRESSES) {
@@ -111,7 +110,8 @@ impl DynamicStoreDnsModifier {
             Ok(sa) => sa,
             Err(_) => {
                 return Err(DnsInspectionError::ConfigValueTypeError(format!(
-                    "{}/{}", dns_base_path, dns_leaf
+                    "{}/{}",
+                    dns_base_path, dns_leaf
                 )));
             }
         };
@@ -128,7 +128,10 @@ impl DynamicStoreDnsModifier {
             )
             .collect();
         if server_address_opts.contains(&None) {
-            return Err(DnsInspectionError::ConfigValueTypeError(format!("{}/{}", dns_base_path, dns_leaf)))
+            return Err(DnsInspectionError::ConfigValueTypeError(format!(
+                "{}/{}",
+                dns_base_path, dns_leaf
+            )));
         }
         Ok(Some(
             server_address_opts
@@ -425,10 +428,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(
-            result,
-            Err(DnsInspectionError::NotConnected)
-        );
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -440,10 +440,7 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq!(
-            result,
-            Err(DnsInspectionError::NotConnected)
-        );
+        assert_eq!(result, Err(DnsInspectionError::NotConnected));
     }
 
     #[test]
@@ -463,7 +460,9 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(DnsInspectionError::ConfigValueTypeError("State:/Network/Global/IPv4/PrimaryService".to_string()))
+            Err(DnsInspectionError::ConfigValueTypeError(
+                "State:/Network/Global/IPv4/PrimaryService".to_string()
+            ))
         );
     }
 
@@ -526,7 +525,12 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq! (result, Err (DnsInspectionError::ConfigValueTypeError(String::from ("State:/Network/Service/booga/DNS/ServerAddresses"))));
+        assert_eq!(
+            result,
+            Err(DnsInspectionError::ConfigValueTypeError(String::from(
+                "State:/Network/Service/booga/DNS/ServerAddresses"
+            )))
+        );
     }
 
     #[test]
@@ -556,7 +560,12 @@ mod tests {
 
         let result = subject.inspect();
 
-        assert_eq! (result, Err (DnsInspectionError::ConfigValueTypeError(String::from ("State:/Network/Service/booga/DNS/ServerAddresses"))));
+        assert_eq!(
+            result,
+            Err(DnsInspectionError::ConfigValueTypeError(String::from(
+                "State:/Network/Service/booga/DNS/ServerAddresses"
+            )))
+        );
     }
 
     #[test]
@@ -601,9 +610,12 @@ mod tests {
 
         let result = subject.inspect().unwrap();
 
-        assert_eq!(result, vec![
-            IpAddr::from_str("1.2.3.4").unwrap(),
-            IpAddr::from_str("5.6.7.8").unwrap(),
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                IpAddr::from_str("1.2.3.4").unwrap(),
+                IpAddr::from_str("5.6.7.8").unwrap(),
+            ]
+        );
     }
 }

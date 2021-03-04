@@ -22,5 +22,3 @@ pub mod resolv_conf_dns_modifier;
 pub mod utils;
 #[cfg(target_os = "windows")]
 pub mod win_dns_modifier;
-
-pub mod dns_inspector;
