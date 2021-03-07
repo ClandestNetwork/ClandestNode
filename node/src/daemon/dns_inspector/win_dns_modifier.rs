@@ -148,14 +148,15 @@ impl WinDnsModifier {
         match result {
             Ok(retval) => Ok(retval),
             Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => {
-                Err(DnsInspectionError::RegistryQueryOsError(String::from(
-                    "You must have administrative privilege to modify your DNS settings",
-                )))
+                Err(DnsInspectionError::RegistryQueryOsError(
+                    "You must have administrative privilege to modify your DNS settings"
+                        .to_string(),
+                ))
             }
             Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => {
-                Err(DnsInspectionError::RegistryQueryOsError(format!(
-                    "Registry contains no DNS information to display"
-                )))
+                Err(DnsInspectionError::RegistryQueryOsError(
+                    "Registry contains no DNS information to display".to_string(),
+                ))
             }
             Err(ref e) => Err(DnsInspectionError::RegistryQueryOsError(format!(
                 "Unexpected error: {:?}",
