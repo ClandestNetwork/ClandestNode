@@ -31,7 +31,7 @@ impl DnsModifier for DynamicStoreDnsModifier {
             Some(sa) => sa,
         };
         let ip_vec: Vec<IpAddr> = active_addresses
-            .into_iter()
+            .iter()
             .flat_map(|ip_str| IpAddr::from_str(ip_str))
             .collect();
         Ok(ip_vec)
