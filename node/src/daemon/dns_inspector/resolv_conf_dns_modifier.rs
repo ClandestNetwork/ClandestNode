@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_resolv_conf_does_not_exist() {
-        let root = make_root("inspect_complains_if_resolv_conf_does_not_exist");
+        let root = make_root("daemon_inspect_complains_if_resolv_conf_does_not_exist");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root;
 
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_resolv_conf_exists_but_is_a_directory() {
-        let root = make_root("inspect_complains_if_resolv_conf_exists_but_is_a_directory");
+        let root = make_root("daemon_inspect_complains_if_resolv_conf_exists_but_is_a_directory");
         fs::create_dir_all(
             Path::new(&root)
                 .join(Path::new("etc"))
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_resolv_conf_exists_but_is_not_readable() {
-        let root = make_root("inspect_complains_if_resolv_conf_exists_but_is_not_readable");
+        let root = make_root("daemon_inspect_complains_if_resolv_conf_exists_but_is_not_readable");
         let file = make_resolv_conf(&root, "");
         let mut permissions = file.metadata().unwrap().permissions();
         permissions.set_mode(0o333);
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_resolv_conf_is_not_utf_8() {
-        let root = make_root("inspect_complains_if_resolv_conf_is_not_utf_8");
+        let root = make_root("daemon_inspect_complains_if_resolv_conf_is_not_utf_8");
         let mut file = make_resolv_conf(&root, "");
         file.seek(SeekFrom::Start(0)).unwrap();
         file.write(&[192, 193]).unwrap();
@@ -326,7 +326,8 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_there_is_no_preexisting_nameserver_directive() {
-        let root = make_root("inspect_complains_if_there_is_no_preexisting_nameserver_directive");
+        let root =
+            make_root("daemon_inspect_complains_if_there_is_no_preexisting_nameserver_directive");
         make_resolv_conf(&root, "");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root;
@@ -338,7 +339,7 @@ mod tests {
 
     #[test]
     fn inspect_complains_if_nameserver_directive_has_bad_ip_address() {
-        let root = make_root("inspect_complains_if_nameserver_directive_has_bad_ip_address");
+        let root = make_root("daemon_inspect_complains_if_nameserver_directive_has_bad_ip_address");
         make_resolv_conf(&root, "nameserver 300.301.302.303");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root;
@@ -353,7 +354,7 @@ mod tests {
 
     #[test]
     fn inspect_works_if_everything_is_copacetic() {
-        let root = make_root("inspect_works_if_everything_is_copacetic");
+        let root = make_root("daemon_inspect_works_if_everything_is_copacetic");
         make_resolv_conf (&root, "#comment\n## nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 2603:6011:b504:bf01:2ad:24ff:fe57:fd78\n#nameserver 127.0.0.1\n");
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root.clone();
