@@ -3,6 +3,6 @@
 use crate::daemon::dns_inspector::DnsInspectionError;
 use std::net::IpAddr;
 
-pub trait DnsModifier {
+pub trait DnsInspector {
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError>;
 }

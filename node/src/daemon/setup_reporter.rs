@@ -2,8 +2,8 @@
 
 use crate::blockchain::blockchain_interface::{chain_id_from_name, chain_name_from_id};
 use crate::bootstrapper::BootstrapperConfig;
-use crate::daemon::dns_inspector::dns_modifier_factory::{
-    DnsModifierFactory, DnsModifierFactoryReal,
+use crate::daemon::dns_inspector::dns_inspector_factory::{
+    DnsInspectorFactory, DnsInspectorFactoryReal,
 };
 use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
 use crate::db_config::persistent_configuration::{
@@ -637,12 +637,12 @@ impl ValueRetriever for DbPassword {
 }
 
 struct DnsServers {
-    factory: Box<dyn DnsModifierFactory>,
+    factory: Box<dyn DnsInspectorFactory>,
 }
 impl DnsServers {
     pub fn new() -> Self {
         Self {
-            factory: Box::new(DnsModifierFactoryReal::new()),
+            factory: Box::new(DnsInspectorFactoryReal::new()),
         }
     }
 }
@@ -657,9 +657,12 @@ impl ValueRetriever for DnsServers {
         _persistent_config_opt: &Option<Box<dyn PersistentConfiguration>>,
         _db_password_opt: &Option<String>,
     ) -> Option<(String, UiSetupResponseValueStatus)> {
-        let modifier = self.factory.make()?;
-        match modifier.inspect() {
+        let inspector = self.factory.make()?;
+        match inspector.inspect() {
             Ok(ip_addrs) => {
+                if ip_addrs.is_empty() {
+                    return None;
+                }
                 if ip_addrs.iter().any(|ip_addr| ip_addr.is_loopback()) {
                     return None;
                 }
@@ -874,7 +877,7 @@ mod tests {
     use super::*;
     use crate::blockchain::blockchain_interface::chain_id_from_name;
     use crate::bootstrapper::RealUser;
-    use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+    use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
     use crate::daemon::dns_inspector::DnsInspectionError;
     use crate::database::db_initializer::{DbInitializer, DbInitializerReal};
     use crate::db_config::persistent_configuration::{
@@ -899,19 +902,19 @@ mod tests {
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
 
-    pub struct DnsModifierMock {
+    pub struct DnsInspectorMock {
         inspect_results: RefCell<Vec<Result<Vec<IpAddr>, DnsInspectionError>>>,
     }
 
-    impl DnsModifier for DnsModifierMock {
+    impl DnsInspector for DnsInspectorMock {
         fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
             self.inspect_results.borrow_mut().remove(0)
         }
     }
 
-    impl DnsModifierMock {
-        pub fn new() -> DnsModifierMock {
-            DnsModifierMock {
+    impl DnsInspectorMock {
+        pub fn new() -> DnsInspectorMock {
+            DnsInspectorMock {
                 inspect_results: RefCell::new(vec![]),
             }
         }
@@ -919,7 +922,7 @@ mod tests {
         pub fn inspect_result(
             self,
             result: Result<Vec<IpAddr>, DnsInspectionError>,
-        ) -> DnsModifierMock {
+        ) -> DnsInspectorMock {
             self.inspect_results.borrow_mut().push(result);
             self
         }
@@ -927,11 +930,11 @@ mod tests {
 
     #[derive(Default)]
     pub struct DnsModifierFactoryMock {
-        make_results: RefCell<Vec<Option<Box<dyn DnsModifier>>>>,
+        make_results: RefCell<Vec<Option<Box<dyn DnsInspector>>>>,
     }
 
-    impl DnsModifierFactory for DnsModifierFactoryMock {
-        fn make(&self) -> Option<Box<dyn DnsModifier>> {
+    impl DnsInspectorFactory for DnsModifierFactoryMock {
+        fn make(&self) -> Option<Box<dyn DnsInspector>> {
             self.make_results.borrow_mut().remove(0)
         }
     }
@@ -943,7 +946,7 @@ mod tests {
             }
         }
 
-        pub fn make_result(self, result: Option<Box<dyn DnsModifier>>) -> DnsModifierFactoryMock {
+        pub fn make_result(self, result: Option<Box<dyn DnsInspector>>) -> DnsModifierFactoryMock {
             self.make_results.borrow_mut().push(result);
             self
         }
@@ -2133,7 +2136,7 @@ mod tests {
     #[test]
     fn dns_servers_computed_default_does_not_exist_when_dns_is_subverted() {
         let modifier =
-            DnsModifierMock::new().inspect_result(Ok(vec![IpAddr::from_str("127.0.0.1").unwrap()]));
+            DnsInspectorMock::new().inspect_result(Ok(vec![IpAddr::from_str("127.0.0.1").unwrap()]));
         let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
         let mut subject = DnsServers::new();
         subject.factory = Box::new(factory);
@@ -2145,7 +2148,19 @@ mod tests {
 
     #[test]
     fn dns_servers_computed_default_does_not_exist_when_dns_inspection_fails() {
-        let modifier = DnsModifierMock::new().inspect_result(Err(DnsInspectionError::NotConnected));
+        let modifier = DnsInspectorMock::new().inspect_result(Err(DnsInspectionError::NotConnected));
+        let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
+        let mut subject = DnsServers::new();
+        subject.factory = Box::new(factory);
+
+        let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
+
+        assert_eq!(result, None)
+    }
+
+    #[test]
+    fn dns_servers_computed_default_does_not_exist_when_dns_inspection_returns_no_addresses() {
+        let modifier = DnsInspectorMock::new().inspect_result(Ok(vec![]));
         let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
         let mut subject = DnsServers::new();
         subject.factory = Box::new(factory);
@@ -2157,7 +2172,7 @@ mod tests {
 
     #[test]
     fn dns_servers_computed_default_exists_when_dns_inspection_succeeds() {
-        let modifier = DnsModifierMock::new().inspect_result(Ok(vec![
+        let modifier = DnsInspectorMock::new().inspect_result(Ok(vec![
             IpAddr::from_str("192.168.0.1").unwrap(),
             IpAddr::from_str("8.8.8.8").unwrap(),
         ]));

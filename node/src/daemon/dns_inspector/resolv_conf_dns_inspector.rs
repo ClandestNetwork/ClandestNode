@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 #![cfg(target_os = "linux")]
-use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 use crate::daemon::dns_inspector::DnsInspectionError;
 use regex::Regex;
 use std::fs::File;
@@ -12,11 +12,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-pub struct ResolvConfDnsModifier {
+pub struct ResolvConfDnsInspector {
     root: PathBuf,
 }
 
-impl DnsModifier for ResolvConfDnsModifier {
+impl DnsInspector for ResolvConfDnsInspector {
     #[allow(unused_mut)]
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, contents) = self.open_resolv_conf(false)?;
@@ -24,15 +24,15 @@ impl DnsModifier for ResolvConfDnsModifier {
     }
 }
 
-impl Default for ResolvConfDnsModifier {
+impl Default for ResolvConfDnsInspector {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ResolvConfDnsModifier {
-    pub fn new() -> ResolvConfDnsModifier {
-        ResolvConfDnsModifier {
+impl ResolvConfDnsInspector {
+    pub fn new() -> ResolvConfDnsInspector {
+        ResolvConfDnsInspector {
             root: PathBuf::from("/"),
         }
     }
@@ -49,19 +49,19 @@ impl ResolvConfDnsModifier {
             Ok(f) => f,
             Err(ref e) if e.kind() == ErrorKind::NotFound => {
                 return Err(DnsInspectionError::InvalidConfigFile(
-                    ResolvConfDnsModifier::process_msg("/etc/resolv.conf was not found", for_write),
+                    ResolvConfDnsInspector::process_msg("/etc/resolv.conf was not found", for_write),
                 ));
             }
             Err(ref e) if e.kind() == ErrorKind::PermissionDenied => {
                 let suffix = if for_write { " and writable" } else { "" };
                 let msg = format!("/etc/resolv.conf is not readable{}", suffix);
                 return Err(DnsInspectionError::InvalidConfigFile(
-                    ResolvConfDnsModifier::process_msg(msg.as_str(), for_write),
+                    ResolvConfDnsInspector::process_msg(msg.as_str(), for_write),
                 ));
             }
             Err(ref e) if e.raw_os_error() == Some(21) => {
                 return Err(DnsInspectionError::InvalidConfigFile(
-                    ResolvConfDnsModifier::process_msg(
+                    ResolvConfDnsInspector::process_msg(
                         "/etc/resolv.conf is a directory",
                         for_write,
                     ),
@@ -77,7 +77,7 @@ impl ResolvConfDnsModifier {
         let mut contents = String::new();
         if file.read_to_string(&mut contents).is_err() {
             return Err(DnsInspectionError::InvalidConfigFile(
-                ResolvConfDnsModifier::process_msg(
+                ResolvConfDnsInspector::process_msg(
                     "/etc/resolv.conf is not a UTF-8 text file",
                     for_write,
                 ),
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn nameserver_line_to_ip_complains_when_given_badly_formatted_nameserver_line() {
         let nameserver_line = "booga-booga".to_string();
-        let subject = ResolvConfDnsModifier::new();
+        let subject = ResolvConfDnsInspector::new();
 
         let result = subject.nameserver_line_to_ip_str(nameserver_line);
 
@@ -197,7 +197,7 @@ mod tests {
     fn nameserver_line_to_ip_handles_line_with_leading_whitespace_and_comment() {
         let nameserver_line =
             "  \t  \tnameserver  \t  \t booga-booga  \t\t  # comment #".to_string();
-        let subject = ResolvConfDnsModifier::new();
+        let subject = ResolvConfDnsInspector::new();
 
         let result = subject.nameserver_line_to_ip_str(nameserver_line);
 
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn nameserver_line_to_ip_handles_line_with_minimum_whitespace_and_no_comment() {
         let nameserver_line = "nameserver booga-booga".to_string();
-        let subject = ResolvConfDnsModifier::new();
+        let subject = ResolvConfDnsInspector::new();
 
         let result = subject.nameserver_line_to_ip_str(nameserver_line);
 
@@ -218,7 +218,7 @@ mod tests {
     fn active_nameservers_are_properly_detected_in_trimmed_file() {
         let contents =
             "nameserver beginning\n#nameserver commented\n# nameserver commented2\n nameserver preceded_by_space\nnameserver followed_by_space \nnameserver with more than two words\n ## nameserver double_comment\nnameserver ending";
-        let subject = ResolvConfDnsModifier::new();
+        let subject = ResolvConfDnsInspector::new();
 
         let result = subject.active_nameservers(contents);
 
@@ -238,7 +238,7 @@ mod tests {
     fn active_nameservers_are_properly_detected_in_untrimmed_file() {
         let contents =
             "#leading comment\nnameserver beginning\nnameserver ending\n#trailing comment";
-        let subject = ResolvConfDnsModifier::new();
+        let subject = ResolvConfDnsInspector::new();
 
         let result = subject.active_nameservers(contents);
 
@@ -257,7 +257,7 @@ mod tests {
             "dns_inspector",
             "daemon_inspect_complains_if_resolv_conf_does_not_exist",
         );
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -280,7 +280,7 @@ mod tests {
                 .join(Path::new("resolv.conf")),
         )
         .unwrap();
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -303,7 +303,7 @@ mod tests {
         let mut permissions = file.metadata().unwrap().permissions();
         permissions.set_mode(0o333);
         file.set_permissions(permissions.clone()).unwrap();
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -325,7 +325,7 @@ mod tests {
         let mut file = make_resolv_conf(&root, "");
         file.seek(SeekFrom::Start(0)).unwrap();
         file.write(&[192, 193]).unwrap();
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -345,7 +345,7 @@ mod tests {
             "daemon_inspect_complains_if_there_is_no_preexisting_nameserver_directive",
         );
         make_resolv_conf(&root, "");
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -360,7 +360,7 @@ mod tests {
             "daemon_inspect_complains_if_nameserver_directive_has_bad_ip_address",
         );
         make_resolv_conf(&root, "nameserver 300.301.302.303");
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root;
 
         let result = subject.inspect();
@@ -378,7 +378,7 @@ mod tests {
             "daemon_inspect_works_if_everything_is_copacetic",
         );
         make_resolv_conf (&root, "#comment\n## nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 2603:6011:b504:bf01:2ad:24ff:fe57:fd78\n#nameserver 127.0.0.1\n");
-        let mut subject = ResolvConfDnsModifier::new();
+        let mut subject = ResolvConfDnsInspector::new();
         subject.root = root.clone();
 
         let result = subject.inspect().unwrap();

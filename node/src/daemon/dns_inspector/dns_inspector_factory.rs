@@ -1,27 +1,27 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
-use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 #[cfg(target_os = "linux")]
 use std::fs::File;
 #[cfg(target_os = "linux")]
 use std::path::Path;
 
 #[cfg(target_os = "linux")]
-use crate::daemon::dns_inspector::resolv_conf_dns_modifier::ResolvConfDnsModifier;
+use crate::daemon::dns_inspector::resolv_conf_dns_inspector::ResolvConfDnsInspector;
 
 #[cfg(target_os = "macos")]
-use crate::daemon::dns_inspector::dynamic_store_dns_modifier::DynamicStoreDnsModifier;
+use crate::daemon::dns_inspector::dynamic_store_dns_inspector::DynamicStoreDnsInspector;
 #[cfg(target_os = "windows")]
-use crate::daemon::dns_inspector::win_dns_modifier::WinDnsModifier;
+use crate::daemon::dns_inspector::win_dns_inspector::WinDnsInspector;
 
-pub trait DnsModifierFactory {
-    fn make(&self) -> Option<Box<dyn DnsModifier>>;
+pub trait DnsInspectorFactory {
+    fn make(&self) -> Option<Box<dyn DnsInspector>>;
 }
 
 #[derive(Default)]
-pub struct DnsModifierFactoryReal {}
+pub struct DnsInspectorFactoryReal {}
 
-impl DnsModifierFactory for DnsModifierFactoryReal {
-    fn make(&self) -> Option<Box<dyn DnsModifier>> {
+impl DnsInspectorFactory for DnsInspectorFactoryReal {
+    fn make(&self) -> Option<Box<dyn DnsInspector>> {
         let qualifier_factory_refref = QUALIFIER_FACTORIES
             .iter()
             .find(|qf_refref| (*qf_refref).system_qualifies())?;
@@ -29,7 +29,7 @@ impl DnsModifierFactory for DnsModifierFactoryReal {
     }
 }
 
-impl DnsModifierFactoryReal {
+impl DnsInspectorFactoryReal {
     pub fn new() -> Self {
         Default::default()
     }
@@ -43,7 +43,7 @@ const QUALIFIER_FACTORIES: [&dyn QualifierFactory; 3] = [
 
 trait QualifierFactory {
     fn system_qualifies(&self) -> bool;
-    fn make(&self) -> Box<dyn DnsModifier>;
+    fn make(&self) -> Box<dyn DnsInspector>;
 }
 
 struct ResolvConfQualifierFactory;
@@ -52,8 +52,8 @@ impl QualifierFactory for ResolvConfQualifierFactory {
     fn system_qualifies(&self) -> bool {
         File::open(Path::new("/etc/resolv.conf")).is_ok()
     }
-    fn make(&self) -> Box<dyn DnsModifier> {
-        Box::new(ResolvConfDnsModifier::new())
+    fn make(&self) -> Box<dyn DnsInspector> {
+        Box::new(ResolvConfDnsInspector::new())
     }
 }
 
@@ -62,7 +62,7 @@ impl QualifierFactory for ResolvConfQualifierFactory {
     fn system_qualifies(&self) -> bool {
         false
     }
-    fn make(&self) -> Box<dyn DnsModifier> {
+    fn make(&self) -> Box<dyn DnsInspector> {
         panic!("Should never be called")
     }
 }
@@ -74,8 +74,8 @@ impl QualifierFactory for WinQualifierFactory {
         true
     }
 
-    fn make(&self) -> Box<dyn DnsModifier> {
-        Box::new(WinDnsModifier::default())
+    fn make(&self) -> Box<dyn DnsInspector> {
+        Box::new(WinDnsInspector::default())
     }
 }
 
@@ -84,7 +84,7 @@ impl QualifierFactory for WinQualifierFactory {
     fn system_qualifies(&self) -> bool {
         false
     }
-    fn make(&self) -> Box<dyn DnsModifier> {
+    fn make(&self) -> Box<dyn DnsInspector> {
         panic!("Should never be called")
     }
 }
@@ -95,8 +95,8 @@ impl QualifierFactory for DynamicStoreQualifierFactory {
     fn system_qualifies(&self) -> bool {
         true
     }
-    fn make(&self) -> Box<dyn DnsModifier> {
-        Box::new(DynamicStoreDnsModifier::new())
+    fn make(&self) -> Box<dyn DnsInspector> {
+        Box::new(DynamicStoreDnsInspector::new())
     }
 }
 #[cfg(not(target_os = "macos"))]
@@ -104,7 +104,7 @@ impl QualifierFactory for DynamicStoreQualifierFactory {
     fn system_qualifies(&self) -> bool {
         false
     }
-    fn make(&self) -> Box<dyn DnsModifier> {
+    fn make(&self) -> Box<dyn DnsInspector> {
         panic!("Should never be called")
     }
 }
@@ -169,8 +169,8 @@ mod tests {
     }
 
     #[test]
-    fn dns_modifier_factory_makes_something_on_this_os() {
-        let subject = DnsModifierFactoryReal::new();
+    fn dns_inspector_factory_makes_something_on_this_os() {
+        let subject = DnsInspectorFactoryReal::new();
 
         let _result = subject.make();
 

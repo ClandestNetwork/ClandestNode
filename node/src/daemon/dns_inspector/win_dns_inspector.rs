@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 
-use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 use crate::daemon::dns_inspector::DnsInspectionError;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -13,11 +13,11 @@ use winreg::RegKey;
 const NOT_FOUND: i32 = 2;
 const PERMISSION_DENIED: i32 = 5;
 
-pub struct WinDnsModifier {
+pub struct WinDnsInspector {
     hive: Box<dyn RegKeyTrait>,
 }
 
-impl DnsModifier for WinDnsModifier {
+impl DnsInspector for WinDnsInspector {
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let interfaces = self.find_interfaces_to_inspect()?;
         let dns_server_list_csv = self.find_dns_server_list(interfaces)?;
@@ -29,9 +29,9 @@ impl DnsModifier for WinDnsModifier {
     }
 }
 
-impl Default for WinDnsModifier {
+impl Default for WinDnsInspector {
     fn default() -> Self {
-        WinDnsModifier {
+        WinDnsInspector {
             hive: Box::new(RegKeyReal::new(
                 RegKey::predef(HKEY_LOCAL_MACHINE),
                 "HKEY_LOCAL_MACHINE",
@@ -40,7 +40,7 @@ impl Default for WinDnsModifier {
     }
 }
 
-impl WinDnsModifier {
+impl WinDnsInspector {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Default::default()
@@ -68,7 +68,7 @@ impl WinDnsModifier {
                 interface_key.open_subkey_with_flags(&interface_name[..], access_required)
             })
             .filter(|interface| {
-                WinDnsModifier::get_default_gateway(interface.as_ref()).is_some()
+                WinDnsInspector::get_default_gateway(interface.as_ref()).is_some()
                     && interface.get_value("NameServer").is_ok()
             })
             .collect();
@@ -77,7 +77,7 @@ impl WinDnsModifier {
         }
         let distinct_gateway_ips: HashSet<String> = gateway_interfaces
             .iter()
-            .flat_map(|interface| WinDnsModifier::get_default_gateway(interface.as_ref()))
+            .flat_map(|interface| WinDnsInspector::get_default_gateway(interface.as_ref()))
             .collect();
         if distinct_gateway_ips.len() > 1 {
             Err(DnsInspectionError::ConflictingEntries(
@@ -259,7 +259,7 @@ mod tests {
                 .get_value_result("DhcpDefaultGateway", Ok("DhcpDefaultGateway".to_string())),
         );
 
-        let result = WinDnsModifier::get_default_gateway(interface.as_ref());
+        let result = WinDnsInspector::get_default_gateway(interface.as_ref());
 
         assert_eq!(result, Some("DhcpDefaultGateway".to_string()))
     }
@@ -275,7 +275,7 @@ mod tests {
                 ),
         );
 
-        let result = WinDnsModifier::get_default_gateway(interface.as_ref());
+        let result = WinDnsInspector::get_default_gateway(interface.as_ref());
 
         assert_eq!(result, Some("DefaultGateway".to_string()))
     }
@@ -288,7 +288,7 @@ mod tests {
                 .get_value_result("DhcpDefaultGateway", Ok("DhcpDefaultGateway".to_string())),
         );
 
-        let result = WinDnsModifier::get_default_gateway(interface.as_ref());
+        let result = WinDnsInspector::get_default_gateway(interface.as_ref());
 
         assert_eq!(result, Some("DhcpDefaultGateway".to_string()))
     }
@@ -304,7 +304,7 @@ mod tests {
                 ),
         );
 
-        let result = WinDnsModifier::get_default_gateway(interface.as_ref());
+        let result = WinDnsInspector::get_default_gateway(interface.as_ref());
 
         assert_eq!(result, None)
     }
@@ -316,7 +316,7 @@ mod tests {
                 .get_value_result("NameServer", Err(Error::from_raw_os_error(NOT_FOUND)))
                 .get_value_result("DhcpNameServer", Err(Error::from_raw_os_error(NOT_FOUND))),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -333,7 +333,7 @@ mod tests {
                     Ok("name server list from DHCP".to_string()),
                 ),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -350,7 +350,7 @@ mod tests {
                 )
                 .get_value_result("DhcpNameServer", Err(Error::from_raw_os_error(NOT_FOUND))),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -370,7 +370,7 @@ mod tests {
                     Ok("name server list from DHCP".to_string()),
                 ),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -387,7 +387,7 @@ mod tests {
                     Ok("name server list from DHCP".to_string()),
                 ),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -401,7 +401,7 @@ mod tests {
                 .get_value_result("NameServer", Ok("".to_string()))
                 .get_value_result("DhcpNameServer", Err(Error::from_raw_os_error(NOT_FOUND))),
         );
-        let subject = WinDnsModifier::new();
+        let subject = WinDnsInspector::new();
 
         let result = subject.find_dns_servers_for_interface(interface);
 
@@ -413,7 +413,7 @@ mod tests {
         let stream_holder = FakeStreamHolder::new();
         let hive = RegKeyMock::default()
             .open_subkey_with_flags_result(Err(Error::from_raw_os_error(NOT_FOUND)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -431,7 +431,7 @@ mod tests {
     fn inspect_complains_about_unexpected_os_error() {
         let hive =
             RegKeyMock::default().open_subkey_with_flags_result(Err(Error::from_raw_os_error(3)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -464,7 +464,7 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -486,7 +486,7 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -521,7 +521,7 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(another_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(last_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -555,7 +555,7 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(one_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(another_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();
@@ -597,7 +597,7 @@ mod tests {
             .open_subkey_with_flags_result(Ok(Box::new(another_active_interface)))
             .open_subkey_with_flags_result(Ok(Box::new(inactive_interface)));
         let hive = RegKeyMock::default().open_subkey_with_flags_result(Ok(Box::new(interfaces)));
-        let mut subject = WinDnsModifier::default();
+        let mut subject = WinDnsInspector::default();
         subject.hive = Box::new(hive);
 
         let result = subject.inspect();

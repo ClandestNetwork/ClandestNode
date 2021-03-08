@@ -10,15 +10,15 @@ extern crate system_configuration;
 
 #[cfg(target_os = "windows")]
 mod adapter_wrapper;
-pub mod dns_modifier;
-pub mod dns_modifier_factory;
-mod dynamic_store_dns_modifier;
-mod resolv_conf_dns_modifier;
+pub mod dns_inspector;
+pub mod dns_inspector_factory;
+mod dynamic_store_dns_inspector;
+mod resolv_conf_dns_inspector;
 mod utils;
 #[cfg(target_os = "windows")]
-mod win_dns_modifier;
+mod win_dns_inspector;
 
-use crate::daemon::dns_inspector::dns_modifier_factory::DnsModifierFactory;
+use crate::daemon::dns_inspector::dns_inspector_factory::DnsInspectorFactory;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::net::IpAddr;
@@ -47,17 +47,17 @@ impl Debug for DnsInspectionError {
 }
 
 pub fn dns_servers(
-    factory: Box<dyn DnsModifierFactory>,
+    factory: Box<dyn DnsInspectorFactory>,
 ) -> Result<Vec<IpAddr>, DnsInspectionError> {
-    let modifier = factory.make().unwrap();
-    modifier.inspect()
+    let inspector = factory.make().unwrap();
+    inspector.inspect()
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::daemon::dns_inspector::dns_modifier_factory::{
-        DnsModifierFactory, DnsModifierFactoryReal,
+    use crate::daemon::dns_inspector::dns_inspector_factory::{
+        DnsInspectorFactory, DnsInspectorFactoryReal,
     };
 
     #[test]
@@ -86,9 +86,9 @@ pub mod tests {
 
     #[test]
     fn dns_servers_works() {
-        let factory = DnsModifierFactoryReal::new();
-        let modifier = factory.make().unwrap();
-        let expected_result = modifier.inspect();
+        let factory = DnsInspectorFactoryReal::new();
+        let inspector = factory.make().unwrap();
+        let expected_result = inspector.inspect();
 
         let actual_result = dns_servers(Box::new(factory));
 

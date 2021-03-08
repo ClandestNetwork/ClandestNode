@@ -1,6 +1,6 @@
 // Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
 #![cfg(target_os = "macos")]
-use crate::daemon::dns_inspector::dns_modifier::DnsModifier;
+use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 use regex::Regex;
 use std::collections::HashMap;
 
@@ -19,11 +19,11 @@ const PRIMARY_SERVICE: &str = "PrimaryService";
 const SERVER_ADDRESSES: &str = "ServerAddresses";
 const SERVER_ADDRESSES_BAK: &str = "ServerAddressesBak";
 
-pub struct DynamicStoreDnsModifier {
+pub struct DynamicStoreDnsInspector {
     store: Box<dyn StoreWrapper>,
 }
 
-impl DnsModifier for DynamicStoreDnsModifier {
+impl DnsInspector for DynamicStoreDnsInspector {
     fn inspect(&self) -> Result<Vec<IpAddr>, DnsInspectionError> {
         let (_, dns_info) = self.get_dns_info()?;
         let active_addresses = match dns_info.get(SERVER_ADDRESSES) {
@@ -38,7 +38,7 @@ impl DnsModifier for DynamicStoreDnsModifier {
     }
 }
 
-impl Default for DynamicStoreDnsModifier {
+impl Default for DynamicStoreDnsInspector {
     fn default() -> Self {
         Self {
             store: Box::new(StoreWrapperReal::new("MASQNode")),
@@ -46,7 +46,7 @@ impl Default for DynamicStoreDnsModifier {
     }
 }
 
-impl DynamicStoreDnsModifier {
+impl DynamicStoreDnsInspector {
     pub fn new() -> Self {
         Default::default()
     }
@@ -423,7 +423,7 @@ mod tests {
     #[test]
     fn inspect_complains_if_root_path_doesnt_exist() {
         let store = StoreWrapperMock::new().get_dictionary_string_cfpl_result(None);
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -435,7 +435,7 @@ mod tests {
     fn inspect_complains_if_primary_service_doesnt_exist() {
         let ipv4_map: HashMap<String, CFPropertyList> = HashMap::new();
         let store = StoreWrapperMock::new().get_dictionary_string_cfpl_result(Some(ipv4_map));
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -453,7 +453,7 @@ mod tests {
         let store = StoreWrapperMock::new()
             .get_dictionary_string_cfpl_result(Some(ipv4_map))
             .cfpl_to_string_result(Err(String::from("not a string")));
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -477,7 +477,7 @@ mod tests {
             .get_dictionary_string_cfpl_result(Some(ipv4_map))
             .cfpl_to_string_result(Ok(String::from("booga")))
             .get_dictionary_string_cfpl_result(None);
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -497,7 +497,7 @@ mod tests {
             .get_dictionary_string_cfpl_result(Some(ipv4_map))
             .cfpl_to_string_result(Ok(String::from("booga")))
             .get_dictionary_string_cfpl_result(Some(server_addresses_map));
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -520,7 +520,7 @@ mod tests {
             .cfpl_to_string_result(Ok(String::from("booga")))
             .get_dictionary_string_cfpl_result(Some(server_addresses_map))
             .cfpl_to_vec_result(Err(String::from("boolean, not array")));
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -555,7 +555,7 @@ mod tests {
             .cfpl_to_string_result(Err(String::from("Not a string")))
             .get_dictionary_string_cfpl_result(Some(server_addresses_map))
             .cfpl_to_vec_result(Ok(vec![CFBoolean::from(true).to_CFPropertyList()]));
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect();
@@ -605,7 +605,7 @@ mod tests {
             ]))
             .set_dictionary_string_cfpl_parameters(&set_dictionary_string_cfpl_parameters_arc)
             .set_dictionary_string_cfpl_result(true);
-        let mut subject = DynamicStoreDnsModifier::new();
+        let mut subject = DynamicStoreDnsInspector::new();
         subject.store = Box::new(store);
 
         let result = subject.inspect().unwrap();
