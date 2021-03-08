@@ -302,12 +302,14 @@ mod tests {
         let file = make_resolv_conf(&root, "");
         let mut permissions = file.metadata().unwrap().permissions();
         permissions.set_mode(0o333);
-        file.set_permissions(permissions).unwrap();
+        file.set_permissions(permissions.clone()).unwrap();
         let mut subject = ResolvConfDnsModifier::new();
         subject.root = root;
 
         let result = subject.inspect();
 
+        permissions.set_mode(0o777);
+        file.set_permissions(permissions).unwrap();
         assert_eq!(
             result.err().unwrap(),
             DnsInspectionError::InvalidConfigFile(String::from("/etc/resolv.conf is not readable"))
