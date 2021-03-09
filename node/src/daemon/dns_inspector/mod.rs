@@ -10,7 +10,7 @@ extern crate system_configuration;
 
 #[cfg(target_os = "windows")]
 mod adapter_wrapper;
-#[allow (clippy::module_inception)]
+#[allow(clippy::module_inception)]
 pub mod dns_inspector;
 pub mod dns_inspector_factory;
 mod dynamic_store_dns_inspector;
