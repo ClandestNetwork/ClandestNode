@@ -2135,8 +2135,8 @@ mod tests {
 
     #[test]
     fn dns_servers_computed_default_does_not_exist_when_dns_is_subverted() {
-        let modifier =
-            DnsInspectorMock::new().inspect_result(Ok(vec![IpAddr::from_str("127.0.0.1").unwrap()]));
+        let modifier = DnsInspectorMock::new()
+            .inspect_result(Ok(vec![IpAddr::from_str("127.0.0.1").unwrap()]));
         let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
         let mut subject = DnsServers::new();
         subject.factory = Box::new(factory);
@@ -2148,7 +2148,8 @@ mod tests {
 
     #[test]
     fn dns_servers_computed_default_does_not_exist_when_dns_inspection_fails() {
-        let modifier = DnsInspectorMock::new().inspect_result(Err(DnsInspectionError::NotConnected));
+        let modifier =
+            DnsInspectorMock::new().inspect_result(Err(DnsInspectionError::NotConnected));
         let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
         let mut subject = DnsServers::new();
         subject.factory = Box::new(factory);

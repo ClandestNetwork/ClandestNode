@@ -49,7 +49,10 @@ impl ResolvConfDnsInspector {
             Ok(f) => f,
             Err(ref e) if e.kind() == ErrorKind::NotFound => {
                 return Err(DnsInspectionError::InvalidConfigFile(
-                    ResolvConfDnsInspector::process_msg("/etc/resolv.conf was not found", for_write),
+                    ResolvConfDnsInspector::process_msg(
+                        "/etc/resolv.conf was not found",
+                        for_write,
+                    ),
                 ));
             }
             Err(ref e) if e.kind() == ErrorKind::PermissionDenied => {
