@@ -10,6 +10,8 @@ use masq_lib::short_writeln;
 use std::default::Default;
 use std::fmt::Debug;
 
+const START_COMMAND_TIMEOUT_MILLIS: u64 = 5000;
+
 pub fn start_subcommand() -> App<'static, 'static> {
     SubCommand::with_name("start")
         .about("Starts a MASQNode with the parameters that have been established by 'setup.' Only valid if Node is not already running.")
@@ -22,7 +24,7 @@ impl Command for StartCommand {
     fn execute(&self, context: &mut dyn CommandContext) -> Result<(), CommandError> {
         let out_message = UiStartOrder {};
         let result: Result<UiStartResponse, CommandError> =
-            transaction(out_message, context, STANDARD_COMMAND_TIMEOUT_MILLIS);
+            transaction(out_message, context, START_COMMAND_TIMEOUT_MILLIS);
         match result {
             Ok(response) => {
                 short_writeln!(
@@ -54,6 +56,7 @@ mod tests {
     use masq_lib::messages::{UiStartOrder, UiStartResponse};
     use std::string::ToString;
     use std::sync::{Arc, Mutex};
+    use crate::commands::start_command::START_COMMAND_TIMEOUT_MILLIS;
 
     #[test]
     fn start_command_happy_path() {
@@ -76,7 +79,7 @@ mod tests {
         let transact_params = transact_params_arc.lock().unwrap();
         assert_eq!(
             *transact_params,
-            vec![(UiStartOrder {}.tmb(0), STANDARD_COMMAND_TIMEOUT_MILLIS)]
+            vec![(UiStartOrder {}.tmb(0), START_COMMAND_TIMEOUT_MILLIS)]
         );
         assert_eq!(
             stdout_arc.lock().unwrap().get_string(),
