@@ -46,7 +46,6 @@ impl StartCommand {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
     use crate::commands::start_command::START_COMMAND_TIMEOUT_MILLIS;
     use crate::test_utils::mocks::CommandContextMock;
