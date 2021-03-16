@@ -11,7 +11,6 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 const NOT_FOUND: i32 = 2;
-const PERMISSION_DENIED: i32 = 5;
 
 pub struct WinDnsInspector {
     hive: Box<dyn RegKeyTrait>,
