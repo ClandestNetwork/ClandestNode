@@ -15,6 +15,7 @@ use crate::node_configurator::node_configurator_standard::standard::{
 use crate::node_configurator::{
     app_head, data_directory_from_context, determine_config_file_path, DirsWrapper, RealDirsWrapper,
 };
+use crate::sub_lib::logger::Logger;
 use crate::sub_lib::neighborhood::NodeDescriptor;
 use crate::sub_lib::utils::make_new_multi_config;
 use crate::test_utils::main_cryptde;
@@ -638,11 +639,13 @@ impl ValueRetriever for DbPassword {
 
 struct DnsServers {
     factory: Box<dyn DnsInspectorFactory>,
+    logger: Logger,
 }
 impl DnsServers {
     pub fn new() -> Self {
         Self {
             factory: Box::new(DnsInspectorFactoryReal::new()),
+            logger: Logger::new("DnsServers"),
         }
     }
 }
@@ -672,7 +675,10 @@ impl ValueRetriever for DnsServers {
                     .join(",");
                 Some((dns_servers, Default))
             }
-            Err(_) => None, // TODO: Maybe log this error somehow
+            Err(e) => {
+                warning!(self.logger, "Error inspecting DNS settings: {:?}", e);
+                None
+            }
         }
     }
 
@@ -889,6 +895,7 @@ mod tests {
     use crate::sub_lib::node_addr::NodeAddr;
     use crate::sub_lib::wallet::Wallet;
     use crate::test_utils::assert_string_contains;
+    use crate::test_utils::logging::{init_test_logging, TestLogHandler};
     use crate::test_utils::persistent_configuration_mock::PersistentConfigurationMock;
     use masq_lib::messages::UiSetupResponseValueStatus::{Blank, Configured, Required, Set};
     use masq_lib::test_utils::environment_guard::{ClapGuard, EnvironmentGuard};
@@ -2148,6 +2155,7 @@ mod tests {
 
     #[test]
     fn dns_servers_computed_default_does_not_exist_when_dns_inspection_fails() {
+        init_test_logging();
         let modifier =
             DnsInspectorMock::new().inspect_result(Err(DnsInspectionError::NotConnected));
         let factory = DnsModifierFactoryMock::new().make_result(Some(Box::new(modifier)));
@@ -2156,7 +2164,8 @@ mod tests {
 
         let result = subject.computed_default(&BootstrapperConfig::new(), &None, &None);
 
-        assert_eq!(result, None)
+        assert_eq!(result, None);
+        TestLogHandler::new().exists_log_containing("WARN: DnsServers: Error inspecting DNS settings: This system does not appear to be connected to a network");
     }
 
     #[test]

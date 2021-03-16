@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
+// Copyright (c) 2019-2021, MASQ (https://masq.ai). All rights reserved.
 
 use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 use crate::daemon::dns_inspector::DnsInspectionError;
@@ -111,7 +111,7 @@ impl WinDnsInspector {
         let list_set: HashSet<String> = list_result_vec
             .into_iter()
             .flat_map(|result| match result {
-                Err(_e) => None, //is this correct or not, there used to be panic!() of meaning like "shouldn't happen"?
+                Err(_e) => None,
                 Ok(list) => Some(list),
             })
             .collect();
@@ -147,12 +147,6 @@ impl WinDnsInspector {
     fn handle_reg_error<T>(&self, result: io::Result<T>) -> Result<T, DnsInspectionError> {
         match result {
             Ok(retval) => Ok(retval),
-            Err(ref e) if e.raw_os_error() == Some(PERMISSION_DENIED) => {
-                Err(DnsInspectionError::RegistryQueryOsError(
-                    "You must have administrative privilege to modify your DNS settings"
-                        .to_string(),
-                ))
-            }
             Err(ref e) if e.raw_os_error() == Some(NOT_FOUND) => {
                 Err(DnsInspectionError::RegistryQueryOsError(
                     "Registry contains no DNS information to display".to_string(),

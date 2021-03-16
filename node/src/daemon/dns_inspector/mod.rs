@@ -29,9 +29,9 @@ pub enum DnsInspectionError {
     NotConnected,
     BadEntryFormat(String),
     InvalidConfigFile(String),
-    ConflictingEntries(usize, usize), // This system has 3 active network interfaces configured with 2 different default gateways. Cannot summarize DNS settings.
+    ConflictingEntries(usize, usize),
     RegistryQueryOsError(String),
-    ConfigValueTypeError(String), // State:/Network/Service/booga/DNS/ServerAddresses
+    ConfigValueTypeError(String),
 }
 
 impl Debug for DnsInspectionError {

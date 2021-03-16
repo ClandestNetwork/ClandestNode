@@ -1,9 +1,7 @@
 // Copyright (c) 2019-2021, MASQ (https://masq.ai) and/or its affiliates. All rights reserved.
 
 use crate::command_context::CommandContext;
-use crate::commands::commands_common::{
-    transaction, Command, CommandError, STANDARD_COMMAND_TIMEOUT_MILLIS,
-};
+use crate::commands::commands_common::{transaction, Command, CommandError};
 use clap::{App, SubCommand};
 use masq_lib::messages::{UiStartOrder, UiStartResponse};
 use masq_lib::short_writeln;
@@ -50,13 +48,12 @@ impl StartCommand {
 mod tests {
     // use super::*;
     use crate::command_factory::{CommandFactory, CommandFactoryReal};
-    use crate::commands::commands_common::STANDARD_COMMAND_TIMEOUT_MILLIS;
+    use crate::commands::start_command::START_COMMAND_TIMEOUT_MILLIS;
     use crate::test_utils::mocks::CommandContextMock;
     use masq_lib::messages::ToMessageBody;
     use masq_lib::messages::{UiStartOrder, UiStartResponse};
     use std::string::ToString;
     use std::sync::{Arc, Mutex};
-    use crate::commands::start_command::START_COMMAND_TIMEOUT_MILLIS;
 
     #[test]
     fn start_command_happy_path() {

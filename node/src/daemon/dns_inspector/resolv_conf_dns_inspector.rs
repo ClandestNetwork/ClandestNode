@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019, Substratum LLC (https://substratum.net) and/or its affiliates. All rights reserved.
+// Copyright (c) 2019-2021, MASQ (https://masq.ai). All rights reserved.
 #![cfg(target_os = "linux")]
 use crate::daemon::dns_inspector::dns_inspector::DnsInspector;
 use crate::daemon::dns_inspector::DnsInspectionError;

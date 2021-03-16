@@ -118,7 +118,6 @@ impl DbInitializerReal {
         self.create_banned_table(conn);
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn create_config_table(&self, conn: &Connection) {
         conn.execute(
             "create table if not exists config (
@@ -136,7 +135,6 @@ impl DbInitializerReal {
         .expect("Can't create config name index");
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn initialize_config(&self, conn: &Connection, chain_id: u8) {
         Self::set_config_value(conn, EXAMPLE_ENCRYPTED, None, true, "example_encrypted");
         Self::set_config_value(
@@ -192,7 +190,6 @@ impl DbInitializerReal {
         Self::set_config_value(conn, "past_neighbors", None, true, "past neighbors");
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn create_payable_table(&self, conn: &Connection) {
         conn.execute(
             "create table if not exists payable (
@@ -211,7 +208,6 @@ impl DbInitializerReal {
         .expect("Can't create payable wallet_address index");
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn create_receivable_table(&self, conn: &Connection) {
         conn.execute(
             "create table if not exists receivable (
@@ -229,7 +225,6 @@ impl DbInitializerReal {
         .expect("Can't create receivable wallet_address index");
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn create_banned_table(&self, conn: &Connection) {
         conn.execute(
             "create table banned ( wallet_address text primary key )",

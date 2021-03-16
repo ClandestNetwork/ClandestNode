@@ -173,8 +173,8 @@ impl ActorSystemFactoryReal {
         send_bind_message!(peer_actors.ui_gateway, peer_actors);
         send_bind_message!(peer_actors.blockchain_bridge, peer_actors);
         send_bind_message!(peer_actors.configurator, peer_actors);
-        if proxy_client_subs.is_some() {
-            send_bind_message_opt!(peer_actors.proxy_client_opt, peer_actors);
+        if let Some(subs) = proxy_client_subs {
+            send_bind_message!(subs, peer_actors);
         }
         stream_handler_pool_subs
             .bind
@@ -1004,7 +1004,6 @@ mod tests {
     fn prepare_initial_messages_doesnt_start_up_proxy_client_if_consume_only_mode() {
         let actor_factory = ActorFactoryMock::new();
         let recordings = actor_factory.get_recordings();
-        let parameters = actor_factory.make_parameters();
         let config = BootstrapperConfig {
             log_level: LevelFilter::Off,
             crash_point: CrashPoint::None,
@@ -1036,7 +1035,6 @@ mod tests {
                 mode: NeighborhoodMode::ConsumeOnly(vec![]),
             },
         };
-        let (tx, rx) = mpsc::channel();
         let system = System::new("MASQNode");
 
         ActorSystemFactoryReal::prepare_initial_messages(
@@ -1044,15 +1042,14 @@ mod tests {
             alias_cryptde(),
             config.clone(),
             Box::new(actor_factory),
-            tx,
+            mpsc::channel().0,
         );
 
         System::current().stop();
         system.run();
 
         let messages = recordings.proxy_client.lock().unwrap();
-        assert!(&messages.filed_accessible().is_empty());
-
+        assert!(messages.is_empty());
         check_bind_message(&recordings.dispatcher, true);
         check_bind_message(&recordings.hopper, true);
         check_bind_message(&recordings.proxy_server, true);
@@ -1060,52 +1057,6 @@ mod tests {
         check_bind_message(&recordings.ui_gateway, true);
         check_bind_message(&recordings.accountant, true);
         check_start_message(&recordings.neighborhood);
-        let hopper_config = Parameters::get(parameters.hopper_params);
-        check_cryptde(hopper_config.main_cryptde);
-        assert_eq!(hopper_config.per_routing_service, 0);
-        assert_eq!(hopper_config.per_routing_byte, 0);
-        let (
-            actual_main_cryptde,
-            actual_alias_cryptde,
-            actual_is_decentralized,
-            consuming_wallet_balance,
-        ) = Parameters::get(parameters.proxy_server_params);
-        check_cryptde(actual_main_cryptde);
-        check_cryptde(actual_alias_cryptde);
-        assert_ne!(
-            actual_main_cryptde.public_key(),
-            actual_alias_cryptde.public_key()
-        );
-        assert_eq!(actual_is_decentralized, true);
-        assert_eq!(consuming_wallet_balance, Some(0));
-        let (cryptde, neighborhood_config) = Parameters::get(parameters.neighborhood_params);
-        check_cryptde(cryptde);
-        assert_eq!(
-            neighborhood_config.neighborhood_config,
-            config.neighborhood_config
-        );
-        assert_eq!(
-            neighborhood_config.consuming_wallet,
-            config.consuming_wallet
-        );
-        let ui_gateway_config = Parameters::get(parameters.ui_gateway_params);
-        assert_eq!(ui_gateway_config.ui_port, 5335);
-        assert_eq!(ui_gateway_config.node_descriptor, "NODE-DESCRIPTOR");
-        let bootstrapper_config = Parameters::get(parameters.blockchain_bridge_params);
-        assert_eq!(
-            bootstrapper_config.blockchain_bridge_config,
-            BlockchainBridgeConfig {
-                blockchain_service_url: None,
-                chain_id: DEFAULT_CHAIN_ID,
-                gas_price: 1,
-            }
-        );
-        assert_eq!(
-            bootstrapper_config.consuming_wallet,
-            Some(make_wallet("consuming"))
-        );
-        let _stream_handler_pool_subs = rx.recv().unwrap();
-        // more...more...what? How to check contents of _stream_handler_pool_subs?
     }
 
     #[test]

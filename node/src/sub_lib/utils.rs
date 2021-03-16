@@ -38,19 +38,6 @@ macro_rules! send_bind_message {
     };
 }
 
-macro_rules! send_bind_message_opt {
-    ($subs:expr, $peer_actors:expr) => {
-        $subs
-            .clone()
-            .expect("Proxy client was accidentally None")
-            .bind
-            .try_send(BindMessage {
-                peer_actors: $peer_actors.clone(),
-            })
-            .expect(&format!("Actor for {:?} is dead", $subs));
-    };
-}
-
 macro_rules! send_start_message {
     ($subs:expr) => {
         $subs

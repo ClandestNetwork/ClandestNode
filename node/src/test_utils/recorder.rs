@@ -272,10 +272,6 @@ impl Recording {
         recording.get_record::<T>(index).clone()
     }
 
-    pub fn filed_accessible(&self) -> &Vec<Box<dyn Any + Send>> {
-        &self.messages
-    }
-
     pub fn get_record<T>(&self, index: usize) -> &T
     where
         T: Any + Send,

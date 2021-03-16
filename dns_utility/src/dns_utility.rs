@@ -92,7 +92,6 @@ impl DnsUtility {
         Ok(())
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn status_from_inspect(&self, dns_server_list: String) -> String {
         match dns_server_list {
             ref s if s == &String::from("127.0.0.1\n") => String::from("subverted"),
