@@ -1,9 +1,0 @@
-name = "MASQNode"
-identifier = "net.masq.node"
-icon = ["masq.png"]
-version = "1.0.0"
-copyright = "Copyright (c) MASQ 2019. All rights reserved."
-short_description = "MASQ Node"
-long_description = """
-MASQ Node allows Node runners to make money while they sleep.
-"""
